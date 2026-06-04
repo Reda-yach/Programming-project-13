@@ -83,3 +83,56 @@ De applicatie moet:
 - JavaScript (Node.js)
 - Git & GitHub
 - Trello (SCRUM/Kanban)
+
+# Database Setup
+
+## Vereisten
+- MySQL 8.0 of hoger
+- MySQL Workbench (optioneel)
+
+## Lokaal opzetten
+
+### Stap 1 — Verbind met MySQL
+Open je terminal en typ:
+```bash
+mysql -u root -p
+```
+
+### Stap 2 — Maak de tabellen aan
+```bash
+source database/schema.sql
+```
+
+### Stap 3 — Laad de testdata in
+```bash
+source database/seed.sql
+```
+
+### Stap 4 — Controleer of alles werkt
+```sql
+USE stagesysteem;
+SELECT * FROM users;
+SELECT * FROM competenties;
+```
+Je zou 5 gebruikers en 3 competenties moeten zien.
+
+## Tabellen
+| Tabel | Omschrijving |
+|---|---|
+| users | Alle gebruikers (student, docent, mentor, commissie, admin) |
+| stages | Stageaanvragen per student |
+| logboeken | Wekelijkse logboeken per stage |
+| evaluaties | Tussentijdse en finale evaluaties |
+| competentie_profielen | Editeerbare competentieprofielen |
+| competenties | Competenties per profiel met gewicht |
+| competentie_scores | Scores per competentie per evaluatie |
+
+## Testgebruikers
+| Email | Rol |
+|---|---|
+| student@ehb.be | STUDENT |
+| docent@ehb.be | DOCENT |
+| mentor@ehb.be | MENTOR |
+| commissie@ehb.be | COMMISSIE |
+| admin@ehb.be | ADMIN |
+
