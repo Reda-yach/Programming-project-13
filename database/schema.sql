@@ -1,134 +1,286 @@
--- ============================================
--- STAGESYSTEEM DATABASE
--- MySQL 8.0+
--- ============================================
+-- ============================================================
+--  STAGEVERLOOP — MySQL DDL
+--  Gegenereerd op basis van het ERD (v6)
+-- ============================================================
 
-CREATE DATABASE IF NOT EXISTS stagesysteem
+CREATE DATABASE IF NOT EXISTS stageverloop
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-USE stagesysteem;
+USE stageverloop;
 
--- --------------------------------------------
--- 1. USERS
--- --------------------------------------------
-CREATE TABLE users (
-  id         VARCHAR(36)  NOT NULL DEFAULT (UUID()),
-  email      VARCHAR(255) NOT NULL,
-  naam       VARCHAR(255) NOT NULL,
-  rol        ENUM('STUDENT','DOCENT','MENTOR','COMMISSIE','ADMIN') NOT NULL,
-  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email)
+-- ------------------------------------------------------------
+-- 1. GEBRUIKER
+-- ------------------------------------------------------------
+CREATE TABLE gebruiker (
+    gebruiker_id        INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(100)    NOT NULL,
+    email               VARCHAR(150)    NOT NULL UNIQUE,
+    telefoonnummer      VARCHAR(20),
+    wachtwoord_hash     VARCHAR(255)    NOT NULL,
+    rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (gebruiker_id)
 );
 
--- --------------------------------------------
--- 2. COMPETENTIE_PROFIELEN
--- --------------------------------------------
-CREATE TABLE competentie_profielen (
-  id     VARCHAR(36)  NOT NULL DEFAULT (UUID()),
-  naam   VARCHAR(255) NOT NULL,
-  actief TINYINT(1)   NOT NULL DEFAULT 1,
-  PRIMARY KEY (id)
+-- ------------------------------------------------------------
+-- 2. STUDENT
+-- ------------------------------------------------------------
+CREATE TABLE student (
+    student_id          INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id        INT             NOT NULL UNIQUE,
+    opleiding           VARCHAR(100)    NOT NULL,
+    academiejaar        VARCHAR(20)     NOT NULL,
+
+    PRIMARY KEY (student_id),
+    CONSTRAINT fk_student_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- --------------------------------------------
--- 3. COMPETENTIES
--- --------------------------------------------
-CREATE TABLE competenties (
-  id           VARCHAR(36)  NOT NULL DEFAULT (UUID()),
-  profiel_id   VARCHAR(36)  NOT NULL,
-  naam         VARCHAR(255) NOT NULL,
-  omschrijving TEXT         NOT NULL,
-  gewicht      DECIMAL(5,4) NOT NULL,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_competenties_profiel
-    FOREIGN KEY (profiel_id)
-    REFERENCES competentie_profielen(id)
-    ON DELETE CASCADE
+-- ------------------------------------------------------------
+-- 3. DOCENT
+-- ------------------------------------------------------------
+CREATE TABLE docent (
+    docent_id           INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id        INT             NOT NULL UNIQUE,
+    titel               VARCHAR(20),
+    specialisatie       VARCHAR(100),
+    max_studenten       INT             DEFAULT 5,
+
+    PRIMARY KEY (docent_id),
+    CONSTRAINT fk_docent_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- --------------------------------------------
--- 4. STAGES
--- --------------------------------------------
-CREATE TABLE stages (
-  id           VARCHAR(36)  NOT NULL DEFAULT (UUID()),
-  student_id   VARCHAR(36)  NOT NULL,
-  bedrijf_naam VARCHAR(255) NOT NULL,
-  opdracht     TEXT         NOT NULL,
-  start_datum  DATE         NOT NULL,
-  eind_datum   DATE         NOT NULL,
-  status       ENUM(
-    'INGEDIEND',
-    'IN_BEOORDELING',
-    'AANPASSINGEN_VEREIST',
-    'GOEDGEKEURD',
-    'ACTIEF',
-    'AFGEROND',
-    'AFGEKEURD'
-  ) NOT NULL DEFAULT 'INGEDIEND',
-  created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_stages_student
-    FOREIGN KEY (student_id)
-    REFERENCES users(id)
+-- ------------------------------------------------------------
+-- 4. BEDRIJF
+-- ------------------------------------------------------------
+CREATE TABLE bedrijf (
+    bedrijf_id              INT             NOT NULL AUTO_INCREMENT,
+    naam                    VARCHAR(150)    NOT NULL,
+    adres                   VARCHAR(255),
+    sector                  VARCHAR(100),
+    contact_email           VARCHAR(150),
+    contact_telefoonnummer  VARCHAR(20),
+
+    PRIMARY KEY (bedrijf_id)
 );
 
--- --------------------------------------------
--- 5. LOGBOEKEN
--- --------------------------------------------
-CREATE TABLE logboeken (
-  id                VARCHAR(36) NOT NULL DEFAULT (UUID()),
-  stage_id          VARCHAR(36) NOT NULL,
-  datum             DATE        NOT NULL,
-  taken             TEXT        NOT NULL,
-  reflectie         TEXT        NOT NULL,
-  problemen         TEXT        NULL,
-  geverifieerd_door VARCHAR(36) NULL,
-  geverifieerd_op   DATETIME    NULL,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_logboeken_stage
-    FOREIGN KEY (stage_id)
-    REFERENCES stages(id)
-    ON DELETE CASCADE,
-  CONSTRAINT fk_logboeken_mentor
-    FOREIGN KEY (geverifieerd_door)
-    REFERENCES users(id)
-    ON DELETE SET NULL
+-- ------------------------------------------------------------
+-- 5. MENTOR
+-- ------------------------------------------------------------
+CREATE TABLE mentor (
+    mentor_id           INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id        INT             NOT NULL UNIQUE,
+    bedrijf_id          INT             NOT NULL,
+    functietitel        VARCHAR(100),
+
+    PRIMARY KEY (mentor_id),
+    CONSTRAINT fk_mentor_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_mentor_bedrijf
+        FOREIGN KEY (bedrijf_id) REFERENCES bedrijf(bedrijf_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- --------------------------------------------
--- 6. EVALUATIES
--- --------------------------------------------
-CREATE TABLE evaluaties (
-  id         VARCHAR(36) NOT NULL DEFAULT (UUID()),
-  stage_id   VARCHAR(36) NOT NULL,
-  type       ENUM('TUSSENTIJDS','FINAAL') NOT NULL,
-  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_evaluaties_stage
-    FOREIGN KEY (stage_id)
-    REFERENCES stages(id)
-    ON DELETE CASCADE
+-- ------------------------------------------------------------
+-- 6. STAGE
+-- ------------------------------------------------------------
+CREATE TABLE stage (
+    stage_id            INT             NOT NULL AUTO_INCREMENT,
+    student_id          INT             NOT NULL,
+    bedrijf_id          INT             NOT NULL,
+    mentor_id           INT             NOT NULL,
+    docent_id           INT             NOT NULL,
+    stagetitel          VARCHAR(200)    NOT NULL,
+    beschrijving        TEXT,
+    startdatum          DATE,
+    einddatum           DATE,
+    status              ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond')
+                                        NOT NULL DEFAULT 'ingediend',
+    ingediend_op        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (stage_id),
+    CONSTRAINT fk_stage_student
+        FOREIGN KEY (student_id) REFERENCES student(student_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_stage_bedrijf
+        FOREIGN KEY (bedrijf_id) REFERENCES bedrijf(bedrijf_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_stage_mentor
+        FOREIGN KEY (mentor_id) REFERENCES mentor(mentor_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_stage_docent
+        FOREIGN KEY (docent_id) REFERENCES docent(docent_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- --------------------------------------------
--- 7. COMPETENTIE_SCORES
--- --------------------------------------------
-CREATE TABLE competentie_scores (
-  id              VARCHAR(36)  NOT NULL DEFAULT (UUID()),
-  evaluatie_id    VARCHAR(36)  NOT NULL,
-  competentie_id  VARCHAR(36)  NOT NULL,
-  score           DECIMAL(4,2) NOT NULL,
-  student_notitie TEXT         NULL,
-  mentor_feedback TEXT         NULL,
-  docent_feedback TEXT         NULL,
-  PRIMARY KEY (id),
-  CONSTRAINT fk_scores_evaluatie
-    FOREIGN KEY (evaluatie_id)
-    REFERENCES evaluaties(id)
-    ON DELETE CASCADE,
-  CONSTRAINT fk_scores_competentie
-    FOREIGN KEY (competentie_id)
-    REFERENCES competenties(id)
+-- ------------------------------------------------------------
+-- 7. STAGECONTRACT
+-- ------------------------------------------------------------
+CREATE TABLE stagecontract (
+    contract_id         INT             NOT NULL AUTO_INCREMENT,
+    stage_id            INT             NOT NULL UNIQUE,
+    getekend_student    BOOLEAN         NOT NULL DEFAULT FALSE,
+    getekend_mentor     BOOLEAN         NOT NULL DEFAULT FALSE,
+    getekend_docent     BOOLEAN         NOT NULL DEFAULT FALSE,
+    getekend_op         TIMESTAMP       NULL,
+
+    PRIMARY KEY (contract_id),
+    CONSTRAINT fk_contract_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 8. LOGBOEK
+-- ------------------------------------------------------------
+CREATE TABLE logboek (
+    logboek_id          INT             NOT NULL AUTO_INCREMENT,
+    student_id          INT             NOT NULL,
+    stage_id            INT             NOT NULL,
+    week_nummer         INT             NOT NULL,
+    activiteiten        TEXT,
+    uren                DECIMAL(5,2),
+    status              ENUM('draft','ingediend','goedgekeurd')
+                                        NOT NULL DEFAULT 'draft',
+    ingediend_op        TIMESTAMP       NULL,
+
+    PRIMARY KEY (logboek_id),
+    CONSTRAINT fk_logboek_student
+        FOREIGN KEY (student_id) REFERENCES student(student_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_logboek_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 9. LOGBOEK FEEDBACK
+-- ------------------------------------------------------------
+CREATE TABLE logboek_feedback (
+    feedback_id         INT             NOT NULL AUTO_INCREMENT,
+    logboek_id          INT             NOT NULL,
+    gebruiker_id        INT             NOT NULL,
+    opmerking           TEXT            NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (feedback_id),
+    CONSTRAINT fk_feedback_logboek
+        FOREIGN KEY (logboek_id) REFERENCES logboek(logboek_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_feedback_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 10. EVALUATIE
+-- ------------------------------------------------------------
+CREATE TABLE evaluatie (
+    evaluatie_id        INT             NOT NULL AUTO_INCREMENT,
+    beoordelaar_id      INT             NOT NULL,
+    type                ENUM('student','mentor','docent') NOT NULL,
+    totaalscore         DECIMAL(5,2),
+    opmerking           TEXT,
+    ingevuld_op         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (evaluatie_id),
+    CONSTRAINT fk_evaluatie_beoordelaar
+        FOREIGN KEY (beoordelaar_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 11. STUDENT EVALUATIE  (tussentabel)
+-- ------------------------------------------------------------
+CREATE TABLE student_evaluatie (
+    student_evaluatie_id    INT         NOT NULL AUTO_INCREMENT,
+    student_id              INT         NOT NULL,
+    evaluatie_id            INT         NOT NULL,
+    stage_id                INT         NOT NULL,
+
+    PRIMARY KEY (student_evaluatie_id),
+    CONSTRAINT fk_se_student
+        FOREIGN KEY (student_id) REFERENCES student(student_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_se_evaluatie
+        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_se_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 12. EVALUATIECRITERIUM
+-- ------------------------------------------------------------
+CREATE TABLE evaluatie_criterium (
+    criterium_id        INT             NOT NULL AUTO_INCREMENT,
+    evaluatie_id        INT             NOT NULL,
+    opleiding           VARCHAR(100)    NOT NULL,
+    competentie         VARCHAR(150)    NOT NULL,
+    naam                VARCHAR(150)    NOT NULL,
+    score               INT,
+    volgorde            INT             NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (criterium_id),
+    CONSTRAINT fk_criterium_evaluatie
+        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 13. RUBRIEK
+-- ------------------------------------------------------------
+CREATE TABLE rubriek (
+    rubriek_id          INT             NOT NULL AUTO_INCREMENT,
+    criterium_id        INT             NOT NULL,
+    punt                INT             NOT NULL,
+    beschrijving        TEXT            NOT NULL,
+
+    PRIMARY KEY (rubriek_id),
+    CONSTRAINT fk_rubriek_criterium
+        FOREIGN KEY (criterium_id) REFERENCES evaluatie_criterium(criterium_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 14. COMMISSIE BESLISSING
+-- ------------------------------------------------------------
+CREATE TABLE commissie_beslissing (
+    beslissing_id       INT             NOT NULL AUTO_INCREMENT,
+    stage_id            INT             NOT NULL,
+    commissielid_id     INT             NOT NULL,
+    beslissing          ENUM('goedgekeurd','afgewezen','meer_info') NOT NULL,
+    motivatie           TEXT,
+    beslist_op          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (beslissing_id),
+    CONSTRAINT fk_beslissing_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_beslissing_commissielid
+        FOREIGN KEY (commissielid_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 15. NOTIFICATIE
+-- ------------------------------------------------------------
+CREATE TABLE notificatie (
+    notificatie_id      INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id        INT             NOT NULL,
+    bericht             TEXT            NOT NULL,
+    gelezen             BOOLEAN         NOT NULL DEFAULT FALSE,
+    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (notificatie_id),
+    CONSTRAINT fk_notificatie_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
 );

@@ -1,0 +1,30 @@
+{
+  "name": "programming-project-13",
+  "version": "1.0.0",
+  "description": "- Reda Yachaoui\r - Yassine Mellouki\r - Killian Mulaj\r - Manassé Tedika Nsumbu\r - Zaid Mahmood",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test2": "node backend/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reda-yach/Programming-project-13.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Reda-yach/Programming-project-13/issues"
+  },
+  "homepage": "https://github.com/Reda-yach/Programming-project-13#readme",
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "mysql2": "^3.22.4",
+    "prisma": "^7.8.0"
+  }
+}
