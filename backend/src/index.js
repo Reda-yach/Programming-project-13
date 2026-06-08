@@ -145,3 +145,64 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });
+
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+// Login route
+app.post('/api/login', (req, res) => {
+  const { email, wachtwoord } = req.body;
+
+  // Zoek gebruiker op via email
+  db.query(
+    'SELECT * FROM gebruiker WHERE email = ?',
+    [email],
+    async (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+
+      // Gebruiker niet gevonden
+      if (results.length === 0) {
+        res.status(401).json({ error: 'Gebruiker niet gevonden' });
+        return;
+      }
+
+      const gebruiker = results[0];
+
+      // Wachtwoord controleren
+      const wachtwoordKlopt = await bcrypt.compare(
+        wachtwoord,
+        gebruiker.wachtwoord_hash
+      );
+
+      if (!wachtwoordKlopt) {
+        res.status(401).json({ error: 'Verkeerd wachtwoord' });
+        return;
+      }
+
+      // Token aanmaken
+      const token = jwt.sign(
+        {
+          id: gebruiker.gebruiker_id,
+          email: gebruiker.email,
+          rol: gebruiker.rol
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '8h' }
+      );
+
+      res.json({
+        message: 'Ingelogd!',
+        token,
+        gebruiker: {
+          id: gebruiker.gebruiker_id,
+          naam: gebruiker.naam,
+          email: gebruiker.email,
+          rol: gebruiker.rol
+        }
+      });
+    }
+  );
+});
