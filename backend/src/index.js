@@ -206,3 +206,93 @@ app.post('/api/login', (req, res) => {
     }
   );
 });
+
+// Één stage ophalen op basis van ID
+app.get('/api/stages/:id', (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      s.stage_id,
+      g.naam AS student,
+      b.naam AS bedrijf,
+      s.stagetitel,
+      s.beschrijving,
+      s.startdatum,
+      s.einddatum,
+      s.status,
+      s.ingediend_op
+    FROM stage s
+    JOIN student st ON s.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE s.stage_id = ?
+  `, [id], (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    if (results.length === 0) {
+      res.status(404).json({ error: 'Stage niet gevonden' });
+      return;
+    }
+    res.json(results[0]);
+  });
+});
+
+// Nieuw logboek aanmaken
+app.post('/api/logboeken', (req, res) => {
+  const { student_id, stage_id, week_nummer, activiteiten, uren } = req.body;
+  db.query(`
+    INSERT INTO logboek (student_id, stage_id, week_nummer, activiteiten, uren, status, ingediend_op)
+    VALUES (?, ?, ?, ?, ?, 'ingediend', NOW())
+  `, [student_id, stage_id, week_nummer, activiteiten, uren],
+  (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ message: 'Logboek aangemaakt!', id: results.insertId });
+  });
+});
+
+// Alle commissiebeslissingen ophalen
+app.get('/api/commissie', (req, res) => {
+  db.query(`
+    SELECT
+      g_student.naam AS student,
+      b.naam AS bedrijf,
+      s.stagetitel,
+      g_commissie.naam AS commissielid,
+      cd.beslissing,
+      cd.motivatie,
+      cd.beslist_op
+    FROM commissie_beslissing cd
+    JOIN stage s ON cd.stage_id = s.stage_id
+    JOIN student st ON s.student_id = st.student_id
+    JOIN gebruiker g_student ON st.gebruiker_id = g_student.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    JOIN gebruiker g_commissie ON cd.commissielid_id = g_commissie.gebruiker_id
+  `, (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json(results);
+  });
+});
+
+// Nieuwe commissiebeslissing toevoegen
+app.post('/api/commissie', (req, res) => {
+  const { stage_id, commissielid_id, beslissing, motivatie } = req.body;
+  db.query(`
+    INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivatie)
+    VALUES (?, ?, ?, ?)
+  `, [stage_id, commissielid_id, beslissing, motivatie],
+  (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ message: 'Beslissing toegevoegd!', id: results.insertId });
+  });
+});
