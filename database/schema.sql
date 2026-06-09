@@ -14,6 +14,7 @@ USE stageverloop;
 -- ------------------------------------------------------------
 CREATE TABLE gebruiker (
     gebruiker_id        INT             NOT NULL AUTO_INCREMENT,
+    voornaam            VARCHAR(100)    NOT NULL,
     naam                VARCHAR(100)    NOT NULL,
     email               VARCHAR(150)    NOT NULL UNIQUE,
     telefoonnummer      VARCHAR(20),
@@ -30,6 +31,7 @@ CREATE TABLE gebruiker (
 CREATE TABLE student (
     student_id          INT             NOT NULL AUTO_INCREMENT,
     gebruiker_id        INT             NOT NULL UNIQUE,
+    studentnummer       VARCHAR(20)     NOT NULL UNIQUE,
     opleiding           VARCHAR(100)    NOT NULL,
     academiejaar        VARCHAR(20)     NOT NULL,
 
@@ -145,6 +147,8 @@ CREATE TABLE logboek (
     stage_id            INT             NOT NULL,
     week_nummer         INT             NOT NULL,
     activiteiten        TEXT,
+    reflectie           TEXT,
+    leerpunten          TEXT,
     uren                DECIMAL(5,2),
     status              ENUM('draft','ingediend','goedgekeurd')
                                         NOT NULL DEFAULT 'draft',
@@ -226,6 +230,7 @@ CREATE TABLE evaluatie_criterium (
     competentie         VARCHAR(150)    NOT NULL,
     naam                VARCHAR(150)    NOT NULL,
     score               INT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 1.00,
     volgorde            INT             NOT NULL DEFAULT 0,
 
     PRIMARY KEY (criterium_id),
