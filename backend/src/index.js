@@ -877,6 +877,7 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
+app.use('/api/begeleider', require('./routes/begeleider'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
