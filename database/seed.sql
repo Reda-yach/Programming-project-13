@@ -7,18 +7,18 @@ USE stageverloop;
 -- --------------------------------------------
 -- 1. GEBRUIKERS
 -- --------------------------------------------
-INSERT INTO gebruiker (naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES
-  ('Jef Janssen',    'student@ehb.be',   '0471000001', 'hash_student',   'student'),
-  ('Marie Peeters',  'docent@ehb.be',    '0471000002', 'hash_docent',    'docent'),
-  ('Tom Claes',      'mentor@ehb.be',    '0471000003', 'hash_mentor',    'mentor'),
-  ('An Declercq',    'commissie@ehb.be', '0471000004', 'hash_commissie', 'commissie'),
-  ('Admin Beheer',   'admin@ehb.be',     '0471000005', 'hash_admin',     'admin');
+INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES
+  ('Jef',   'Janssen',  'student@ehb.be',   '0471000001', '$2b$10$BOFQK5OxomOb.JRM.x4V0O1s/Krlp/jI27AUaaHhwJaJ/thCBR3xm', 'student'),
+  ('Marie', 'Peeters',  'docent@ehb.be',    '0471000002', '$2b$10$BOFQK5OxomOb.JRM.x4V0O1s/Krlp/jI27AUaaHhwJaJ/thCBR3xm', 'docent'),
+  ('Tom',   'Claes',    'mentor@ehb.be',    '0471000003', '$2b$10$BOFQK5OxomOb.JRM.x4V0O1s/Krlp/jI27AUaaHhwJaJ/thCBR3xm', 'mentor'),
+  ('An',    'Declercq', 'commissie@ehb.be', '0471000004', '$2b$10$BOFQK5OxomOb.JRM.x4V0O1s/Krlp/jI27AUaaHhwJaJ/thCBR3xm', 'commissie'),
+  ('Admin', 'Beheer',   'admin@ehb.be',     '0471000005', '$2b$10$BOFQK5OxomOb.JRM.x4V0O1s/Krlp/jI27AUaaHhwJaJ/thCBR3xm', 'admin');
 
 -- --------------------------------------------
 -- 2. STUDENT
 -- --------------------------------------------
-INSERT INTO student (gebruiker_id, opleiding, academiejaar) VALUES
-  (1, 'Toegepaste Informatica', '2024-2025');
+INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES
+  (1, 'EHB-2024-0842', 'Toegepaste Informatica', '2024-2025');
 
 -- --------------------------------------------
 -- 3. DOCENT
