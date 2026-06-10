@@ -37,6 +37,29 @@ router.get('/openstaand', verifyToken, (req, res) => {
     res.json(results);
   });
 });
+// Stage goedkeuren
+router.put('/:id/goedkeuren', verifyToken, (req, res) => {
+  const { id } = req.params;
+
+  // Controleer of stage bestaat
+  db.query('SELECT * FROM stage WHERE stage_id = ?', [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+
+    const stage = results[0];
+
+    // Controleer of status correct is
+    if (!['ingediend', 'in_behandeling'].includes(stage.status)) {
+      return res.status(400).json({ error: `Stage kan niet goedgekeurd worden, huidige status is: ${stage.status}` });
+    }
+
+    // Status op goedgekeurd zetten
+    db.query('UPDATE stage SET status = ? WHERE stage_id = ?', ['goedgekeurd', id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ message: 'Stage goedgekeurd!', status: 'goedgekeurd' });
+    });
+  });
+});
 // Test-route
 router.get('/test', (req, res) => {
   res.json({ message: 'Begeleider route werkt!' });
