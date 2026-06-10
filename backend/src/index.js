@@ -40,6 +40,11 @@ app.get('/', (req, res) => {
   res.json({ message: 'Backend werkt!' });
 });
 
+// Health check — voor monitoring / smoke tests
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 // ============================================================
 // AUTHENTICATIE
 // ============================================================
@@ -871,6 +876,21 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
       }
     });
   });
+});
+
+// ============================================================
+// FOUTAFHANDELING (moet ná alle routes staan)
+// ============================================================
+
+// 404 — geen enkele route matchte
+app.use((req, res) => {
+  res.status(404).json({ error: 'Niet gevonden' });
+});
+
+// Centrale error-handler — vangnet voor onverwachte fouten
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.message || 'Interne serverfout' });
 });
 
 // ============================================================
