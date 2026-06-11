@@ -5,32 +5,12 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const db = require('./db');
+const { verifyToken, requireRol } = require('./middleware/auth');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-// ============================================================
-// JWT MIDDLEWARE
-// ============================================================
-
-function verifyToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
-
-  if (!token) {
-    return res.status(401).json({ error: 'Geen token meegegeven' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, gebruiker) => {
-    if (err) {
-      return res.status(403).json({ error: 'Ongeldig token' });
-    }
-    req.gebruiker = gebruiker; // { id, email, rol }
-    next();
-  });
-}
 
 // ============================================================
 // TEST ROUTE
@@ -439,7 +419,7 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
 });
 
 // Stage status updaten (beveiligd)
-app.put('/api/stages/:id/status', verifyToken, (req, res) => {
+app.put('/api/stages/:id/status', verifyToken, requireRol('commissie', 'admin', 'docent'), (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   db.query(`
@@ -934,7 +914,7 @@ app.put('/api/notificaties/:id/gelezen', verifyToken, (req, res) => {
 // ============================================================
 
 // Alle commissiebeslissingen ophalen (beveiligd)
-app.get('/api/commissie', verifyToken, (req, res) => {
+ app.get('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   db.query(`
     SELECT
       cd.beslissing_id,
@@ -963,7 +943,7 @@ app.get('/api/commissie', verifyToken, (req, res) => {
 });
 
 // Nieuwe commissiebeslissing toevoegen
-app.post('/api/commissie', verifyToken, (req, res) => {
+ app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   const { stage_id, commissielid_id, beslissing, motivatie } = req.body;
   db.query(`
     INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivatie)
