@@ -18,6 +18,31 @@ const router = createRouter({
       name: 'student-aanvraag',
       component: () => import('../views/StudentAanvraag.vue'),
     },
+    {
+      path: '/docent-studenten',
+      name: 'docent-studenten',
+      component: () => import('../views/DocentInCommissieStudenten.vue'),
+    },
+    {
+      path: '/docent-logboek-overzicht',
+      name: 'docent-logboek-overzicht',
+      component: () => import('../views/Docentlogboekoverzicht.vue'),
+    },
+    {
+      path: '/docent-evaluaties',
+      name: 'docent-evaluaties',
+      component: () => import('../views/DocentInCommissieEvaluaties.vue'),
+    },
+    {
+      path: '/docent-aanvragen',
+      name: 'docent-aanvragen',
+      component: () => import('../views/DocentInCommissieAanvragen.vue'),
+    },
+    {
+      path: '/docent-logboek-detail',
+      name: 'docent-logboek-detail',
+      component: () => import('../views/DocentLogboekDetail.vue'),
+    },
   ],
 })
 router.beforeEach((to, from, next) => {

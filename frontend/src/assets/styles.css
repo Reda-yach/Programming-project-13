@@ -572,3 +572,37 @@ tr:hover td { background: #fafafa; }
 .font-medium { font-weight: 500; }
 .font-semibold { font-weight: 600; }
 .link-blue { color: var(--blue); }
+
+@media (max-width: 480px) {
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 32px 24px;
+  }
+  .login-page {
+    padding: 16px;
+  }
+}
+
+/* === Responsive: layout + topbar op smal scherm === */
+@media (max-width: 768px) {
+  .content { padding: 24px 20px 48px; }
+  .card-grid-2 { grid-template-columns: 1fr; }
+  .form-grid-2 { grid-template-columns: 1fr; }
+
+  /* Topbar herschikt: logo links, rol/uitloggen rechts, nav op eigen regel eronder */
+  .topbar {
+    flex-wrap: wrap;
+    padding: 14px 20px;
+    gap: 12px;
+  }
+  .topbar-right {
+    margin-left: auto;
+    gap: 12px;
+  }
+  .topbar-nav {
+    order: 3;
+    flex-basis: 100%;
+    gap: 20px;
+  }
+}
