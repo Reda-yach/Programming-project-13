@@ -45,6 +45,7 @@ app.get('/', (req, res) => {
 // ============================================================
 
 // Login
+// Login
 app.post('/api/login', (req, res) => {
   const { email, wachtwoord } = req.body;
 
@@ -81,7 +82,8 @@ app.post('/api/login', (req, res) => {
         { expiresIn: '8h' }
       );
 
-      res.json({
+      // Basis-antwoord dat altijd geldt
+      const antwoord = {
         message: 'Ingelogd!',
         token,
         gebruiker: {
@@ -89,9 +91,34 @@ app.post('/api/login', (req, res) => {
           voornaam: gebruiker.voornaam,
           naam: gebruiker.naam,
           email: gebruiker.email,
+          telefoonnummer: gebruiker.telefoonnummer,
           rol: gebruiker.rol
         }
-      });
+      };
+
+      // Is dit een student? Zoek dan het student_id (en studentgegevens) erbij.
+      if (gebruiker.rol === 'student') {
+        db.query(
+          'SELECT student_id, studentnummer, opleiding, academiejaar FROM student WHERE gebruiker_id = ?',
+          [gebruiker.gebruiker_id],
+          (err2, studentResults) => {
+            if (err2) {
+              res.status(500).json({ error: err2.message });
+              return;
+            }
+            if (studentResults.length > 0) {
+              const s = studentResults[0];
+              antwoord.gebruiker.student_id = s.student_id;
+              antwoord.gebruiker.studentnummer = s.studentnummer;
+              antwoord.gebruiker.opleiding = s.opleiding;
+              antwoord.gebruiker.academiejaar = s.academiejaar;
+            }
+            res.json(antwoord);
+          }
+        );
+      } else {
+        res.json(antwoord);
+      }
     }
   );
 });
@@ -118,19 +145,7 @@ app.get('/api/gebruikers', verifyToken, (req, res) => {
 // BEDRIJVEN
 // ============================================================
 
-// Alle bedrijven ophalen (voor dropdown bij stage-aanvraag)
-app.get('/api/bedrijven', verifyToken, (req, res) => {
-  db.query(
-    'SELECT bedrijf_id, naam, adres, sector, contact_email, contact_telefoonnummer FROM bedrijf',
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json(results);
-    }
-  );
-});
+
 
 // Één bedrijf ophalen
 app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
@@ -172,29 +187,6 @@ app.post('/api/bedrijven', verifyToken, (req, res) => {
 // MENTORS
 // ============================================================
 
-// Alle mentors ophalen (voor dropdown bij stage-aanvraag)
-app.get('/api/mentors', verifyToken, (req, res) => {
-  db.query(`
-    SELECT
-      m.mentor_id,
-      g.voornaam,
-      g.naam,
-      g.email,
-      g.telefoonnummer,
-      m.functietitel,
-      b.naam AS bedrijf,
-      m.bedrijf_id
-    FROM mentor m
-    JOIN gebruiker g ON m.gebruiker_id = g.gebruiker_id
-    JOIN bedrijf b ON m.bedrijf_id = b.bedrijf_id
-  `, (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json(results);
-  });
-});
 
 // Mentors van een specifiek bedrijf ophalen
 app.get('/api/bedrijven/:id/mentors', verifyToken, (req, res) => {
@@ -217,6 +209,42 @@ app.get('/api/bedrijven/:id/mentors', verifyToken, (req, res) => {
     }
     res.json(results);
   });
+});
+
+// Nieuwe mentor aanmaken (maakt eerst een gebruiker met rol 'mentor', dan het mentor-record)
+// Tijdelijk wachtwoord 'mentor123' — vereenvoudiging; mentor wijzigt dit later zelf.
+app.post('/api/mentors', verifyToken, async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, functietitel, bedrijf_id } = req.body;
+
+  try {
+    const hash = await bcrypt.hash('mentor123', 10);
+
+    db.query(
+      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+      [voornaam, naam, email, telefoonnummer, hash, 'mentor'],
+      (err, gebruikerResult) => {
+        if (err) {
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        const gebruiker_id = gebruikerResult.insertId;
+
+        db.query(
+          'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
+          [gebruiker_id, bedrijf_id, functietitel],
+          (err2, mentorResult) => {
+            if (err2) {
+              res.status(500).json({ error: err2.message });
+              return;
+            }
+            res.json({ message: 'Mentor aangemaakt!', mentor_id: mentorResult.insertId });
+          }
+        );
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ============================================================

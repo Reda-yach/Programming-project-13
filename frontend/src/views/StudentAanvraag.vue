@@ -16,14 +16,14 @@ const navLinks = ref([
   { label: 'Aanvraag', to: '/student/aanvraag' },
 ])
 
-// Readonly student data — komt later uit de backend / Pinia store
+const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
 const student = ref({
-  naam: 'De Smedt',
-  voornaam: 'Emma',
-  studentnr: 'EHB-2024-0842',
-  opleiding: 'Toegepaste Informatica',
-  email: 'emma.desmedt@student.ehb.be',
-  telefoon: '+32 479 12 34 56',
+  naam: opgeslagenGebruiker.naam,
+  voornaam: opgeslagenGebruiker.voornaam,
+  studentnr: opgeslagenGebruiker.studentnummer,
+  opleiding: opgeslagenGebruiker.opleiding,
+  email: opgeslagenGebruiker.email,
+  telefoon: opgeslagenGebruiker.telefoonnummer,
 })
 
 // Formuliervelden bedrijf
@@ -111,12 +111,15 @@ function bouwAanvraag() {
   }
 }
 
-function handleIndienen() {
+async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
-
-  stageStore.dienIn(bouwAanvraag())
-  toonBevestiging.value = true
+  try {
+    await stageStore.dienIn(bouwAanvraag())
+    toonBevestiging.value = true
+  } catch (e) {
+    alert(e.message)
+  }
 }
 
 function sluitModal() {

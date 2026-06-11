@@ -97,7 +97,7 @@ CREATE TABLE stage (
     student_id          INT             NOT NULL,
     bedrijf_id          INT             NOT NULL,
     mentor_id           INT             NOT NULL,
-    docent_id           INT             NOT NULL,
+    docent_id           INT,
     stagetitel          VARCHAR(200)    NOT NULL,
     beschrijving        TEXT,
     startdatum          DATE,
