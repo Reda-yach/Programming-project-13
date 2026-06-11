@@ -49,3 +49,15 @@ export const useStageStore = defineStore('stage', () => {
       status.value = 'in_behandeling'
       localStorage.setItem(
         OPSLAG_SLEUTEL,
+        JSON.stringify({ status: status.value, aanvraag: aanvraag.value })
+      )
+      return true
+
+    } catch (e) {
+      fout.value = 'Geen verbinding met de server'
+      return false
+    }
+  }
+
+  return { status, aanvraag, fout, laad, dienIn }
+})
