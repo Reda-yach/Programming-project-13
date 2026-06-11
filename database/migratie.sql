@@ -104,3 +104,8 @@ CREATE TABLE logboek_dag (
   uren DECIMAL(4,2),
   FOREIGN KEY (logboek_id) REFERENCES logboek(logboek_id) ON DELETE CASCADE
 );
+-- --------------------------------------------
+-- MIGRATIE 12: evaluatie_fase kolom toevoegen aan evaluatie
+-- --------------------------------------------
+ALTER TABLE evaluatie
+  ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
