@@ -1,26 +1,29 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
 
+
 const stageStore = useStageStore()
 
-// Ingelogde gebruiker
-const student = ref({
-  voornaam: 'Emma',
+onMounted(() => {
+  stageStore.laad()
 })
 
-// Stage-status komt nu uit de store: 'geen' | 'in_behandeling' | 'actief'
+const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+const student = ref({
+  voornaam: gebruiker.voornaam || 'student',
+})
+
 const stageStatus = computed(() => stageStore.status)
 
-// Stage-gegevens (alleen gevuld zodra de stage actief is)
 const stage = computed(() => stageStore.aanvraag)
 
 // Navbar-items hangen af van de stage-status.
 // Zonder actieve stage: alleen Dashboard + Aanvraag.
 const navLinks = computed(() =>
-  stageStatus.value === 'actief'
+  stageStatus.value === 'goedgekeurd'
     ? [
         { label: 'Dashboard', to: '/student' },
         { label: 'Aanvraag', to: '/student/aanvraag' },
@@ -36,8 +39,25 @@ const navLinks = computed(() =>
 // Logboek deze week (leeg in deze toestand)
 const logboekDagen = ref([])
 
-// Meldingen (leeg in deze toestand)
-const meldingen = ref([])
+function formatTijd(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return isNaN(d) ? '' : d.toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+function meldingPresentatie(b) {
+  if (b === 'aanpassing_gevraagd') return { icon: '✏️', titel: 'Aanpassing gevraagd' }
+  if (b === 'afgewezen') return { icon: '❌', titel: 'Aanvraag afgewezen' }
+  if (b === 'goedgekeurd') return { icon: '✅', titel: 'Aanvraag goedgekeurd' }
+  return { icon: '📋', titel: 'Beslissing commissie' }
+}
+
+// Meldingen uit de store (commissie-beslissingen)
+const meldingen = computed(() =>
+  (stageStore.meldingen || []).map((m) => {
+    const p = meldingPresentatie(m.beslissing)
+    return { icon: p.icon, titel: p.titel, tijd: formatTijd(m.beslist_op), sub: m.motivatie || 'Geen motivatie opgegeven.' }
+  })
+)
 
 // Evaluaties — reageren op de stage-status.
 const evaluaties = computed(() => ({

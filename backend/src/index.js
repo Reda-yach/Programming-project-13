@@ -359,6 +359,85 @@ app.post('/api/stages', verifyToken, (req, res) => {
   });
 });
 
+
+app.get('/api/mijn-stage', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+ 
+  // Eerst het student_id opzoeken bij deze ingelogde gebruiker
+  db.query(
+    'SELECT student_id FROM student WHERE gebruiker_id = ?',
+    [gebruiker_id],
+    (err, studentRows) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (studentRows.length === 0) {
+        // Ingelogde gebruiker is geen student
+        res.status(403).json({ error: 'Geen student-account' });
+        return;
+      }
+      const student_id = studentRows[0].student_id;
+ 
+      // Meest recente stage van deze student ophalen, met bedrijf + laatste commissie-motivatie
+      db.query(`
+        SELECT
+          s.stage_id,
+          s.stagetitel,
+          s.beschrijving,
+          s.startdatum,
+          s.einddatum,
+          s.status,
+          b.naam AS bedrijf,
+          b.adres AS bedrijf_adres,
+          b.sector AS bedrijf_sector,
+          (
+            SELECT cb.motivatie
+            FROM commissie_beslissing cb
+            WHERE cb.stage_id = s.stage_id
+            ORDER BY cb.beslist_op DESC
+            LIMIT 1
+          ) AS commissie_motivatie
+        FROM stage s
+        JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+        WHERE s.student_id = ?
+        ORDER BY s.ingediend_op DESC
+        LIMIT 1
+      `, [student_id], (err2, stageRows) => {
+        if (err2) {
+          res.status(500).json({ error: err2.message });
+          return;
+        }
+        if (stageRows.length === 0) {
+          // Student heeft nog geen stage → geen aanvraag, geen meldingen
+          res.json({ stage: null, meldingen: [] });
+          return;
+        }
+ 
+        const stage = stageRows[0];
+ 
+        // Alle commissie-beslissingen van deze stage als meldingen, nieuw → oud
+        db.query(`
+          SELECT
+            cb.beslissing_id,
+            cb.beslissing,
+            cb.motivatie,
+            cb.beslist_op
+          FROM commissie_beslissing cb
+          WHERE cb.stage_id = ?
+          ORDER BY cb.beslist_op DESC
+        `, [stage.stage_id], (err3, beslissingRows) => {
+          if (err3) {
+            res.status(500).json({ error: err3.message });
+            return;
+          }
+          res.json({ stage, meldingen: beslissingRows });
+        });
+      });
+    }
+  );
+});
+
 // Stage status updaten (beveiligd)
 app.put('/api/stages/:id/status', verifyToken, (req, res) => {
   const { id } = req.params;

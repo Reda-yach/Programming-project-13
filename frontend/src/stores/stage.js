@@ -3,16 +3,70 @@ import { ref } from 'vue'
 
 const API = 'http://localhost:3000/api'
 
+function mapStatus(dbStatus) {
+  switch (dbStatus) {
+    case 'ingediend':
+    case 'in_behandeling':
+      return 'in_behandeling'
+    case 'aanpassing_gevraagd':
+      return 'aanpassing_gevraagd'
+    case 'afgewezen':
+      return 'afgewezen'
+    case 'goedgekeurd':
+    case 'bezig':
+      return 'goedgekeurd'
+    default:
+      return 'geen'
+  }
+}
+
 export const useStageStore = defineStore('stage', () => {
   const status = ref('geen')
   const aanvraag = ref(null)
+  const motivatie = ref(null)
+  const meldingen = ref([])
   const fout = ref(null)
-
-  // LATER: vervang door GET /api/stages voor de ingelogde student,
-  // zodat de status uit de database komt i.p.v. enkel uit het geheugen.
-  function laad() {
-    // Bewust leeg: we lezen niet meer uit localStorage.
-    // De status komt vers bij het indienen, of later uit de backend.
+ 
+  // Status uit de DATABASE halen voor de ingelogde student.
+  // Overleeft een refresh en toont de commissie-beslissing.
+  async function laad() {
+    fout.value = null
+    const token = localStorage.getItem('token')
+ 
+    // Geen token → niet ingelogd, geen crash.
+    if (!token) {
+      status.value = 'geen'
+      aanvraag.value = null
+      motivatie.value = null
+      meldingen.value = []
+      return
+    }
+ 
+    try {
+      const res = await fetch(`${API}/mijn-stage`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Laden mislukt')
+ 
+      // Geen aanvraag ingediend.
+      if (!data.stage) {
+        status.value = 'geen'
+        aanvraag.value = null
+        motivatie.value = null
+        meldingen.value = []
+        return
+      }
+ 
+      aanvraag.value = data.stage
+      status.value = mapStatus(data.stage.status)
+      motivatie.value = data.stage.commissie_motivatie || null
+      meldingen.value = data.meldingen || []
+    } catch (e) {
+      fout.value = e.message || 'Geen verbinding met de server'
+      status.value = 'geen'
+      meldingen.value = []
+    }
   }
 
   // Weg A (Model 1): uit de invoer worden echt een bedrijf en een mentor
@@ -84,8 +138,7 @@ export const useStageStore = defineStore('stage', () => {
       const stageData = await stageRes.json()
       if (!stageRes.ok) throw new Error(stageData.error || 'Stage aanmaken mislukt')
 
-      aanvraag.value = gegevens
-      status.value = 'in_behandeling'
+      await laad()
       return true
 
     } catch (e) {
@@ -94,5 +147,5 @@ export const useStageStore = defineStore('stage', () => {
     }
   }
 
-  return { status, aanvraag, fout, laad, dienIn }
+  return { status, aanvraag, motivatie, meldingen, fout, laad, dienIn }
 })
