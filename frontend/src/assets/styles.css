@@ -572,3 +572,40 @@ tr:hover td { background: #fafafa; }
 .font-medium { font-weight: 500; }
 .font-semibold { font-weight: 600; }
 .link-blue { color: var(--blue); }
+@media (max-width: 768px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .split-sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .split-main {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 14px 16px;
+  }
+
+  .topbar-nav {
+    gap: 16px;
+  }
+
+  .card {
+    padding: 20px 16px;
+  }
+
+  .flex.gap-12 {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
