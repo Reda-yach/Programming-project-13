@@ -10,14 +10,12 @@ const error = ref('')
 
 // Bestemming per rol. De backend bepaalt de rol — de frontend leidt die
 // NIET af uit het e-mailadres (dat is onbetrouwbaar en onveilig).
-// Past de backend "stagecommissie" anders aan (bv. docent + isAdmin-vlag)?
-// Dan pas je alleen de keuze hieronder aan; de rest blijft staan.
 const bestemmingPerRol = {
   student:   '/student',
   docent:    '/docent',
   mentor:    '/mentor',
   admin:     '/admin',
-  commissie: '/commissie', // docent die ook admin is (stagecommissie)
+  commissie: '/commissie',
 }
 
 async function handleLogin() {
@@ -28,17 +26,33 @@ async function handleLogin() {
     return
   }
 
-  // TODO: echte backend-aanroep. De backend antwoordt met o.a. de rol.
-  // const { rol } = await login(email.value, wachtwoord.value)
-  const rol = '' // placeholder tot de backend gekoppeld is
+  try {
+    const res = await fetch('http://localhost:3000/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value, wachtwoord: wachtwoord.value }),
+    })
+    const data = await res.json()
 
-  const bestemming = bestemmingPerRol[rol]
-  if (!bestemming) {
-    error.value = 'Aanmelden mislukt. Controleer je gegevens.'
-    return
+    if (!res.ok) {
+      error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
+      return
+    }
+
+    // Token + gebruiker bewaren voor de route guard en de andere pagina's
+    localStorage.setItem('token', data.token)
+    localStorage.setItem('gebruiker', JSON.stringify(data.gebruiker))
+
+    const bestemming = bestemmingPerRol[data.gebruiker.rol]
+    if (!bestemming) {
+      error.value = 'Onbekende rol. Neem contact op met de beheerder.'
+      return
+    }
+
+    router.push(bestemming)
+  } catch (e) {
+    error.value = 'Kan geen verbinding maken met de server.'
   }
-
-  router.push(bestemming)
 }
 </script>
 
