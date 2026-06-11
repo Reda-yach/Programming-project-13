@@ -878,6 +878,51 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
 app.use('/api/begeleider', require('./routes/begeleider'));
+// Contract aanmaken na goedkeuring
+app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
+  const { stage_id } = req.params;
+
+  // Controleer of stage bestaat en goedgekeurd is
+  db.query('SELECT * FROM stage WHERE stage_id = ?', [stage_id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+
+    if (results[0].status !== 'goedgekeurd') {
+      return res.status(400).json({ error: 'Stage moet eerst goedgekeurd zijn' });
+    }
+
+    // Contract aanmaken
+    db.query(`
+      INSERT INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+      VALUES (?, FALSE, FALSE, FALSE)
+    `, [stage_id], (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ message: 'Contract aangemaakt!', id: result.insertId });
+    });
+  });
+});
+// Stage volledig bewerken
+app.put('/api/stages/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id } = req.body;
+
+  db.query('SELECT * FROM stage WHERE stage_id = ?', [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+
+    db.query(`
+      UPDATE stage 
+      SET stagetitel = ?, beschrijving = ?, startdatum = ?, einddatum = ?, 
+          bedrijf_id = ?, mentor_id = ?, docent_id = ?
+      WHERE stage_id = ?
+    `, [stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id, id],
+    (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+      res.json({ message: 'Stage bijgewerkt!' });
+    });
+  });
+});
 const PORT = process.env.PORT || 3000;
 app.use('/api/aanvraag', require('./routes/aanvraag'));
 app.listen(PORT, () => {
