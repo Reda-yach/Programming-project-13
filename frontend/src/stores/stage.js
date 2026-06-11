@@ -4,17 +4,21 @@ import { ref } from 'vue'
 const API = 'http://localhost:3000/api'
 
 export const useStageStore = defineStore('stage', () => {
-  // 'geen' | 'in_behandeling' | 'actief'
   const status = ref('geen')
   const aanvraag = ref(null)
+  const fout = ref(null)
 
+<<<<<<< HEAD
   // LATER: vervang door GET /api/stages voor de ingelogde student,
   // zodat de status uit de database komt i.p.v. enkel uit het geheugen.
+=======
+>>>>>>> 3fcf3dcf96f950e9c78632ca77809e2f90d518d7
   function laad() {
     // Bewust leeg: we lezen niet meer uit localStorage.
     // De status komt vers bij het indienen, of later uit de backend.
   }
 
+<<<<<<< HEAD
   // Weg A (Model 1): uit de invoer worden echt een bedrijf en een mentor
   // aangemaakt, daarna de stage die eraan koppelt.
   async function dienIn(gegevens) {
@@ -84,7 +88,49 @@ export const useStageStore = defineStore('stage', () => {
 
     aanvraag.value = gegevens
     status.value = 'in_behandeling'
+=======
+  async function dienIn(gegevens) {
+    fout.value = null
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:3000/api/stages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          student_id: gegevens.student.student_id,
+          bedrijf_id: gegevens.bedrijf.bedrijf_id,
+          mentor_id: gegevens.mentor.mentor_id,
+          docent_id: gegevens.student.docent_id,
+          stagetitel: gegevens.bedrijf.opdracht,
+          beschrijving: gegevens.bedrijf.opdracht,
+          startdatum: gegevens.bedrijf.datumVan,
+          einddatum: gegevens.bedrijf.datumTot
+        })
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        fout.value = data.error || 'Er is iets misgegaan'
+        return false
+      }
+
+      aanvraag.value = gegevens
+      status.value = 'in_behandeling'
+      localStorage.setItem(
+        OPSLAG_SLEUTEL,
+        JSON.stringify({ status: status.value, aanvraag: aanvraag.value })
+      )
+      return true
+
+    } catch (e) {
+      fout.value = 'Geen verbinding met de server'
+      return false
+    }
+>>>>>>> 3fcf3dcf96f950e9c78632ca77809e2f90d518d7
   }
 
-  return { status, aanvraag, laad, dienIn }
+  return { status, aanvraag, fout, laad, dienIn }
 })

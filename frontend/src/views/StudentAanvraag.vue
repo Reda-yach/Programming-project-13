@@ -17,13 +17,14 @@ const navLinks = ref([
 ])
 
 const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+
 const student = ref({
-  naam: opgeslagenGebruiker.naam,
-  voornaam: opgeslagenGebruiker.voornaam,
-  studentnr: opgeslagenGebruiker.studentnummer,
-  opleiding: opgeslagenGebruiker.opleiding,
-  email: opgeslagenGebruiker.email,
-  telefoon: opgeslagenGebruiker.telefoonnummer,
+  naam: opgeslagenGebruiker?.naam || '',
+  voornaam: opgeslagenGebruiker?.voornaam || '',
+  studentnr: opgeslagenGebruiker?.studentnummer || '',
+  opleiding: opgeslagenGebruiker?.opleiding || '',
+  email: opgeslagenGebruiker?.email || '',
+  telefoon: opgeslagenGebruiker?.telefoonnummer || '',
 })
 
 // Formuliervelden bedrijf
@@ -48,7 +49,7 @@ const toonBevestiging = ref(false)
 
 // Bij het laden: als er al een aanvraag is, vul de velden ermee in
 // zodat de student ziet wat hij heeft ingediend.
-onMounted(() => {
+onMounted(async () => {
   const a = stageStore.aanvraag
   if (a) {
     bedrijf.value = a.bedrijf.bedrijf
@@ -61,6 +62,17 @@ onMounted(() => {
     mentorFunctie.value = a.mentor.functie
     mentorEmail.value = a.mentor.email
     mentorTel.value = a.mentor.tel
+  }
+
+  const token = localStorage.getItem('token')
+  if (!token) return
+  const res = await fetch('http://localhost:3000/api/stage', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  const data = await res.json()
+  if (data.student) {
+    student.value.studentnr = data.student.studentnummer
+    student.value.opleiding = data.student.opleiding
   }
 })
 
