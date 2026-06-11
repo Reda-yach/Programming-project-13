@@ -19,8 +19,8 @@ const router = createRouter({
       component: () => import('../views/StudentAanvraag.vue'),
     },
     {
-      path: '/docent-studenten',
-      name: 'docent-studenten',
+      path: '/docent',
+      name: 'docent',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
