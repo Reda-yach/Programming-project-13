@@ -90,7 +90,7 @@ const evaluaties = computed(() => ({
           <!-- Met actieve stage -->
           <template v-if="stageStatus === 'actief'">
             <div class="flex items-center gap-12" style="margin-bottom: 16px;">
-              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏢</div>
+              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;">Bedrijf</div>
               <div>
                 <div class="font-semibold" style="font-size:16px;">{{ stage?.bedrijf?.bedrijf }}</div>
                 <div class="text-secondary text-xs">
@@ -173,14 +173,14 @@ const evaluaties = computed(() => ({
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            Nu invullen
           </RouterLink>
           <span
             v-else
             class="flex items-center gap-8 text-sm text-secondary"
             style="padding-top:8px;"
           >
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
 
@@ -208,14 +208,14 @@ const evaluaties = computed(() => ({
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            Nu invullen
           </RouterLink>
           <span
             v-else
             class="flex items-center gap-8 text-sm text-secondary"
             style="padding-top:8px;"
           >
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
       </section>

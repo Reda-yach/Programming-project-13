@@ -256,7 +256,7 @@ function naarDashboard() {
     <!-- Bevestigingsscherm (modal overlay) -->
     <div v-if="toonBevestiging" class="modal-page" style="position:fixed;inset:0;z-index:200;">
       <div class="modal-card">
-        <div class="modal-icon">✅</div>
+        <div class="modal-icon" aria-hidden="true">OK</div>
         <h2 class="modal-title">Aanvraag ingediend!</h2>
         <p class="modal-sub">
           Je stage-aanvraag voor <strong>{{ bedrijf || 'het bedrijf' }}</strong> is succesvol ingediend.

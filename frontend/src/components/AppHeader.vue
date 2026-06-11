@@ -15,7 +15,7 @@ import { RouterLink } from 'vue-router'
       <RouterLink to="/aanvragen" class="nav-item">Aanvragen</RouterLink>
     </nav>
     <div class="topbar-right">
-      <span class="role-btn">Commissie ▾</span>
+      <span class="role-btn">Commissie</span>
       <RouterLink to="/login" class="uitloggen">Uitloggen</RouterLink>
     </div>
   </header>

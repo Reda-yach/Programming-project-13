@@ -86,7 +86,7 @@ async function handleLogin() {
         <p id="login-error" role="alert" aria-live="polite">{{ error }}</p>
       </form>
 
-      <router-link to="/wachtwoord-vergeten" class="login-link">Wachtwoord vergeten? →</router-link>
+      <router-link to="/wachtwoord-vergeten" class="login-link">Wachtwoord vergeten?</router-link>
 
     </section>
   </main>
