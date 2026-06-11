@@ -88,3 +88,19 @@ SELECT stagetitel, status FROM stage WHERE stage_id = 1;
 
 SELECT 'Evaluatiecriteria:' AS info;
 SELECT naam, score, gewicht, volgorde FROM evaluatie_criterium WHERE evaluatie_id = 1;
+-- --------------------------------------------
+-- MIGRATIE 10: bestand_pad toevoegen aan stagecontract
+-- --------------------------------------------
+ALTER TABLE stagecontract ADD COLUMN bestand_pad VARCHAR(255) NULL;
+
+-- --------------------------------------------
+-- MIGRATIE 11: logboek_dag tabel aanmaken voor dagelijkse invoer
+-- --------------------------------------------
+CREATE TABLE logboek_dag (
+  dag_id INT AUTO_INCREMENT PRIMARY KEY,
+  logboek_id INT NOT NULL,
+  dag ENUM('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag') NOT NULL,
+  activiteiten TEXT,
+  uren DECIMAL(4,2),
+  FOREIGN KEY (logboek_id) REFERENCES logboek(logboek_id) ON DELETE CASCADE
+);
