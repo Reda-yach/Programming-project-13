@@ -43,12 +43,15 @@ const router = createRouter({
       name: 'docent-logboek-detail',
       component: () => import('../views/DocentLogboekDetail.vue'),
     },
+    {
+      path: '/docent-studenten',
+      name: 'docent-studenten',
+      component: () => import('../views/DocentInCommissieStudenten.vue'),
+    },
   ],
 })
-<<<<<<< HEAD
-=======
 
->>>>>>> 3fcf3dcf96f950e9c78632ca77809e2f90d518d7
+
 router.beforeEach((to, from, next) => {
   const openRoutes = ['login']
   const token = localStorage.getItem('token')
@@ -58,8 +61,5 @@ router.beforeEach((to, from, next) => {
     next()
   }
 })
-<<<<<<< HEAD
-=======
 
->>>>>>> 3fcf3dcf96f950e9c78632ca77809e2f90d518d7
 export default router

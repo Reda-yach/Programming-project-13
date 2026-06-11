@@ -45,7 +45,6 @@ app.get('/', (req, res) => {
 // ============================================================
 
 // Login
-// Login
 app.post('/api/login', (req, res) => {
   const { email, wachtwoord } = req.body;
 
@@ -252,7 +251,21 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
 // ============================================================
 
 // Alle stages ophalen (beveiligd)
+// Alle stages ophalen (beveiligd).
+// Zonder ?status= : toont openstaande aanvragen (in_behandeling + ingediend) — voor de commissie-lijst.
+// Met ?status=goedgekeurd (bv.) : toont alleen die ene status.
 app.get('/api/stages', verifyToken, (req, res) => {
+  const { status } = req.query;
+
+  let where = '';
+  let params = [];
+  if (status) {
+    where = 'WHERE s.status = ?';
+    params = [status];
+  } else {
+    where = "WHERE s.status IN ('in_behandeling', 'ingediend')";
+  }
+
   db.query(`
     SELECT
       s.stage_id,
@@ -262,12 +275,15 @@ app.get('/api/stages', verifyToken, (req, res) => {
       s.stagetitel,
       s.startdatum,
       s.einddatum,
-      s.status
+      s.status,
+      s.ingediend_op
     FROM stage s
     JOIN student st ON s.student_id = st.student_id
     JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
     JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-  `, (err, results) => {
+    ${where}
+    ORDER BY s.ingediend_op DESC
+  `, params, (err, results) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -296,6 +312,9 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
       gm.email AS mentor_email,
       gm.telefoonnummer AS mentor_telefoon,
       m.functietitel AS mentor_functie,
+      gd.voornaam AS docent_voornaam,
+      gd.naam AS docent_naam,
+      gd.email AS docent_email,
       s.stagetitel,
       s.beschrijving,
       s.startdatum,
@@ -308,6 +327,8 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
     JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
     JOIN mentor m ON s.mentor_id = m.mentor_id
     JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+    LEFT JOIN docent d ON s.docent_id = d.docent_id
+    LEFT JOIN gebruiker gd ON d.gebruiker_id = gd.gebruiker_id
     WHERE s.stage_id = ?
   `, [id], (err, results) => {
     if (err) {
@@ -357,7 +378,68 @@ app.put('/api/stages/:id/status', verifyToken, (req, res) => {
     res.json({ message: 'Status bijgewerkt!' });
   });
 });
+// Commissie-beslissing op een stage: slaat de beslissing+motivatie op
+// EN zet de stage-status, in één call. Het commissielid komt uit de token.
+app.post('/api/stages/:id/beslissing', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { beslissing, motivatie } = req.body;
+  const commissielid_id = req.gebruiker.id; // uit de JWT, niet uit de body
 
+  // Knop → database-waarde. Beide tabellen gebruiken nu dezelfde term.
+  const opties = {
+    goedkeuren: 'goedgekeurd',
+    afkeuren:   'afgewezen',
+    aanpassing: 'aanpassing_gevraagd',
+  };
+
+  const waarde = opties[beslissing];
+  if (!waarde) {
+    res.status(400).json({
+      error: "Ongeldige beslissing. Kies uit: goedkeuren, afkeuren, aanpassing",
+    });
+    return;
+  }
+
+  // Motivatie verplicht bij afkeuren of aanpassing vragen
+  if ((beslissing === 'afkeuren' || beslissing === 'aanpassing') && !motivatie?.trim()) {
+    res.status(400).json({ error: 'Motivatie is verplicht bij afkeuren of aanpassing vragen.' });
+    return;
+  }
+
+  // 1) Beslissing opslaan
+  db.query(
+    `INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivatie)
+     VALUES (?, ?, ?, ?)`,
+    [id, commissielid_id, waarde, motivatie || null],
+    (err, insertResult) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+
+      // 2) Stage-status bijwerken (zelfde waarde)
+      db.query(
+        `UPDATE stage SET status = ? WHERE stage_id = ?`,
+        [waarde, id],
+        (err2, updateResult) => {
+          if (err2) {
+            res.status(500).json({ error: err2.message });
+            return;
+          }
+          if (updateResult.affectedRows === 0) {
+            res.status(404).json({ error: 'Stage niet gevonden' });
+            return;
+          }
+          res.json({
+            message: 'Beslissing opgeslagen en status bijgewerkt!',
+            beslissing_id: insertResult.insertId,
+            nieuwe_status: waarde,
+          });
+        }
+      );
+    }
+  );
+});
 // ============================================================
 // LOGBOEKEN
 // ============================================================

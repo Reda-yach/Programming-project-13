@@ -102,7 +102,7 @@ CREATE TABLE stage (
     beschrijving        TEXT,
     startdatum          DATE,
     einddatum           DATE,
-    status              ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond')
+    status              ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond','aanpassing_gevraagd')
                                         NOT NULL DEFAULT 'ingediend',
     ingediend_op        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -261,7 +261,7 @@ CREATE TABLE commissie_beslissing (
     beslissing_id       INT             NOT NULL AUTO_INCREMENT,
     stage_id            INT             NOT NULL,
     commissielid_id     INT             NOT NULL,
-    beslissing          ENUM('goedgekeurd','afgewezen','meer_info') NOT NULL,
+    beslissing          ENUM('goedgekeurd','afgewezen','aanpassing_gevraagd') NOT NULL,
     motivatie           TEXT,
     beslist_op          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
