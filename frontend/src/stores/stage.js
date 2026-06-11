@@ -4,13 +4,10 @@ import { ref } from 'vue'
 const OPSLAG_SLEUTEL = 'stage-aanvraag'
 
 export const useStageStore = defineStore('stage', () => {
-  // 'geen' | 'in_behandeling' | 'actief'
   const status = ref('geen')
   const aanvraag = ref(null)
+  const fout = ref(null)
 
-  // Bij het opstarten de bewaarde status inladen.
-  // LATER: vervang dit door een API-call die de status van de
-  // ingelogde student ophaalt (bv. GET /api/stage).
   function laad() {
     const opgeslagen = localStorage.getItem(OPSLAG_SLEUTEL)
     if (opgeslagen) {
@@ -20,17 +17,35 @@ export const useStageStore = defineStore('stage', () => {
     }
   }
 
-  // Een aanvraag indienen.
-  // LATER: vervang de localStorage-regel door een POST naar de backend
-  // (bv. await api.post('/api/stage/aanvraag', gegevens)).
-  function dienIn(gegevens) {
-    aanvraag.value = gegevens
-    status.value = 'in_behandeling'
-    localStorage.setItem(
-      OPSLAG_SLEUTEL,
-      JSON.stringify({ status: status.value, aanvraag: aanvraag.value })
-    )
-  }
+  async function dienIn(gegevens) {
+    fout.value = null
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:3000/api/stages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          student_id: gegevens.student.student_id,
+          bedrijf_id: gegevens.bedrijf.bedrijf_id,
+          mentor_id: gegevens.mentor.mentor_id,
+          docent_id: gegevens.student.docent_id,
+          stagetitel: gegevens.bedrijf.opdracht,
+          beschrijving: gegevens.bedrijf.opdracht,
+          startdatum: gegevens.bedrijf.datumVan,
+          einddatum: gegevens.bedrijf.datumTot
+        })
+      })
 
-  return { status, aanvraag, laad, dienIn }
-})
+      if (!response.ok) {
+        const data = await response.json()
+        fout.value = data.error || 'Er is iets misgegaan'
+        return false
+      }
+
+      aanvraag.value = gegevens
+      status.value = 'in_behandeling'
+      localStorage.setItem(
+        OPSLAG_SLEUTEL,
