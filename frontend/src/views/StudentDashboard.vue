@@ -106,7 +106,7 @@ const evaluaties = computed(() => ({
               Aanvraag in behandeling
             </div>
             <p class="text-secondary text-sm" style="line-height:1.6;">
-              Je stage-aanvraag is ingediend en wordt nu beoordeeld door je begeleider.
+              Je stage-aanvraag is ingediend en wordt nu beoordeeld door de stagecommissie.
             </p>
           </template>
 
