@@ -548,10 +548,15 @@ app.get('/api/stages/:id/logboeken', verifyToken, (req, res) => {
       l.leerpunten,
       l.uren,
       l.status,
-      l.ingediend_op
+      l.ingediend_op,
+      l.gevalideerd_op,
+      gm.voornaam AS gevalideerd_door_voornaam,
+      gm.naam AS gevalideerd_door_naam
     FROM logboek l
     JOIN student st ON l.student_id = st.student_id
     JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    LEFT JOIN mentor m ON l.gevalideerd_door = m.mentor_id
+    LEFT JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
     WHERE l.stage_id = ?
     ORDER BY l.week_nummer ASC
   `, [id], (err, results) => {
