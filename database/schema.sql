@@ -296,3 +296,25 @@ CREATE TABLE notificatie (
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+-- ------------------------------------------------------------
+-- PROBLEEMMELDING
+-- ------------------------------------------------------------
+CREATE TABLE probleemmelding (
+    melding_id          INT             NOT NULL AUTO_INCREMENT,
+    mentor_id           INT             NOT NULL,
+    stage_id            INT             NOT NULL,
+    titel               VARCHAR(200)    NOT NULL,
+    beschrijving        TEXT            NOT NULL,
+    status              ENUM('open','in_behandeling','opgelost')
+                                        NOT NULL DEFAULT 'open',
+    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (melding_id),
+    CONSTRAINT fk_melding_mentor
+        FOREIGN KEY (mentor_id) REFERENCES mentor(mentor_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_melding_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
