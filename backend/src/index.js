@@ -1043,6 +1043,59 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 });
 
 // ============================================================
+// MENTOR EVALUATIES
+// ============================================================
+
+// Evaluaties ophalen van een specifieke stage voor mentor
+app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      e.evaluatie_id,
+      e.type,
+      e.totaalscore,
+      e.opmerking,
+      e.ingevuld_op,
+      g.voornaam,
+      g.naam AS student_naam,
+      st.studentnummer,
+      st.opleiding,
+      s.stage_id,
+      b.naam AS bedrijf
+    FROM evaluatie e
+    JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+    JOIN student st ON se.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN stage s ON se.stage_id = s.stage_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE s.mentor_id = ?
+    ORDER BY e.ingevuld_op DESC
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// Mentor score en feedback opslaan per criterium
+app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { criterium_id } = req.params;
+  const { mentor_score, mentor_feedback } = req.body;
+
+  db.query(`
+    UPDATE evaluatie_criterium
+    SET mentor_score = ?,
+        mentor_feedback = ?
+    WHERE criterium_id = ?
+  `, [mentor_score, mentor_feedback, criterium_id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: 'Criterium niet gevonden' });
+    }
+    res.json({ message: 'Mentor score en feedback opgeslagen!' });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
