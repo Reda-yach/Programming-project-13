@@ -1123,9 +1123,13 @@ app.get('/api/mentors/:id/logboeken', verifyToken, requireRol('mentor', 'docent'
 // Logboek aftekenen als gelezen door mentor
 app.put('/api/logboeken/:id/aftekenen', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
   const { id } = req.params;
-  db.query(`
-    UPDATE logboek SET status = 'goedgekeurd' WHERE logboek_id = ?
-  `, [id], (err, results) => {
+ db.query(`
+    UPDATE logboek
+    SET status = 'goedgekeurd',
+        gevalideerd_door = ?,
+        gevalideerd_op = NOW()
+    WHERE logboek_id = ?
+  `, [req.gebruiker.id, id], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     if (results.affectedRows === 0) {
       return res.status(404).json({ error: 'Logboek niet gevonden' });
