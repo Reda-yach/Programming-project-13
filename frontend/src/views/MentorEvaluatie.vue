@@ -13,6 +13,7 @@ const geselecteerde = ref(null)
 const criteria = ref([])
 const bezig = ref(false)
 const bericht = ref('')
+const ingediend = ref(false)
 const toonNieuweEvaluatie = ref(false)
 const nieuweOpmerking = ref('')
 const geselecteerdeStage = ref(null)
@@ -111,6 +112,24 @@ async function slaAllesOp() {
   }
   bezig.value = false
   bericht.value = 'Alle scores en feedback opgeslagen!'
+}
+
+async function dienIn() {
+  bezig.value = true
+  const token = localStorage.getItem('token')
+  const res = await fetch(`http://localhost:3000/api/evaluaties/${geselecteerde.value.evaluatie_id}/indienen`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  const data = await res.json()
+  bezig.value = false
+
+  if (res.ok) {
+    ingediend.value = true
+    bericht.value = data.message
+  } else {
+    bericht.value = data.error
+  }
 }
 
 function totaalScore() {
@@ -216,20 +235,40 @@ function totaalScore() {
         </div>
 
         <!-- Totaal en opslaan -->
-        <div class="card mt-24 flex items-center gap-16">
-          <span>
-            Mentor score: <strong>{{ totaalScore() }}</strong> / {{ criteria.length * 5 }}
-          </span>
-          <button
-            class="btn btn-primary"
+        <div class="card mt-24">
+          <div class="flex items-center gap-16">
+            <span>
+              Mentor score: <strong>{{ totaalScore() }}</strong> / {{ criteria.length * 5 }}
+            </span>
+          </div>
+
+          <p v-if="bericht" class="text-sm mt-8 badge-green">{{ bericht }}</p>
+
+          <div v-if="!ingediend" class="flex gap-8 mt-16">
+            <button
+             class="btn btn-secondary"
             @click="slaAllesOp"
             :disabled="bezig"
+          >
+            Opslaan
+          </button>
+          <button
+            class="btn btn-primary"
+            @click="dienIn"
+            :disabled="bezig"
+            style="background:#16a34a;"
           >
             Finale score geven
           </button>
         </div>
 
+        <div v-else class="mt-16">
+          <span class="badge badge-green">✓ Finale beoordeling ingediend — kan niet meer aangepast worden</span>
+          <button class="btn btn-secondary mt-16" @click="terugNaarLijst">
+            Terug naar overzicht
+          </button>
       </div>
+    </div>
 
     </main>
   </div>
