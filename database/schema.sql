@@ -102,7 +102,7 @@ CREATE TABLE stage (
     beschrijving        TEXT,
     startdatum          DATE,
     einddatum           DATE,
-    status              ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond')
+    status              ENUM('ingediend','in_behandeling','goedgekeurd','aanpassing_vereist','afgewezen','bezig','afgerond')
                                         NOT NULL DEFAULT 'ingediend',
     ingediend_op        TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -160,6 +160,22 @@ CREATE TABLE logboek (
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_logboek_stage
         FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 8B. LOGBOEK DAG  (dagelijkse invoer Ma–Vr binnen een weeklogboek)
+-- ------------------------------------------------------------
+CREATE TABLE logboek_dag (
+    dag_id              INT             NOT NULL AUTO_INCREMENT,
+    logboek_id          INT             NOT NULL,
+    dag                 ENUM('maandag','dinsdag','woensdag','donderdag','vrijdag') NOT NULL,
+    activiteiten        TEXT,
+    uren                DECIMAL(4,2),
+
+    PRIMARY KEY (dag_id),
+    CONSTRAINT fk_logboek_dag_logboek
+        FOREIGN KEY (logboek_id) REFERENCES logboek(logboek_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -278,11 +294,12 @@ CREATE TABLE commissie_beslissing (
 -- 15. NOTIFICATIE
 -- ------------------------------------------------------------
 CREATE TABLE notificatie (
-    notificatie_id      INT             NOT NULL AUTO_INCREMENT,
-    gebruiker_id        INT             NOT NULL,
-    bericht             TEXT            NOT NULL,
-    gelezen             BOOLEAN         NOT NULL DEFAULT FALSE,
-    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notificatie_id      INT                                        NOT NULL AUTO_INCREMENT,
+    gebruiker_id        INT                                        NOT NULL,
+    bericht             TEXT                                       NOT NULL,
+    type                ENUM('info','goed','waarschuwing','fout')  NOT NULL DEFAULT 'info',
+    gelezen             BOOLEAN                                    NOT NULL DEFAULT FALSE,
+    aangemaakt_op       TIMESTAMP                                  NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (notificatie_id),
     CONSTRAINT fk_notificatie_gebruiker

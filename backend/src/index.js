@@ -874,10 +874,9 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 });
 
 // ============================================================
-// SERVER STARTEN
+// EXTRA STAGE- EN CONTRACTROUTES
 // ============================================================
-app.use('/api/stage', require('./routes/stage'));
-app.use('/api/begeleider', require('./routes/begeleider'));
+
 // Contract aanmaken na goedkeuring
 app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
   const { stage_id } = req.params;
@@ -923,8 +922,19 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
     });
   });
 });
-const PORT = process.env.PORT || 3000;
+// ============================================================
+// ROUTERMODULES
+// ============================================================
+app.use('/api/stage', require('./routes/stage'));
+app.use('/api/begeleider', require('./routes/begeleider'));
 app.use('/api/aanvraag', require('./routes/aanvraag'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/students', verifyToken, require('./routes/studentdashboardroute'));
+
+// ============================================================
+// SERVER STARTEN
+// ============================================================
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });

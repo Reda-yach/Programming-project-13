@@ -7,10 +7,12 @@ defineProps({
 })
 
 const classMap = {
-  'In behandeling': 'badge-yellow',
-  'Goedgekeurd':    'badge-green',
-  'Afgekeurd':      'badge-red',
-  'Aanpassing':     'badge-orange',
+  'In behandeling':     'badge-yellow',
+  'Goedgekeurd':        'badge-green',
+  'Afgewezen':          'badge-red',
+  'Aanpassing vereist': 'badge-orange',
+  'Actief':             'badge-green',
+  'Afgerond':           'badge-green',
 }
 </script>
 
