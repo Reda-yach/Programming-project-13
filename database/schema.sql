@@ -21,6 +21,8 @@ CREATE TABLE gebruiker (
     wachtwoord_hash     VARCHAR(255)    NOT NULL,
     rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reset_token         VARCHAR(255)    NULL,
+    reset_token_verloopt TIMESTAMP      NULL,
 
     PRIMARY KEY (gebruiker_id)
 );
