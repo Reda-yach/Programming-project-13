@@ -195,6 +195,8 @@ CREATE TABLE evaluatie (
     totaalscore         DECIMAL(5,2),
     opmerking           TEXT,
     ingevuld_op         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ingediend           TINYINT(1)      NOT NULL DEFAULT 0,
+    ingediend_op        TIMESTAMP       NULL,
 
     PRIMARY KEY (evaluatie_id),
     CONSTRAINT fk_evaluatie_beoordelaar
