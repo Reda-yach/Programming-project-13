@@ -49,6 +49,26 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
+      path: '/docent/studenten',
+      name: 'docent-studenten-overzicht',
+      component: () => import('../views/DocentStudenten.vue'),
+    },
+    {
+      path: '/docent/studenten/:id',
+      name: 'docent-student-detail',
+      component: () => import('../views/DocentStudentDetail.vue'),
+    },
+    {
+      path: '/docent/logboek/:studentId',
+      name: 'docent-logboek-detail-nieuw',
+      component: () => import('../views/DocentLogboekDetail.vue'),
+    },
+    {
+      path: '/docent/aanvragen',
+      name: 'docent-aanvragen-overzicht',
+      component: () => import('../views/DocentAanvragen.vue'),
+    },
+    {
       path: '/mentor',
       name: 'mentor-dashboard',
       component: () => import('../views/MentorDashboard.vue'),
