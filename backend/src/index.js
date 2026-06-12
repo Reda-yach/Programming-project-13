@@ -1197,6 +1197,71 @@ app.post('/api/evaluaties/tussentijds', verifyToken, requireRol('mentor', 'docen
 });
 
 // ============================================================
+// FINALE BEOORDELING
+// ============================================================
+
+// Finale beoordeling definitief indienen en vergrendelen
+app.put('/api/evaluaties/:id/indienen', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+
+  // Controleer of al ingediend
+  db.query(`
+    SELECT ingediend FROM evaluatie WHERE evaluatie_id = ?
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
+    if (results[0].ingediend) return res.status(400).json({ error: 'Evaluatie is al ingediend en kan niet meer aangepast worden' });
+
+    // Vergrendelen
+    db.query(`
+      UPDATE evaluatie
+      SET ingediend = 1,
+          ingediend_op = NOW()
+      WHERE evaluatie_id = ?
+    `, [id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      // Notificatie naar student en docent
+      db.query(`
+        SELECT
+          st.gebruiker_id AS student_gebruiker_id,
+          d.gebruiker_id AS docent_gebruiker_id
+        FROM student_evaluatie se
+        JOIN student st ON se.student_id = st.student_id
+        JOIN stage s ON se.stage_id = s.stage_id
+        LEFT JOIN docent d ON s.docent_id = d.docent_id
+        WHERE se.evaluatie_id = ?
+      `, [id], (err3, rows) => {
+        if (err3 || rows.length === 0) {
+          return res.json({ message: 'Finale beoordeling ingediend!' });
+        }
+
+        const notificaties = [
+          [rows[0].student_gebruiker_id, 'Je mentor heeft de finale beoordeling ingediend. Bekijk je evaluaties.'],
+        ];
+
+        if (rows[0].docent_gebruiker_id) {
+          notificaties.push([rows[0].docent_gebruiker_id, 'Een mentor heeft een finale beoordeling ingediend voor een van uw studenten.']);
+        }
+
+        let teller = 0;
+        notificaties.forEach(([gebruiker_id, bericht]) => {
+          db.query(`
+            INSERT INTO notificatie (gebruiker_id, bericht)
+            VALUES (?, ?)
+          `, [gebruiker_id, bericht], () => {
+            teller++;
+            if (teller === notificaties.length) {
+              res.json({ message: 'Finale beoordeling ingediend en betrokkenen verwittigd!' });
+            }
+          });
+        });
+      });
+    });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
