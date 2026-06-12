@@ -154,6 +154,9 @@ CREATE TABLE logboek (
                                         NOT NULL DEFAULT 'draft',
     ingediend_op        TIMESTAMP       NULL,
 
+    gevalideerd_door    INT             NULL,
+    gevalideerd_op      TIMESTAMP       NULL,
+
     PRIMARY KEY (logboek_id),
     CONSTRAINT fk_logboek_student
         FOREIGN KEY (student_id) REFERENCES student(student_id)
