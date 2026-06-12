@@ -235,15 +235,19 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
 // Zonder ?status= : toont openstaande aanvragen (in_behandeling + ingediend) — voor de commissie-lijst.
 // Met ?status=goedgekeurd (bv.) : toont alleen die ene status.
 app.get('/api/stages', verifyToken, (req, res) => {
-  const { status } = req.query;
+  const { status, zoek } = req.query;
 
-  let where = '';
+  let where = 'WHERE 1=1';
   let params = [];
+
   if (status) {
-    where = 'WHERE s.status = ?';
-    params = [status];
-  } else {
-    where = "WHERE s.status IN ('in_behandeling', 'ingediend')";
+    where += ' AND s.status = ?';
+    params.push(status);
+  }
+
+  if (zoek) {
+    where += ' AND (g.naam LIKE ? OR g.voornaam LIKE ? OR b.naam LIKE ?)';
+    params.push(`%${zoek}%`, `%${zoek}%`, `%${zoek}%`);
   }
 
   db.query(`
