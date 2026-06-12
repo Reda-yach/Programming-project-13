@@ -13,6 +13,9 @@ const geselecteerde = ref(null)
 const criteria = ref([])
 const bezig = ref(false)
 const bericht = ref('')
+const toonNieuweEvaluatie = ref(false)
+const nieuweOpmerking = ref('')
+const geselecteerdeStage = ref(null)
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 
 onMounted(async () => {
@@ -25,6 +28,40 @@ async function laadEvaluaties() {
     headers: { 'Authorization': `Bearer ${token}` }
   })
   evaluaties.value = await res.json()
+}
+
+async function maakTussentijdseEvaluatie(stagiair) {
+  geselecteerdeStage.value = stagiair
+  toonNieuweEvaluatie.value = true
+}
+
+async function slaaTussentijdsOp() {
+  bezig.value = true
+  const token = localStorage.getItem('token')
+  const res = await fetch('http://localhost:3000/api/evaluaties/tussentijds', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      stage_id: geselecteerdeStage.value.stage_id,
+      student_id: geselecteerdeStage.value.student_id,
+      beoordelaar_id: gebruiker.id,
+      opmerking: nieuweOpmerking.value
+    })
+  })
+  const data = await res.json()
+  bezig.value = false
+
+  if (res.ok) {
+    bericht.value = data.message
+    toonNieuweEvaluatie.value = false
+    nieuweOpmerking.value = ''
+    await laadEvaluaties()
+  } else {
+    bericht.value = data.error
+  }
 }
 
 async function selecteer(evaluatie) {
