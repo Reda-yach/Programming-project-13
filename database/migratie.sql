@@ -117,3 +117,8 @@ ALTER TABLE logboek
   ADD CONSTRAINT fk_logboek_mentor
     FOREIGN KEY (gevalideerd_door) REFERENCES mentor(mentor_id)
     ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- SCHEMA MIGRATIE 6: mentor score en feedback toevoegen aan evaluatie_criterium
+ALTER TABLE evaluatie_criterium
+  ADD COLUMN mentor_score INT NULL AFTER score,
+  ADD COLUMN mentor_feedback TEXT NULL AFTER mentor_score;
