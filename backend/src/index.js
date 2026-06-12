@@ -1156,6 +1156,47 @@ app.put('/api/logboeken/:id/aftekenen', verifyToken, requireRol('mentor', 'docen
 });
 
 // ============================================================
+// TUSSENTIJDSE EVALUATIE
+// ============================================================
+
+// Nieuwe tussentijdse evaluatie aanmaken voor een student
+app.post('/api/evaluaties/tussentijds', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { stage_id, student_id, beoordelaar_id, opmerking } = req.body;
+
+  db.query(`
+    INSERT INTO evaluatie (beoordelaar_id, type, opmerking)
+    VALUES (?, 'tussentijds', ?)
+  `, [beoordelaar_id, opmerking || null], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const evaluatie_id = results.insertId;
+
+    db.query(`
+      INSERT INTO student_evaluatie (student_id, evaluatie_id, stage_id)
+      VALUES (?, ?, ?)
+    `, [student_id, evaluatie_id, stage_id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      // Notificatie sturen naar student
+      db.query(`
+        SELECT gebruiker_id FROM student WHERE student_id = ?
+      `, [student_id], (err3, rows) => {
+        if (err3 || rows.length === 0) {
+          return res.json({ message: 'Tussentijdse evaluatie aangemaakt!', id: evaluatie_id });
+        }
+
+        db.query(`
+          INSERT INTO notificatie (gebruiker_id, bericht)
+          VALUES (?, ?)
+        `, [rows[0].gebruiker_id, 'Je mentor heeft een tussentijdse evaluatie ingevuld. Bekijk je evaluaties.'], () => {
+          res.json({ message: 'Tussentijdse evaluatie aangemaakt en student verwittigd!', id: evaluatie_id });
+        });
+      });
+    });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
