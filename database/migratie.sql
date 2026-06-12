@@ -147,3 +147,8 @@ CREATE TABLE IF NOT EXISTS probleemmelding (
         FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- SCHEMA MIGRATIE 9: reset token kolommen toevoegen aan gebruiker
+ALTER TABLE gebruiker
+  ADD COLUMN reset_token VARCHAR(255) NULL AFTER created_at,
+  ADD COLUMN reset_token_verloopt TIMESTAMP NULL AFTER reset_token;
