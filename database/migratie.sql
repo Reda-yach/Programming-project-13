@@ -109,3 +109,11 @@ CREATE TABLE logboek_dag (
 -- --------------------------------------------
 ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
+
+-- SCHEMA MIGRATIE 5: validatie kolommen toevoegen aan logboek
+ALTER TABLE logboek
+  ADD COLUMN gevalideerd_door INT NULL,
+  ADD COLUMN gevalideerd_op TIMESTAMP NULL,
+  ADD CONSTRAINT fk_logboek_mentor
+    FOREIGN KEY (gevalideerd_door) REFERENCES mentor(mentor_id)
+    ON DELETE SET NULL ON UPDATE CASCADE;
