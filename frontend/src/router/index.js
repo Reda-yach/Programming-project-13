@@ -58,6 +58,11 @@ const router = createRouter({
       name: 'mentor-logboeken',
       component: () => import('../views/MentorLogboeken.vue'),
     },
+    {
+      path: '/mentor/evaluatie',
+      name: 'mentor-evaluatie',
+      component: () => import('../views/MentorEvaluatie.vue'),
+    },
   ],
 })
 
