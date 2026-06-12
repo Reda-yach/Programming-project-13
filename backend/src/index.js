@@ -1429,6 +1429,55 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
 });
 
 // ============================================================
+// DOCENT EVALUATIE
+// ============================================================
+
+// Docent score en feedback opslaan per criterium
+app.put('/api/evaluaties/criteria/:criterium_id/docent', verifyToken, requireRol('docent', 'admin'), (req, res) => {
+  const { criterium_id } = req.params;
+  const { docent_score, docent_feedback } = req.body;
+
+  if (![5, 3, 1, 0].includes(docent_score)) {
+    return res.status(400).json({ error: 'Score moet 5, 3, 1 of 0 zijn' });
+  }
+
+  db.query(`
+    UPDATE evaluatie_criterium
+    SET score = ?,
+        mentor_feedback = COALESCE(mentor_feedback, ?)
+    WHERE criterium_id = ?
+  `, [docent_score, docent_feedback, criterium_id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: 'Criterium niet gevonden' });
+    }
+    res.json({ message: 'Docent score opgeslagen!' });
+  });
+});
+
+// Evaluatie totaalscore berekenen en opslaan
+app.put('/api/evaluaties/:id/totaalscore', verifyToken, requireRol('docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+
+  db.query(`
+    SELECT SUM(score * gewicht) as totaal, SUM(gewicht) as max_gewicht
+    FROM evaluatie_criterium
+    WHERE evaluatie_id = ?
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    const totaal = results[0].totaal || 0;
+
+    db.query(`
+      UPDATE evaluatie SET totaalscore = ? WHERE evaluatie_id = ?
+    `, [totaal, id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ message: 'Totaalscore bijgewerkt!', totaalscore: totaal });
+    });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
