@@ -1,35 +1,91 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 defineProps({
   links: {
     type: Array,
-    default: () => [],
-  },
+    default: () => []
+  }
 })
+
+function uitloggen() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('gebruiker')
+  router.push('/login')
+}
 </script>
 
 <template>
-  <header class="topbar">
-    <div class="topbar-logo">
-      <div class="logo-icon"></div>
-      <span class="logo-text">Stage Monitor</span>
+  <nav class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">■ Stage Monitor</span>
     </div>
-    <nav class="topbar-nav">
-      <RouterLink
+
+    <div class="topbar-center">
+      <router-link
         v-for="link in links"
         :key="link.to"
         :to="link.to"
-        class="nav-item"
-        active-class="active"
+        class="topbar-link"
+        active-class="topbar-link-active"
       >
         {{ link.label }}
-      </RouterLink>
-    </nav>
-    <div class="topbar-right">
-      <RouterLink to="/login" class="uitloggen">Uitloggen</RouterLink>
+      </router-link>
     </div>
-  </header>
+
+    <div class="topbar-right">
+      <span class="topbar-user">Student ▾</span>
+      <button class="btn btn-secondary" @click="uitloggen">
+        Uitloggen
+      </button>
+    </div>
+  </nav>
 </template>
 
-<style scoped></style>
+<style scoped>
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.topbar-logo {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.topbar-center {
+  display: flex;
+  gap: 24px;
+}
+
+.topbar-link {
+  font-size: 14px;
+  color: #6b7280;
+  text-decoration: none;
+  padding-bottom: 4px;
+}
+
+.topbar-link-active {
+  color: #111827;
+  font-weight: 600;
+  border-bottom: 2px solid #111827;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar-user {
+  font-size: 14px;
+  color: #111827;
+}
+</style>
