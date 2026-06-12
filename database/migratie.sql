@@ -122,3 +122,8 @@ ALTER TABLE logboek
 ALTER TABLE evaluatie_criterium
   ADD COLUMN mentor_score INT NULL AFTER score,
   ADD COLUMN mentor_feedback TEXT NULL AFTER mentor_score;
+
+-- SCHEMA MIGRATIE 7: ingediend kolommen toevoegen aan evaluatie
+ALTER TABLE evaluatie
+  ADD COLUMN ingediend TINYINT(1) NOT NULL DEFAULT 0 AFTER ingevuld_op,
+  ADD COLUMN ingediend_op TIMESTAMP NULL AFTER ingediend;
