@@ -63,6 +63,11 @@ const router = createRouter({
       name: 'mentor-evaluatie',
       component: () => import('../views/MentorEvaluatie.vue'),
     },
+    {
+      path: '/mentor/probleem',
+      name: 'mentor-probleem',
+      component: () => import('../views/MentorProbleemmelding.vue'),
+    },
   ],
 })
 
