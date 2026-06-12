@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const db = require('./db');
@@ -1038,6 +1040,107 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
       } else {
         res.json({ message: `Contract getekend door ${rol}!` });
       }
+    });
+  });
+});
+
+// ============================================================
+// WACHTWOORD RESET
+// ============================================================
+
+// E-mailtransporter instellen
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// POST /api/auth/forgot-password
+app.post('/api/auth/forgot-password', (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'E-mailadres is verplicht' });
+  }
+
+  db.query('SELECT * FROM gebruiker WHERE email = ?', [email], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    // Altijd dezelfde melding tonen voor veiligheid
+    if (results.length === 0) {
+      return res.json({ message: 'Als dit e-mailadres bekend is, ontvang je een resetlink.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const verlooptOp = new Date(Date.now() + 60 * 60 * 1000); // 1 uur geldig
+
+    db.query(`
+      UPDATE gebruiker
+      SET reset_token = ?,
+          reset_token_verloopt = ?
+      WHERE email = ?
+    `, [token, verlooptOp, email], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+      const mailOpties = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Wachtwoord resetten — Stage Monitor',
+        html: `
+          <h2>Wachtwoord resetten</h2>
+          <p>Je hebt een wachtwoordreset aangevraagd voor je Stage Monitor account.</p>
+          <p>Klik op de onderstaande link om je wachtwoord te resetten. Deze link is 1 uur geldig.</p>
+          <a href="${resetLink}" style="background:#111827;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;">
+            Wachtwoord resetten
+          </a>
+          <p style="margin-top:16px;color:#6b7280;">Als je dit niet hebt aangevraagd, kan je deze e-mail negeren.</p>
+        `
+      };
+
+      transporter.sendMail(mailOpties, (err3) => {
+        if (err3) {
+          console.error('E-mail fout:', err3);
+          return res.status(500).json({ error: 'E-mail kon niet worden verstuurd' });
+        }
+        res.json({ message: 'Als dit e-mailadres bekend is, ontvang je een resetlink.' });
+      });
+    });
+  });
+});
+
+// POST /api/auth/reset-password
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, nieuwWachtwoord } = req.body;
+
+  if (!token || !nieuwWachtwoord) {
+    return res.status(400).json({ error: 'Token en nieuw wachtwoord zijn verplicht' });
+  }
+
+  db.query(`
+    SELECT * FROM gebruiker
+    WHERE reset_token = ?
+    AND reset_token_verloopt > NOW()
+  `, [token], async (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'Ongeldige of verlopen resetlink' });
+    }
+
+    const hash = await bcrypt.hash(nieuwWachtwoord, 10);
+
+    db.query(`
+      UPDATE gebruiker
+      SET wachtwoord_hash = ?,
+          reset_token = NULL,
+          reset_token_verloopt = NULL
+      WHERE reset_token = ?
+    `, [hash, token], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ message: 'Wachtwoord succesvol gewijzigd! Je kan nu opnieuw aanmelden.' });
     });
   });
 });
