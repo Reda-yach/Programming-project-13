@@ -289,3 +289,16 @@ CREATE TABLE notificatie (
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+-- ------------------------------------------------------------
+-- 16. COMPETENTIE
+-- ------------------------------------------------------------
+CREATE TABLE competentie (
+    competentie_id      INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    omschrijving        TEXT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
+    opleiding_id        INT             NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (competentie_id)
+);
