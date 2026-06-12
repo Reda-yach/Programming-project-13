@@ -110,22 +110,32 @@ source database/seed.sql
 
 ### Stap 4 — Controleer of alles werkt
 ```sql
-USE stagesysteem;
-SELECT * FROM users;
-SELECT * FROM competenties;
+USE stageverloop;
+SELECT * FROM gebruiker;
+SELECT * FROM evaluatie_criterium;
 ```
-Je zou 5 gebruikers en 3 competenties moeten zien.
+Je zou 5 gebruikers en 3 evaluatiecriteria moeten zien.
+
+> **Let op (bestaande databases):** `schema.sql` bevat het volledige, actuele schema.
+> `database/migratie.sql` is enkel bedoeld om een **oudere** database bij te werken
+> (o.a. de `logboek_dag`- en `notificatie.type`-uitbreidingen). Voer het niet uit op
+> een database die je net met `schema.sql` hebt aangemaakt.
 
 ## Tabellen
 | Tabel | Omschrijving |
 |---|---|
-| users | Alle gebruikers (student, docent, mentor, commissie, admin) |
-| stages | Stageaanvragen per student |
-| logboeken | Wekelijkse logboeken per stage |
-| evaluaties | Tussentijdse en finale evaluaties |
-| competentie_profielen | Editeerbare competentieprofielen |
-| competenties | Competenties per profiel met gewicht |
-| competentie_scores | Scores per competentie per evaluatie |
+| gebruiker | Alle gebruikers (student, docent, mentor, commissie, admin) |
+| student / docent / mentor | Rolspecifieke profielgegevens, gekoppeld aan `gebruiker` |
+| bedrijf | Stagebedrijven |
+| stage | Stageaanvragen per student (incl. status van ingediend t/m afgerond) |
+| stagecontract | Ondertekening en bestandspad van het stagecontract |
+| logboek | Wekelijkse logboeken per stage |
+| logboek_dag | Dagelijkse invoer (Ma–Vr) binnen een weeklogboek |
+| logboek_feedback | Mentor-/docentopmerkingen per logboek |
+| evaluatie / student_evaluatie | Tussentijdse en finale evaluaties per student |
+| evaluatie_criterium / rubriek | Aanpasbare competentiecriteria met scoringsrubrieken |
+| commissie_beslissing | Beslissingen van de stagecommissie per stage |
+| notificatie | Meldingen per gebruiker (met type voor kleur/icoon) |
 
 ## Testgebruikers
 | Email | Rol |

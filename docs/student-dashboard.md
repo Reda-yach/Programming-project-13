@@ -1,64 +1,45 @@
 # Student dashboard — concrete statuscheck
 
-Dit document leest de Trello-checklist van de user story "Student dashboard" en legt concreet vast wat er nu aanwezig is en wat nog ontbreekt.
+Dit document volgt de Trello-checklist van de user story "Student dashboard" en legt vast wat er nu aanwezig is. Laatst bijgewerkt: 12 juni 2026.
 
-## 1. Wat is er nu al aanwezig?
+## 1. Acceptatiecriteria
 
-### Acceptatiecriteria
-- Student ziet zijn naam en stagegegevens.
-  - Status: deels aanwezig.
-  - In de code is er wel een studentpagina met studentgegevens in [frontend/src/views/StudentAanvraag.vue](../frontend/src/views/StudentAanvraag.vue), maar op het echte dashboard in [frontend/src/views/StudentDashboard.vue](../frontend/src/views/StudentDashboard.vue) is dit nog niet als volledige dashboardweergave ingericht.
-- Student ziet de status van zijn logboek.
-  - Status: nog niet concreet aanwezig.
-  - Er is wel een "Logboek deze week"-blok, maar geen werkelijke status van het logboek of echte data.
-- Student ziet recente mentorfeedback.
-  - Status: niet aanwezig.
-  - Er is momenteel geen feedbacksectie of dataflow voor mentorfeedback in het dashboard.
-- Student ziet aankomende deadlines.
-  - Status: niet aanwezig.
-  - Er is geen concrete deadlineweergave in de huidige dashboardcode.
-- Dashboardgegevens worden automatisch bijgewerkt.
-  - Status: niet aanwezig.
-  - De huidige status komt uit lokale store-data in [frontend/src/stores/stage.js](../frontend/src/stores/stage.js), niet uit een live backend-bron.
+- **Student ziet zijn naam en stagegegevens** — ✅ aanwezig.
+  - [StudentDashboard.vue](../frontend/src/views/StudentDashboard.vue) toont naam, opleiding/jaar en de stage-kaart (bedrijf, stageperiode, status) met live data uit de backend.
+- **Student ziet de status van zijn logboek** — ✅ aanwezig.
+  - "Logboek deze week" toont een Ma–Vr dag-raster met echte per-dag-invoer (groen vinkje = uren ingevuld) plus een statusbadge (Concept/Ingediend/Goedgekeurd).
+- **Student ziet recente mentorfeedback** — ✅ aanwezig.
+  - Feedback wordt uit `logboek_feedback` opgehaald en samen met meldingen in één "Meldingen & Feedback"-tijdlijn getoond.
+- **Student ziet aankomende deadlines** — ✅ aanwezig (als evaluaties).
+  - Rij 2 toont **Tussentijdse Evaluatie** en **Eindevaluatie** met beschikbaarheid (BESCHIKBAAR / IN AFWACHTING), afgeleid uit de stageperiode.
+- **Dashboardgegevens worden automatisch bijgewerkt** — ✅ aanwezig.
+  - Alle data komt live uit `GET /api/students/:id/dashboard`; de view laadt deze bij elke `onMounted` opnieuw op (geen lokale store-mockdata meer).
 
-### Frontend
-- Welkomstkaart.
-  - Status: aanwezig.
-  - De view toont een welkomsttekst in [frontend/src/views/StudentDashboard.vue](../frontend/src/views/StudentDashboard.vue).
-- Logboekstatuskaart.
-  - Status: deels aanwezig.
-  - Er is een placeholder voor logboek, maar nog geen echte statuslogica.
-- Mentorfeedback.
-  - Status: niet aanwezig.
-- Deadlineoverzicht.
-  - Status: niet aanwezig.
-- Melding als logboek van deze week nog niet is ingediend.
-  - Status: niet aanwezig.
-- Meldingen als sectie op het dashboard.
-  - Status: deels aanwezig.
-  - Er is een meldingenblok, maar het bevat nog geen echte data.
+## 2. Frontend
 
-### Backend
-- GET /students/:id/dashboard.
-  - Status: niet aanwezig.
-  - Er is geen endpoint die de dashboardgegevens voor een student teruggeeft.
-- Dashboardgegevens verzamelen.
-  - Status: niet aanwezig.
-  - De huidige backend-routes geven status of aanvraaggegevens terug, maar niet een complete dashboarddataset.
+- **Welkomstkaart** — ✅ "Welkom terug, {naam}" (actief) / "Welkom {naam}" (inactief) + subtitel.
+- **Stage Status-kaart** — ✅ ACTIEF/INACTIEF-pill, bedrijf, stageperiode (dd/mm/jjjj) en voortgangsbalk ("Week N van M · K resterend").
+- **Logboekstatuskaart** — ✅ dag-raster Ma–Vr met echte data + statusbadge.
+- **Mentorfeedback** — ✅ samengevoegd in "Meldingen & Feedback".
+- **Evaluatie-overzicht** — ✅ Tussentijdse + Eindevaluatie-kaarten.
+- **Melding "logboek deze week nog niet ingediend"** — ✅ gele waarschuwingsbalk bovenaan.
+- **Meldingen-sectie** — ✅ "Meldingen & Feedback" met gekleurde status-iconen (✓ groen / ⚠ geel / ✕ rood) en relatieve tijd.
 
-## 2. Wat is nog niet aanwezig?
+## 3. Backend
 
-1. Een echt dashboard-endpoint voor een student.
-2. Een weergave van logboekstatus, mentorfeedback en deadlines.
-3. Een live update van dashboardinformatie vanuit de backend.
-4. Een echte feedback- en meldingsflow op het dashboard.
+- **`GET /api/students/:id/dashboard`** — ✅ aanwezig in [studentdashboardroute.js](../backend/src/routes/studentdashboardroute.js), beveiligd met `verifyToken`.
+  - `:id` is de **gebruiker_id** uit de JWT; de route zoekt zelf de student op. Een student kan alleen zijn eigen dashboard opvragen (staff-rollen mogen alles).
+- **Dashboarddataset verzamelen** — ✅ in één call: studentprofiel, actieve/recentste stage, weeklogboek + per-dag-data (`logboek_dag`), recente feedback, ongelezen meldingen en afgeleide deadlines.
 
-## 3. Concreet wat moet gebeuren
+## 4. Designkoppeling
 
-- Backend: voeg een dashboard-endpoint toe dat naam, stagegegevens, status, feedback en deadlines teruggeeft.
-- Frontend: vervang de huidige placeholder-data door echte dashboardgegevens.
-- Database: maak een structuur voor statusgeschiedenis, feedback en deadline-informatie als dat nodig is voor de user story.
+De implementatie volgt het Figma-prototype (Prototype_groep13), schermen voor de actieve, inactieve en meldingen-toestand.
 
-## 4. Conclusie
+## 5. Afgewerkte verfijningen
 
-De basis van het studentdashboard is aanwezig, maar de checklist-itemen uit Trello zijn nog niet volledig gerealiseerd. De grootste open punten zijn: echte dashboarddata, logboekstatus, feedback, deadlines en automatische updates.
+1. **Notificatie-type** — ✅ `notificatie` heeft nu een `type`-kolom (`info`/`goed`/`waarschuwing`/`fout`), zie [schema.sql](../database/schema.sql) en migratie 13 in [migratie.sql](../database/migratie.sql). De dashboard-route geeft `type` mee en het dashboard kleurt het icoon hierop; de tekst-heuristiek blijft enkel als fallback voor oude rijen zonder type.
+2. **Rol-dropdown** — ✅ de [TopBar](../frontend/src/components/TopBar.vue) toont rechtsboven een rol-dropdown (rol + ▾) die de accountinfo (naam, e-mail, rol) toont; "Uitloggen" wist nu ook echt de sessie en navigeert naar het loginscherm.
+
+## 6. Conclusie
+
+De user story "Student dashboard" is volledig gerealiseerd: een live dashboard-endpoint, echte stage-, logboek-, feedback- en evaluatiegegevens, een weergave die het Figma-ontwerp volgt, getypeerde meldingen en een rol-dropdown in de topbar.
