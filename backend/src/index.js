@@ -1043,6 +1043,50 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 });
 
 // ============================================================
+// MENTOR STAGIAIRS
+// ============================================================
+
+// Alle stagiairs van een specifieke mentor ophalen
+app.get('/api/mentors/:id/stagiairs', verifyToken, requireRol('mentor', 'admin', 'docent'), (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      s.stage_id,
+      g.voornaam,
+      g.naam AS student_naam,
+      st.studentnummer,
+      st.opleiding,
+      b.naam AS bedrijf,
+      s.startdatum,
+      s.einddatum,
+      s.status,
+      (
+        SELECT l.status
+        FROM logboek l
+        WHERE l.stage_id = s.stage_id
+        ORDER BY l.week_nummer DESC
+        LIMIT 1
+      ) AS logboek_status,
+      (
+        SELECT l.week_nummer
+        FROM logboek l
+        WHERE l.stage_id = s.stage_id
+        ORDER BY l.week_nummer DESC
+        LIMIT 1
+      ) AS laatste_week
+    FROM stage s
+    JOIN student st ON s.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE s.mentor_id = ?
+    ORDER BY g.naam ASC
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
