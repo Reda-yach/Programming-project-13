@@ -48,6 +48,11 @@ const router = createRouter({
       name: 'docent-studenten',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
+    {
+      path: '/admin/competenties',
+      name: 'admin-competenties',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
+    },
   ],
 })
 
