@@ -1262,6 +1262,112 @@ app.put('/api/evaluaties/:id/indienen', verifyToken, requireRol('mentor', 'docen
 });
 
 // ============================================================
+// PROBLEEMMELDINGEN
+// ============================================================
+
+// Nieuwe probleemmelding indienen
+app.post('/api/probleemmeldingen', verifyToken, requireRol('mentor', 'admin'), (req, res) => {
+  const { mentor_id, stage_id, titel, beschrijving } = req.body;
+
+  // Controleer of mentor deze stage begeleidt
+  db.query(`
+    SELECT stage_id FROM stage WHERE stage_id = ? AND mentor_id = ?
+  `, [stage_id, mentor_id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) {
+      return res.status(403).json({ error: 'Je kan enkel problemen melden voor stagiairs die je begeleidt' });
+    }
+
+    db.query(`
+      INSERT INTO probleemmelding (mentor_id, stage_id, titel, beschrijving)
+      VALUES (?, ?, ?, ?)
+    `, [mentor_id, stage_id, titel, beschrijving], (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      // Notificatie sturen naar docent en commissie
+      db.query(`
+        SELECT
+          d.gebruiker_id AS docent_gebruiker_id,
+          g.voornaam AS mentor_voornaam,
+          g.naam AS mentor_naam
+        FROM stage s
+        JOIN docent d ON s.docent_id = d.docent_id
+        JOIN mentor m ON s.mentor_id = m.mentor_id
+        JOIN gebruiker g ON m.gebruiker_id = g.gebruiker_id
+        WHERE s.stage_id = ?
+      `, [stage_id], (err3, rows) => {
+        if (err3 || rows.length === 0) {
+          return res.json({ message: 'Probleemmelding ingediend!', id: result.insertId });
+        }
+
+        const bericht = `Nieuwe probleemmelding van mentor ${rows[0].mentor_voornaam} ${rows[0].mentor_naam}: "${titel}"`;
+
+        db.query(`
+          INSERT INTO notificatie (gebruiker_id, bericht)
+          VALUES (?, ?)
+        `, [rows[0].docent_gebruiker_id, bericht], () => {
+          res.json({ message: 'Probleemmelding ingediend en docent verwittigd!', id: result.insertId });
+        });
+      });
+    });
+  });
+});
+
+// Alle probleemmeldingen ophalen voor docent en commissie
+app.get('/api/probleemmeldingen', verifyToken, requireRol('docent', 'commissie', 'admin'), (req, res) => {
+  db.query(`
+    SELECT
+      p.melding_id,
+      p.titel,
+      p.beschrijving,
+      p.status,
+      p.aangemaakt_op,
+      g.voornaam AS mentor_voornaam,
+      g.naam AS mentor_naam,
+      gs.voornaam AS student_voornaam,
+      gs.naam AS student_naam,
+      b.naam AS bedrijf
+    FROM probleemmelding p
+    JOIN mentor m ON p.mentor_id = m.mentor_id
+    JOIN gebruiker g ON m.gebruiker_id = g.gebruiker_id
+    JOIN stage s ON p.stage_id = s.stage_id
+    JOIN student st ON s.student_id = st.student_id
+    JOIN gebruiker gs ON st.gebruiker_id = gs.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    ORDER BY p.aangemaakt_op DESC
+  `, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// Probleemmeldingen van een specifieke mentor ophalen
+app.get('/api/mentors/:id/probleemmeldingen', verifyToken, requireRol('mentor', 'admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      p.melding_id,
+      p.titel,
+      p.beschrijving,
+      p.status,
+      p.aangemaakt_op,
+      gs.voornaam AS student_voornaam,
+      gs.naam AS student_naam,
+      b.naam AS bedrijf
+    FROM probleemmelding p
+    JOIN stage s ON p.stage_id = s.stage_id
+    JOIN student st ON s.student_id = st.student_id
+    JOIN gebruiker gs ON st.gebruiker_id = gs.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE p.mentor_id = ?
+    ORDER BY p.aangemaakt_op DESC
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
