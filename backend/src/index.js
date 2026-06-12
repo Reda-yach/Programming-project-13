@@ -1087,6 +1087,71 @@ app.get('/api/mentors/:id/stagiairs', verifyToken, requireRol('mentor', 'admin',
 });
 
 // ============================================================
+// MENTOR LOGBOEKEN
+// ============================================================
+
+// Logboeken ophalen van alle stagiairs van een mentor
+app.get('/api/mentors/:id/logboeken', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      l.logboek_id,
+      l.week_nummer,
+      l.activiteiten,
+      l.reflectie,
+      l.leerpunten,
+      l.uren,
+      l.status,
+      l.ingediend_op,
+      g.voornaam,
+      g.naam AS student_naam,
+      s.stage_id,
+      b.naam AS bedrijf
+    FROM logboek l
+    JOIN stage s ON l.stage_id = s.stage_id
+    JOIN student st ON l.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE s.mentor_id = ?
+    ORDER BY g.naam ASC, l.week_nummer DESC
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// Logboek aftekenen als gelezen door mentor
+app.put('/api/logboeken/:id/aftekenen', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    UPDATE logboek SET status = 'goedgekeurd' WHERE logboek_id = ?
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: 'Logboek niet gevonden' });
+    }
+
+    // Notificatie sturen naar student
+    db.query(`
+      SELECT st.gebruiker_id, l.week_nummer
+      FROM logboek l
+      JOIN student st ON l.student_id = st.student_id
+      WHERE l.logboek_id = ?
+    `, [id], (err2, rows) => {
+      if (err2 || rows.length === 0) {
+        return res.json({ message: 'Logboek afgetekend!' });
+      }
+      db.query(`
+        INSERT INTO notificatie (gebruiker_id, bericht)
+        VALUES (?, ?)
+      `, [rows[0].gebruiker_id, `Mentor heeft logboek week ${rows[0].week_nummer} bevestigd`], () => {
+        res.json({ message: 'Logboek afgetekend en student verwittigd!' });
+      });
+    });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
