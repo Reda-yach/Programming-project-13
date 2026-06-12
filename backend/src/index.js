@@ -1372,6 +1372,58 @@ app.get('/api/mentors/:id/probleemmeldingen', verifyToken, requireRol('mentor', 
 });
 
 // ============================================================
+// DOCENT STUDENTEN
+// ============================================================
+
+// Alle studenten van een docent ophalen
+app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(`
+    SELECT d.docent_id FROM docent d WHERE d.gebruiker_id = ?
+  `, [gebruiker_id], (err, docentRows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (docentRows.length === 0) return res.status(403).json({ error: 'Geen docent account' });
+
+    const docent_id = docentRows[0].docent_id;
+
+    db.query(`
+      SELECT
+        s.stage_id,
+        g.voornaam,
+        g.naam,
+        st.studentnummer,
+        b.naam AS bedrijf,
+        b.adres AS bedrijf_adres,
+        gm.voornaam AS mentor_voornaam,
+        gm.naam AS mentor_naam,
+        gm.email AS mentor_email,
+        s.startdatum,
+        s.einddatum,
+        s.status,
+        (
+          SELECT l.status
+          FROM logboek l
+          WHERE l.stage_id = s.stage_id
+          ORDER BY l.week_nummer DESC
+          LIMIT 1
+        ) AS logboek_status
+      FROM stage s
+      JOIN student st ON s.student_id = st.student_id
+      JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      JOIN mentor m ON s.mentor_id = m.mentor_id
+      JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+      WHERE s.docent_id = ?
+      ORDER BY g.naam ASC
+    `, [docent_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
+  });
+});
+
+// ============================================================
 // SERVER STARTEN
 // ============================================================
 app.use('/api/stage', require('./routes/stage'));
