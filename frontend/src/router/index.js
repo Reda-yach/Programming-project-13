@@ -74,6 +74,11 @@ const router = createRouter({
       component: () => import('../views/DocentEvaluatie.vue'),
     },
     {
+      path: '/docent/evaluatie/:stageId/:type/invullen',
+      name: 'docent-evaluatie-invullen',
+      component: () => import('../views/DocentEvaluatieInvullen.vue'),
+    },
+    {
       path: '/mentor',
       name: 'mentor-dashboard',
       component: () => import('../views/MentorDashboard.vue'),
