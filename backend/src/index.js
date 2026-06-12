@@ -1083,11 +1083,11 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 // COMPETENTIES
 // ============================================================
  
-// Alle competenties per opleiding ophalen
+// Alle actieve competenties per opleiding ophalen
 app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (req, res) => {
   const { opleiding_id } = req.params;
   db.query(
-    'SELECT * FROM competentie WHERE opleiding_id = ? ORDER BY naam ASC',
+    'SELECT * FROM competentie WHERE opleiding_id = ? AND is_actief = TRUE ORDER BY naam ASC',
     [opleiding_id],
     (err, results) => {
       if (err) {
@@ -1098,57 +1098,111 @@ app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (re
     }
   );
 });
- 
-// Nieuwe competentie aanmaken
+
+// Nieuwe competentie aanmaken (met duplicate check)
 app.post('/api/competenties', verifyToken, requireRol('admin'), (req, res) => {
   const { naam, omschrijving, gewicht, opleiding_id } = req.body;
- 
+
   if (!naam || !opleiding_id) {
     res.status(400).json({ error: 'Naam en opleiding_id zijn verplicht.' });
     return;
   }
- 
+
+  // Controleer op dubbele naam binnen dezelfde opleiding (enkel actieve)
   db.query(
-    'INSERT INTO competentie (naam, omschrijving, gewicht, opleiding_id) VALUES (?, ?, ?, ?)',
-    [naam, omschrijving, gewicht, opleiding_id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
+    'SELECT competentie_id FROM competentie WHERE LOWER(naam) = LOWER(?) AND opleiding_id = ? AND is_actief = TRUE',
+    [naam.trim(), opleiding_id],
+    (errCheck, bestaande) => {
+      if (errCheck) {
+        res.status(500).json({ error: errCheck.message });
         return;
       }
-      res.json({ message: 'Competentie aangemaakt!', id: results.insertId });
+      if (bestaande.length > 0) {
+        res.status(409).json({ error: 'Een competentie met deze naam bestaat al.' });
+        return;
+      }
+
+      db.query(
+        'INSERT INTO competentie (naam, omschrijving, gewicht, opleiding_id) VALUES (?, ?, ?, ?)',
+        [naam.trim(), omschrijving, gewicht, opleiding_id],
+        (err, results) => {
+          if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+          }
+          res.json({ message: 'Competentie aangemaakt!', id: results.insertId });
+        }
+      );
     }
   );
 });
- 
-// Competentie bewerken
+
+// Competentie bewerken (met duplicate check)
 app.put('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
   const { id } = req.params;
   const { naam, omschrijving, gewicht } = req.body;
- 
+
+  if (!naam) {
+    res.status(400).json({ error: 'Naam is verplicht.' });
+    return;
+  }
+
+  // Haal opleiding_id op van de huidige competentie
   db.query(
-    'UPDATE competentie SET naam = ?, omschrijving = ?, gewicht = ? WHERE competentie_id = ?',
-    [naam, omschrijving, gewicht, id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
+    'SELECT opleiding_id FROM competentie WHERE competentie_id = ?',
+    [id],
+    (errGet, rows) => {
+      if (errGet) {
+        res.status(500).json({ error: errGet.message });
         return;
       }
-      if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Competentie niet gevonden' });
+      if (rows.length === 0) {
+        res.status(404).json({ error: 'Competentie niet gevonden.' });
         return;
       }
-      res.json({ message: 'Competentie bijgewerkt!' });
+      const { opleiding_id } = rows[0];
+
+      // Controleer op dubbele naam (andere competenties in dezelfde opleiding)
+      db.query(
+        'SELECT competentie_id FROM competentie WHERE LOWER(naam) = LOWER(?) AND opleiding_id = ? AND is_actief = TRUE AND competentie_id != ?',
+        [naam.trim(), opleiding_id, id],
+        (errCheck, bestaande) => {
+          if (errCheck) {
+            res.status(500).json({ error: errCheck.message });
+            return;
+          }
+          if (bestaande.length > 0) {
+            res.status(409).json({ error: 'Een competentie met deze naam bestaat al.' });
+            return;
+          }
+
+          db.query(
+            'UPDATE competentie SET naam = ?, omschrijving = ?, gewicht = ? WHERE competentie_id = ?',
+            [naam.trim(), omschrijving, gewicht, id],
+            (err, results) => {
+              if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+              }
+              if (results.affectedRows === 0) {
+                res.status(404).json({ error: 'Competentie niet gevonden.' });
+                return;
+              }
+              res.json({ message: 'Competentie bijgewerkt!' });
+            }
+          );
+        }
+      );
     }
   );
 });
- 
-// Competentie verwijderen
+
+// Competentie deactiveren (soft delete via is_actief = FALSE)
 app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
   const { id } = req.params;
- 
+
   db.query(
-    'DELETE FROM competentie WHERE competentie_id = ?',
+    'UPDATE competentie SET is_actief = FALSE WHERE competentie_id = ?',
     [id],
     (err, results) => {
       if (err) {
@@ -1156,10 +1210,10 @@ app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res)
         return;
       }
       if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Competentie niet gevonden' });
+        res.status(404).json({ error: 'Competentie niet gevonden.' });
         return;
       }
-      res.json({ message: 'Competentie verwijderd!' });
+      res.json({ message: 'Competentie gedeactiveerd.' });
     }
   );
 });

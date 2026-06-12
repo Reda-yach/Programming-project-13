@@ -122,3 +122,8 @@ CREATE TABLE competentie (
 
     PRIMARY KEY (competentie_id)
 );
+-- ────────────────────────────────────────────────────────────────────────────
+-- MIGRATIE 14: is_actief kolom toevoegen aan competentie (soft delete)
+-- ────────────────────────────────────────────────────────────────────────────
+ALTER TABLE competentie
+  ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
