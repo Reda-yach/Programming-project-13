@@ -19,38 +19,27 @@ const router = createRouter({
       component: () => import('../views/StudentAanvraag.vue'),
     },
     {
-      path: '/docent',
-      name: 'docent',
-      component: () => import('../views/DocentInCommissieStudenten.vue'),
+      path: '/student/aanvraag/status',
+      name: 'student-aanvraag-status',
+      component: () => import('../views/StudentAanvraagStatus.vue'),
     },
     {
-      path: '/docent-logboek-overzicht',
-      name: 'docent-logboek-overzicht',
-      component: () => import('../views/Docentlogboekoverzicht.vue'),
+      path: '/student/logboek',
+      name: 'student-logboek',
+      component: () => import('../views/StudentLogboek.vue'),
     },
     {
-      path: '/docent-evaluaties',
-      name: 'docent-evaluaties',
-      component: () => import('../views/DocentInCommissieEvaluaties.vue'),
+      path: '/student/evaluatie',
+      name: 'student-evaluatie',
+      component: () => import('../views/StudentEvaluatie.vue'),
     },
     {
-      path: '/docent-aanvragen',
-      name: 'docent-aanvragen',
-      component: () => import('../views/DocentInCommissieAanvragen.vue'),
-    },
-    {
-      path: '/docent-logboek-detail',
-      name: 'docent-logboek-detail',
-      component: () => import('../views/DocentLogboekDetail.vue'),
-    },
-    {
-      path: '/docent-studenten',
-      name: 'docent-studenten',
-      component: () => import('../views/DocentInCommissieStudenten.vue'),
+      path: '/mentor',
+      name: 'mentor-dashboard',
+      component: () => import('../views/MentorDashboard.vue'),
     },
   ],
 })
-
 
 router.beforeEach((to, from, next) => {
   const openRoutes = ['login']
