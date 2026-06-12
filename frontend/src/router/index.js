@@ -69,6 +69,11 @@ const router = createRouter({
       component: () => import('../views/DocentAanvragen.vue'),
     },
     {
+      path: '/docent/evaluatie/:stageId/:type',
+      name: 'docent-evaluatie',
+      component: () => import('../views/DocentEvaluatie.vue'),
+    },
+    {
       path: '/mentor',
       name: 'mentor-dashboard',
       component: () => import('../views/MentorDashboard.vue'),
