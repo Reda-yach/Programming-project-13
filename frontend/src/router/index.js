@@ -92,7 +92,14 @@ const router = createRouter({
     {
       path: '/wachtwoord-vergeten',
       name: 'wachtwoord-vergeten',
-      component: () => import('../views/PlaceholderView.vue'),
+      meta: { requiresAuth: false },
+      component: () => import('../views/WachtwoordVergetenView.vue'),
+    },
+    {
+      path: '/wachtwoord-reset',
+      name: 'wachtwoord-reset',
+      meta: { requiresAuth: false },
+      component: () => import('../views/WachtwoordResetView.vue'),
     },
 
   ],

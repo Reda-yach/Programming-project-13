@@ -21,61 +21,77 @@ Dit document geeft een overzicht van wat er momenteel al aanwezig is in de code 
   - POST /api/login
 - Deze endpoint controleert de gebruiker in de database, vergelijkt het wachtwoord met bcrypt en geeft een JWT-token terug.
 
-## Wat nog niet aanwezig is
+## Backend-flow: KLAAR ✅ (geïmplementeerd)
 
-### 1. De echte wachtwoord-vergeten flow is nog niet geïmplementeerd
-- De route /wachtwoord-vergeten verwijst momenteel naar de placeholder-pagina:
-  - frontend/src/router/index.js
-- Er is nog geen echte formulierpagina voor:
-  - e-mailadres invoeren
-  - reset-link aanvragen
-  - nieuw wachtwoord instellen
+De volledige backend-flow voor "wachtwoord vergeten" is nu gebouwd.
 
-### 2. Backend-endpoints voor reset zijn nog niet aanwezig
-- Er zijn nog geen API-endpoints zoals:
-  - POST /api/auth/forgot-password
-  - POST /api/auth/reset-password
-- Er is nog geen logica voor:
-  - token genereren
-  - token opslaan
-  - token verifiëren
-  - wachtwoord updaten
+### 1. Backend-endpoints (aanwezig)
+- `POST /api/auth/forgot-password` — body `{ email }`
+  - genereert een reset-token, slaat de hash op en mailt de reset-link
+  - antwoordt **altijd** generiek (verraadt niet of een e-mailadres bestaat)
+- `POST /api/auth/reset-password` — body `{ token, wachtwoord }`
+  - verifieert de token (geldig / niet verlopen / niet gebruikt)
+  - zet het nieuwe wachtwoord (bcrypt) en markeert de token als gebruikt
+- Code: `backend/src/routes/auth.js`, geregistreerd in `backend/src/index.js`
 
-### 3. E-mailverzending ontbreekt nog
-- In de backend en dependencies is nog geen e-mailservice aanwezig.
-- Er is momenteel geen implementatie voor:
-  - nodemailer
-  - Mailtrap / SMTP
-  - verzenden van resetlink naar de gebruiker
+### 2. E-mailverzending (aanwezig)
+- `nodemailer` toegevoegd aan de dependencies
+- Mailservice: `backend/src/services/mail.js`
+  - SMTP via `.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`)
+  - **dev-fallback**: zonder SMTP-config wordt de reset-link naar de console gelogd,
+    zodat de flow lokaal getest kan worden zonder mailserver
 
-### 4. Databaseondersteuning voor reset-tokens ontbreekt
-- In de huidige database-schema staat nog geen tabel of veld voor:
-  - reset tokens
-  - geldigheidsduur van tokens
-  - éénmalig gebruik van tokens
-- De bestaande tabel gebruiker bevat alleen logingegevens en rollen.
+### 3. Database-ondersteuning (aanwezig)
+- Tabel `wachtwoord_reset` toegevoegd in `database/migratie.sql` (MIGRATIE 12)
+  - `token_hash` (SHA-256, ruwe token wordt nooit opgeslagen)
+  - `verloopt_op` (geldigheidsduur, standaard 60 min)
+  - `gebruikt_op` (eenmalig gebruik)
+  - FK naar `gebruiker` met `ON DELETE CASCADE`
 
-### 5. Beveiliging en validatie ontbreken nog
-- Er is nog geen extra beveiliging voor:
-  - beperkte aanvraagfrequentie (rate limiting)
-  - geldigheid van reset-tokens
-  - veilige token-opslag
-  - foutafhandeling bij niet-bestaande e-mailadressen
+### 4. Beveiliging en validatie (aanwezig)
+- Rate limiting: max. 3 aanvragen per e-mailadres per 15 minuten (in-memory)
+- Token: 32 random bytes, enkel als SHA-256-hash opgeslagen
+- Token verloopt en is eenmalig; bij reset worden alle openstaande tokens ongeldig
+- Generieke foutafhandeling bij niet-bestaande e-mailadressen
+- Minimale wachtwoordlengte van 8 tekens
+
+## Frontend-flow: KLAAR ✅ (geïmplementeerd)
+
+### 1. Aanvraagpagina (aanwezig)
+- `frontend/src/views/WachtwoordVergetenView.vue`
+  - e-mailadres invoeren → `POST /api/auth/forgot-password`
+  - toont na verzending het generieke bevestigingsbericht van de backend
+- Route `/wachtwoord-vergeten` wijst nu naar deze pagina (niet langer placeholder):
+  - `frontend/src/router/index.js`
+
+### 2. Reset-pagina (aanwezig)
+- `frontend/src/views/WachtwoordResetView.vue`
+  - leest `token` uit de query (`/wachtwoord-reset?token=...`)
+  - nieuw wachtwoord + bevestiging → `POST /api/auth/reset-password`
+  - client-side validatie: min. 8 tekens, beide velden gelijk, token aanwezig
+- Nieuwe route `/wachtwoord-reset` toegevoegd in `frontend/src/router/index.js`
+
+### 3. Vormgeving (aanwezig)
+- Beide pagina's hergebruiken het bestaande login-design-system
+  (`login-page`, `login-card`, `form-group`, `btn-primary` …) — visueel
+  consistent met `LoginView.vue`.
+- `.form-success` toegevoegd in `frontend/src/assets/styles.css` voor de
+  succesmeldingen.
+
+> Opmerking: er is in deze repo geen Figma-MCP geconfigureerd (`.mcp.json`
+> is leeg) en geen Figma-bestand aanwezig. Als referentie is daarom het
+> bestaande login-scherm aangehouden.
 
 ## Conclusie
 
-Wat al goed is:
+Wat klaar is:
+- de volledige backend-flow (endpoints, mail, DB-tokens, beveiliging)
+- de twee frontend-pagina's (aanvraag + reset) met routes en validatie
 - de gebruiker kan naar de pagina komen via de login-link
-- de basis-authenticatie is aanwezig in frontend en backend
-- de app heeft een goede basisstructuur om deze feature aan te koppelen
+- de basis-authenticatie
 
 Wat nog gedaan moet worden:
-1. Een echte wachtwoord-vergeten pagina bouwen in de frontend
-2. Backend-endpoints toevoegen voor forgot/reset password
-3. E-mailfunctionaliteit integreren
-4. Database-tokens toevoegen
-5. Veiligheid en validatie implementeren
-6. Testen van de volledige flow
-
-## Voorstel voor vervolgstap
-De volgende stap is om eerst de backend-functionaliteit te bouwen (forgot/reset password), daarna de frontend-pagina’s en daarna de beveiliging en tests.
+1. DB: migratie 12 uitvoeren op de database
+2. Optioneel: SMTP-gegevens in `.env` zetten voor echte e-mailverzending
+3. Testen van de volledige flow (lokaal kan de reset-link uit de
+   backend-console gehaald worden — zie dev-fallback in `mail.js`)
