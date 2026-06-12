@@ -233,6 +233,8 @@ CREATE TABLE evaluatie_criterium (
     competentie         VARCHAR(150)    NOT NULL,
     naam                VARCHAR(150)    NOT NULL,
     score               INT,
+    mentor_score        INT,
+    mentor_feedback     TEXT,
     gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 1.00,
     volgorde            INT             NOT NULL DEFAULT 0,
 
