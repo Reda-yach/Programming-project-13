@@ -62,6 +62,23 @@
           </div>
 
           <div class="card mt-16">
+            <h2 class="form-section-title">Mentor aftekening</h2>
+            <div v-if="huidigLogboek.gevalideerd_op" class="mt-8">
+              <span class="badge badge-green">✓ Afgetekend</span>
+              <p class="text-secondary text-sm mt-4">
+                Door: {{ huidigLogboek.gevalideerd_door_voornaam }} {{ huidigLogboek.gevalideerd_door_naam }}
+                op {{ formatDatum(huidigLogboek.gevalideerd_op) }}
+              </p>
+            </div>
+            <div v-else class="mt-8">
+              <span class="badge badge-yellow">In afwachting van mentor</span>
+              <p class="text-secondary text-sm mt-4">
+                De mentor heeft dit logboek nog niet afgetekend.
+              </p>
+            </div>
+          </div>
+
+          <div class="card mt-16">
             <h2 class="form-section-title">Mentorfeedback</h2>
             <div v-if="feedback.length === 0" class="mt-8">
               <p class="text-secondary text-sm">
@@ -78,6 +95,26 @@
               <p class="mt-4">{{ f.opmerking }}</p>
               <p class="text-secondary text-sm mt-4">{{ f.created_at?.split('T')[0] }}</p>
             </div>
+          </div>
+
+          <div class="card mt-16">
+            <h2 class="form-section-title">Jouw feedback als docent</h2>
+            <div class="form-group mt-8">
+              <textarea
+                v-model="docentFeedback"
+                rows="4"
+                class="form-input"
+                placeholder="Voeg je feedback toe als docent..."
+              ></textarea>
+            </div>
+            <p v-if="feedbackBericht" class="text-sm mt-8 badge-green">{{ feedbackBericht }}</p>
+            <button
+              class="btn btn-primary mt-12"
+              @click="slaDocentFeedbackOp"
+              :disabled="!docentFeedback.trim()"
+            >
+              Feedback opslaan
+            </button>
           </div>
         </div>
 
@@ -98,6 +135,8 @@ import AppTopbar from '@/components/AppTopbar.vue'
 const route = useRoute()
 const logboeken = ref([])
 const feedback = ref([])
+const docentFeedback = ref('')
+const feedbackBericht = ref('')
 const laden = ref(true)
 const fout = ref(null)
 const huidigWeek = ref(1)
@@ -152,6 +191,28 @@ async function volgendeWeek() {
   if (huidigWeek.value < maxWeek.value) {
     huidigWeek.value++
     await laadFeedback()
+  }
+}
+
+async function slaDocentFeedbackOp() {
+  const token = localStorage.getItem('token')
+  const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
+  const res = await fetch(`${API}/logboeken/${huidigLogboek.value.logboek_id}/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      gebruiker_id: gebruiker.id,
+      opmerking: docentFeedback.value
+    })
+  })
+  if (res.ok) {
+    feedbackBericht.value = 'Feedback opgeslagen!'
+    docentFeedback.value = ''
+    await laadFeedback()
+    setTimeout(() => feedbackBericht.value = '', 2000)
   }
 }
 
