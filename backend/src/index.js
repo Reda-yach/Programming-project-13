@@ -1079,7 +1079,90 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
     });
   });
 });
-
+// ============================================================
+// COMPETENTIES
+// ============================================================
+ 
+// Alle competenties per opleiding ophalen
+app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (req, res) => {
+  const { opleiding_id } = req.params;
+  db.query(
+    'SELECT * FROM competentie WHERE opleiding_id = ? ORDER BY naam ASC',
+    [opleiding_id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json(results);
+    }
+  );
+});
+ 
+// Nieuwe competentie aanmaken
+app.post('/api/competenties', verifyToken, requireRol('admin'), (req, res) => {
+  const { naam, omschrijving, gewicht, opleiding_id } = req.body;
+ 
+  if (!naam || !opleiding_id) {
+    res.status(400).json({ error: 'Naam en opleiding_id zijn verplicht.' });
+    return;
+  }
+ 
+  db.query(
+    'INSERT INTO competentie (naam, omschrijving, gewicht, opleiding_id) VALUES (?, ?, ?, ?)',
+    [naam, omschrijving, gewicht, opleiding_id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json({ message: 'Competentie aangemaakt!', id: results.insertId });
+    }
+  );
+});
+ 
+// Competentie bewerken
+app.put('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { naam, omschrijving, gewicht } = req.body;
+ 
+  db.query(
+    'UPDATE competentie SET naam = ?, omschrijving = ?, gewicht = ? WHERE competentie_id = ?',
+    [naam, omschrijving, gewicht, id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Competentie niet gevonden' });
+        return;
+      }
+      res.json({ message: 'Competentie bijgewerkt!' });
+    }
+  );
+});
+ 
+// Competentie verwijderen
+app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+ 
+  db.query(
+    'DELETE FROM competentie WHERE competentie_id = ?',
+    [id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Competentie niet gevonden' });
+        return;
+      }
+      res.json({ message: 'Competentie verwijderd!' });
+    }
+  );
+});
 // ============================================================
 // SERVER STARTEN
 // ============================================================
