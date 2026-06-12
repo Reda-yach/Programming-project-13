@@ -7,8 +7,9 @@ import { useStageStore } from '../stores/stage'
 const router = useRouter()
 const stageStore = useStageStore()
 
-// true zodra er al een aanvraag loopt of de stage actief is
-const alIngediend = computed(() => stageStore.status !== 'geen')
+const alIngediend = computed(() =>
+  stageStore.status === 'in_behandeling' || stageStore.status === 'goedgekeurd'
+)
 
 // Navbar-links — Dashboard + Aanvraag
 const navLinks = ref([
@@ -30,13 +31,18 @@ const student = ref({
 // Formuliervelden bedrijf
 const bedrijf = ref('')
 const sector = ref('')
-const adres = ref('')
+// Adres opgesplitst in aparte velden
+const straatnaam = ref('')
+const huisnummer = ref('')
+const postcode = ref('')
+const gemeente = ref('')
 const opdracht = ref('')
 const datumVan = ref('')
 const datumTot = ref('')
 
-// Formuliervelden mentor
-const mentorNaam = ref('')
+// Formuliervelden mentor (naam opgesplitst in voornaam + achternaam)
+const mentorVoornaam = ref('')
+const mentorAchternaam = ref('')
 const mentorFunctie = ref('')
 const mentorEmail = ref('')
 const mentorTel = ref('')
@@ -50,29 +56,23 @@ const toonBevestiging = ref(false)
 // Bij het laden: als er al een aanvraag is, vul de velden ermee in
 // zodat de student ziet wat hij heeft ingediend.
 onMounted(async () => {
-  const a = stageStore.aanvraag
-  if (a) {
-    bedrijf.value = a.bedrijf.bedrijf
-    sector.value = a.bedrijf.sector
-    adres.value = a.bedrijf.adres
-    opdracht.value = a.bedrijf.opdracht
-    datumVan.value = a.bedrijf.datumVan
-    datumTot.value = a.bedrijf.datumTot
-    mentorNaam.value = a.mentor.naam
-    mentorFunctie.value = a.mentor.functie
-    mentorEmail.value = a.mentor.email
-    mentorTel.value = a.mentor.tel
-  }
-
-  const token = localStorage.getItem('token')
-  if (!token) return
-  const res = await fetch('http://localhost:3000/api/stage', {
-    headers: { 'Authorization': `Bearer ${token}` }
-  })
-  const data = await res.json()
-  if (data.student) {
-    student.value.studentnr = data.student.studentnummer
-    student.value.opleiding = data.student.opleiding
+  await stageStore.laad()
+  if (stageStore.status === 'aanpassing_gevraagd' && stageStore.aanvraag) {
+    const a = stageStore.aanvraag
+    bedrijf.value = a.bedrijf || ''
+    sector.value = a.bedrijf_sector || ''
+    straatnaam.value = a.bedrijf_straatnaam || ''
+    huisnummer.value = a.bedrijf_huisnummer || ''
+    postcode.value = a.bedrijf_postcode || ''
+    gemeente.value = a.bedrijf_gemeente || ''
+    opdracht.value = a.beschrijving || ''
+    datumVan.value = (a.startdatum || '').slice(0, 10)
+    datumTot.value = (a.einddatum || '').slice(0, 10)
+    mentorVoornaam.value = a.mentor_voornaam || ''
+    mentorAchternaam.value = a.mentor_naam || ''
+    mentorFunctie.value = a.mentor_functie || ''
+    mentorEmail.value = a.mentor_email || ''
+    mentorTel.value = a.mentor_telefoon || ''
   }
 })
 
@@ -81,8 +81,33 @@ function valideer() {
 
   if (!bedrijf.value.trim()) fouten.bedrijf = 'Bedrijfsnaam is verplicht'
   if (!sector.value.trim()) fouten.sector = 'Sector is verplicht'
-  if (!adres.value.trim()) fouten.adres = 'Adres is verplicht'
-  if (!opdracht.value.trim()) fouten.opdracht = 'Omschrijving is verplicht'
+
+  // Adres: straatnaam en gemeente zijn tekst, huisnummer en postcode moeten getallen zijn
+  if (!straatnaam.value.trim()) fouten.straatnaam = 'Straatnaam is verplicht'
+
+  if (!huisnummer.value && huisnummer.value !== 0) {
+    fouten.huisnummer = 'Huisnummer is verplicht'
+  } else if (isNaN(huisnummer.value)) {
+    fouten.huisnummer = 'Huisnummer moet een getal zijn'
+  } else if (Number(huisnummer.value) <= 0) {
+    fouten.huisnummer = 'Huisnummer moet groter zijn dan 0'
+  }
+
+  if (!postcode.value && postcode.value !== 0) {
+    fouten.postcode = 'Postcode is verplicht'
+  } else if (isNaN(postcode.value)) {
+    fouten.postcode = 'Postcode moet een getal zijn'
+  } else if (String(postcode.value).length !== 4) {
+    fouten.postcode = 'Een Belgische postcode bestaat uit 4 cijfers'
+  }
+
+  if (!gemeente.value.trim()) fouten.gemeente = 'Gemeente is verplicht'
+
+  if (!opdracht.value.trim()) {
+    fouten.opdracht = 'Omschrijving is verplicht'
+  } else if (opdracht.value.trim().length < 20) {
+    fouten.opdracht = 'Geef een uitgebreidere omschrijving (minstens 20 tekens)'
+  }
 
   if (!datumVan.value) fouten.datumVan = 'Startdatum is verplicht'
   if (!datumTot.value) fouten.datumTot = 'Einddatum is verplicht'
@@ -90,7 +115,8 @@ function valideer() {
     fouten.datumTot = 'Einddatum moet na de startdatum liggen'
   }
 
-  if (!mentorNaam.value.trim()) fouten.mentorNaam = 'Naam mentor is verplicht'
+  if (!mentorVoornaam.value.trim()) fouten.mentorVoornaam = 'Voornaam mentor is verplicht'
+  if (!mentorAchternaam.value.trim()) fouten.mentorAchternaam = 'Achternaam mentor is verplicht'
   if (!mentorFunctie.value.trim()) fouten.mentorFunctie = 'Functie is verplicht'
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -98,6 +124,18 @@ function valideer() {
     fouten.mentorEmail = 'E-mail mentor is verplicht'
   } else if (!emailRegex.test(mentorEmail.value)) {
     fouten.mentorEmail = 'Ongeldig e-mailadres'
+  }
+
+  // Telefoonnummer: verplicht + moet op een geldig nummer lijken.
+  // Toegestaan: cijfers, spaties, +, -, haakjes. Minstens 8 cijfers.
+  const telRegex = /^[0-9\s+\-()]+$/
+  const aantalCijfers = (mentorTel.value.match(/[0-9]/g) || []).length
+  if (!mentorTel.value.trim()) {
+    fouten.mentorTel = 'Telefoonnummer mentor is verplicht'
+  } else if (!telRegex.test(mentorTel.value)) {
+    fouten.mentorTel = 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten'
+  } else if (aantalCijfers < 8) {
+    fouten.mentorTel = 'Telefoonnummer lijkt te kort'
   }
 
   return Object.keys(fouten).length === 0
@@ -109,13 +147,17 @@ function bouwAanvraag() {
     bedrijf: {
       bedrijf: bedrijf.value,
       sector: sector.value,
-      adres: adres.value,
+      straatnaam: straatnaam.value,
+      huisnummer: huisnummer.value,
+      postcode: postcode.value,
+      gemeente: gemeente.value,
       opdracht: opdracht.value,
       datumVan: datumVan.value,
       datumTot: datumTot.value,
     },
     mentor: {
-      naam: mentorNaam.value,
+      voornaam: mentorVoornaam.value,
+      achternaam: mentorAchternaam.value,
       functie: mentorFunctie.value,
       email: mentorEmail.value,
       tel: mentorTel.value,
@@ -127,7 +169,11 @@ async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
   try {
-    await stageStore.dienIn(bouwAanvraag())
+    if (stageStore.status === 'aanpassing_gevraagd') {
+      await stageStore.pasAan(bouwAanvraag())
+    } else {
+      await stageStore.dienIn(bouwAanvraag())
+    }
     toonBevestiging.value = true
   } catch (e) {
     alert(e.message)
@@ -212,13 +258,28 @@ function naarDashboard() {
               <span v-if="fouten.sector" class="form-error">{{ fouten.sector }}</span>
             </div>
             <div class="form-group">
-              <label for="adres">Adres</label>
-              <input type="text" id="adres" v-model="adres" placeholder="Straat, postcode gemeente" :readonly="alIngediend">
-              <span v-if="fouten.adres" class="form-error">{{ fouten.adres }}</span>
+              <label for="straatnaam">Straatnaam</label>
+              <input type="text" id="straatnaam" v-model="straatnaam" placeholder="bv. Nijverheidskaai" :readonly="alIngediend">
+              <span v-if="fouten.straatnaam" class="form-error">{{ fouten.straatnaam }}</span>
             </div>
             <div class="form-group">
+              <label for="huisnummer">Huisnummer</label>
+              <input type="number" id="huisnummer" v-model="huisnummer" min="1" placeholder="bv. 170" :readonly="alIngediend">
+              <span v-if="fouten.huisnummer" class="form-error">{{ fouten.huisnummer }}</span>
+            </div>
+            <div class="form-group">
+              <label for="postcode">Postcode</label>
+              <input type="number" id="postcode" v-model="postcode" placeholder="bv. 1070" :readonly="alIngediend">
+              <span v-if="fouten.postcode" class="form-error">{{ fouten.postcode }}</span>
+            </div>
+            <div class="form-group">
+              <label for="gemeente">Gemeente</label>
+              <input type="text" id="gemeente" v-model="gemeente" placeholder="bv. Anderlecht" :readonly="alIngediend">
+              <span v-if="fouten.gemeente" class="form-error">{{ fouten.gemeente }}</span>
+            </div>
+            <div class="form-group form-group-full">
               <label for="opdracht">Omschrijving opdracht</label>
-              <input type="text" id="opdracht" v-model="opdracht" placeholder="Korte omschrijving van de stage" :readonly="alIngediend">
+              <textarea id="opdracht" v-model="opdracht" rows="5" placeholder="Beschrijf de stageopdracht (minstens 20 tekens)" :readonly="alIngediend"></textarea>
               <span v-if="fouten.opdracht" class="form-error">{{ fouten.opdracht }}</span>
             </div>
             <div class="form-group">
@@ -239,9 +300,14 @@ function naarDashboard() {
           <h2 class="form-section-title">Gegevens stagementor</h2>
           <div class="form-grid-2">
             <div class="form-group">
-              <label for="mentor-naam">Naam mentor</label>
-              <input type="text" id="mentor-naam" v-model="mentorNaam" placeholder="Achternaam mentor" :readonly="alIngediend">
-              <span v-if="fouten.mentorNaam" class="form-error">{{ fouten.mentorNaam }}</span>
+              <label for="mentor-voornaam">Voornaam mentor</label>
+              <input type="text" id="mentor-voornaam" v-model="mentorVoornaam" placeholder="Voornaam mentor" :readonly="alIngediend">
+              <span v-if="fouten.mentorVoornaam" class="form-error">{{ fouten.mentorVoornaam }}</span>
+            </div>
+            <div class="form-group">
+              <label for="mentor-achternaam">Achternaam mentor</label>
+              <input type="text" id="mentor-achternaam" v-model="mentorAchternaam" placeholder="Achternaam mentor" :readonly="alIngediend">
+              <span v-if="fouten.mentorAchternaam" class="form-error">{{ fouten.mentorAchternaam }}</span>
             </div>
             <div class="form-group">
               <label for="mentor-functie">Functie</label>
@@ -256,6 +322,7 @@ function naarDashboard() {
             <div class="form-group">
               <label for="mentor-tel">Telefoon mentor</label>
               <input type="tel" id="mentor-tel" v-model="mentorTel" placeholder="+32 ..." :readonly="alIngediend">
+              <span v-if="fouten.mentorTel" class="form-error">{{ fouten.mentorTel }}</span>
             </div>
           </div>
         </section>
@@ -287,4 +354,9 @@ function naarDashboard() {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* Laat het omschrijvingsveld over de volledige breedte van het raster lopen */
+.form-group-full {
+  grid-column: 1 / -1;
+}
+</style>

@@ -4,7 +4,6 @@ import { RouterLink } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
 
-
 const stageStore = useStageStore()
 
 onMounted(() => {
@@ -17,11 +16,10 @@ const student = ref({
 })
 
 const stageStatus = computed(() => stageStore.status)
-
 const stage = computed(() => stageStore.aanvraag)
+const motivatie = computed(() => stageStore.motivatie)
 
-// Navbar-items hangen af van de stage-status.
-// Zonder actieve stage: alleen Dashboard + Aanvraag.
+// Navbar: extra tabs zodra de stage goedgekeurd (lopend) is.
 const navLinks = computed(() =>
   stageStatus.value === 'goedgekeurd'
     ? [
@@ -36,7 +34,6 @@ const navLinks = computed(() =>
       ],
 )
 
-// Logboek deze week (leeg in deze toestand)
 const logboekDagen = ref([])
 
 function formatTijd(ts) {
@@ -51,7 +48,6 @@ function meldingPresentatie(b) {
   return { icon: '📋', titel: 'Beslissing commissie' }
 }
 
-// Meldingen uit de store (commissie-beslissingen)
 const meldingen = computed(() =>
   (stageStore.meldingen || []).map((m) => {
     const p = meldingPresentatie(m.beslissing)
@@ -59,10 +55,17 @@ const meldingen = computed(() =>
   })
 )
 
-// Evaluaties — reageren op de stage-status.
+// Datum netjes tonen (zonder tijd)
+function formatDatum(d) {
+  if (!d) return ''
+  const dt = new Date(d)
+  return isNaN(dt) ? d : dt.toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// Evaluaties beschikbaar zodra de stage loopt (goedgekeurd).
 const evaluaties = computed(() => ({
   tussentijds: {
-    beschikbaar: stageStatus.value === 'actief',
+    beschikbaar: stageStatus.value === 'goedgekeurd',
     vanaf: null,
   },
   eind: {
@@ -77,12 +80,10 @@ const evaluaties = computed(() => ({
     <TopBar :links="navLinks" />
 
     <main class="content">
-      <!-- Welkomtekst -->
       <section>
         <h1 class="page-title">Welkom terug, {{ student.voornaam }}</h1>
       </section>
 
-      <!-- Rij 1: Stage Status + Logboek deze week -->
       <section class="card-grid-2">
         <!-- Stage Status -->
         <div class="card">
@@ -91,30 +92,32 @@ const evaluaties = computed(() => ({
             <span
               class="badge badge-pill"
               :class="{
-                'badge-green': stageStatus === 'actief',
+                'badge-green': stageStatus === 'goedgekeurd',
                 'badge-yellow': stageStatus === 'in_behandeling',
+                'badge-orange': stageStatus === 'aanpassing_gevraagd',
+                'badge-red': stageStatus === 'afgewezen',
                 'badge-gray': stageStatus === 'geen',
               }"
             >
               {{
-                stageStatus === 'actief'
-                  ? 'Actief'
-                  : stageStatus === 'in_behandeling'
-                    ? 'In behandeling'
-                    : 'Inactief'
+                stageStatus === 'goedgekeurd' ? 'Actief'
+                  : stageStatus === 'in_behandeling' ? 'In behandeling'
+                  : stageStatus === 'aanpassing_gevraagd' ? 'Aanpassing gevraagd'
+                  : stageStatus === 'afgewezen' ? 'Afgewezen'
+                  : 'Inactief'
               }}
             </span>
           </div>
           <hr class="card-divider" />
 
-          <!-- Met actieve stage -->
-          <template v-if="stageStatus === 'actief'">
+          <!-- Goedgekeurd / lopend -->
+          <template v-if="stageStatus === 'goedgekeurd'">
             <div class="flex items-center gap-12" style="margin-bottom: 16px;">
               <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏢</div>
               <div>
-                <div class="font-semibold" style="font-size:16px;">{{ stage?.bedrijf?.bedrijf }}</div>
+                <div class="font-semibold" style="font-size:16px;">{{ stage?.bedrijf }}</div>
                 <div class="text-secondary text-xs">
-                  Stageperiode: {{ stage?.bedrijf?.datumVan }} - {{ stage?.bedrijf?.datumTot }}
+                  Stageperiode: {{ formatDatum(stage?.startdatum) }} – {{ formatDatum(stage?.einddatum) }}
                 </div>
               </div>
             </div>
@@ -130,7 +133,32 @@ const evaluaties = computed(() => ({
             </p>
           </template>
 
-          <!-- Zonder aanvraag (lege toestand) -->
+          <!-- Aanpassing gevraagd -->
+          <template v-else-if="stageStatus === 'aanpassing_gevraagd'">
+            <div class="font-semibold" style="font-size:16px;margin-bottom:8px;">
+              Aanpassing gevraagd
+            </div>
+            <p class="text-secondary text-sm" style="line-height:1.6;margin-bottom:16px;">
+              De commissie vraagt je om je aanvraag aan te passen:
+              <br /><em>{{ motivatie || 'Geen motivatie opgegeven.' }}</em>
+            </p>
+            <RouterLink to="/student/aanvraag" class="btn btn-primary">
+              Aanvraag aanpassen
+            </RouterLink>
+          </template>
+
+          <!-- Afgewezen -->
+          <template v-else-if="stageStatus === 'afgewezen'">
+            <div class="font-semibold" style="font-size:16px;margin-bottom:8px;">
+              Aanvraag afgewezen
+            </div>
+            <p class="text-secondary text-sm" style="line-height:1.6;">
+              Je stage-aanvraag is afgewezen door de commissie.
+              <br /><em>{{ motivatie || 'Geen motivatie opgegeven.' }}</em>
+            </p>
+          </template>
+
+          <!-- Geen aanvraag -->
           <template v-else>
             <div class="font-semibold" style="font-size:16px;margin-bottom:16px;">
               Geen actieve stage
@@ -168,7 +196,6 @@ const evaluaties = computed(() => ({
 
       <!-- Rij 2: Evaluaties -->
       <section class="card-grid-2">
-        <!-- Tussentijdse Evaluatie -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">Tussentijdse Evaluatie</span>
@@ -176,12 +203,7 @@ const evaluaties = computed(() => ({
           <hr class="card-divider" />
           <p class="text-secondary text-sm" style="line-height:1.6;margin-bottom:16px;">
             <template v-if="evaluaties.tussentijds.beschikbaar">
-              Je kunt nu de tussentijdse evaluatie invullen om je voortgang tot nu toe te
-              bespreken met je mentor en docent.
-            </template>
-            <template v-else-if="evaluaties.tussentijds.vanaf">
-              Deze evaluatie wordt beschikbaar rond het midden van je stageperiode
-              (vanaf {{ evaluaties.tussentijds.vanaf }}).
+              Je kunt nu de tussentijdse evaluatie invullen om je voortgang te bespreken met je mentor en docent.
             </template>
             <template v-else>
               Deze evaluatie wordt beschikbaar rond het midden van je stageperiode.
@@ -195,46 +217,20 @@ const evaluaties = computed(() => ({
           >
             Nu invullen →
           </RouterLink>
-          <span
-            v-else
-            class="flex items-center gap-8 text-sm text-secondary"
-            style="padding-top:8px;"
-          >
+          <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
             Nog niet beschikbaar 🔒︎
           </span>
         </div>
 
-        <!-- Eindevaluatie -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">Eindevaluatie</span>
           </div>
           <hr class="card-divider" />
           <p class="text-secondary text-sm" style="line-height:1.6;margin-bottom:16px;">
-            <template v-if="evaluaties.eind.beschikbaar">
-              Je kunt nu de eindevaluatie invullen om je stage af te ronden met je mentor en docent.
-            </template>
-            <template v-else-if="evaluaties.eind.vanaf">
-              Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode
-              (vanaf {{ evaluaties.eind.vanaf }}).
-            </template>
-            <template v-else>
-              Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode.
-            </template>
+            Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode.
           </p>
-          <RouterLink
-            v-if="evaluaties.eind.beschikbaar"
-            to="/student/evaluatie-eind"
-            class="flex items-center gap-8 font-semibold text-sm"
-            style="padding-top:8px;"
-          >
-            Nu invullen →
-          </RouterLink>
-          <span
-            v-else
-            class="flex items-center gap-8 text-sm text-secondary"
-            style="padding-top:8px;"
-          >
+          <span class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
             Nog niet beschikbaar 🔒︎
           </span>
         </div>

@@ -63,7 +63,10 @@ CREATE TABLE docent (
 CREATE TABLE bedrijf (
     bedrijf_id              INT             NOT NULL AUTO_INCREMENT,
     naam                    VARCHAR(150)    NOT NULL,
-    adres                   VARCHAR(255),
+    straatnaam              VARCHAR(150),
+    huisnummer              VARCHAR(10),
+    postcode                VARCHAR(10),
+    gemeente                VARCHAR(100),
     sector                  VARCHAR(100),
     contact_email           VARCHAR(150),
     contact_telefoonnummer  VARCHAR(20),

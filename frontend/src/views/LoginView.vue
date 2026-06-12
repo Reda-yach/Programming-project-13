@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -17,6 +17,16 @@ const bestemmingPerRol = {
   admin:     '/admin',
   commissie: '/commissie',
 }
+
+// Al ingelogd? Stuur meteen door naar het juiste dashboard.
+onMounted(() => {
+  const token = localStorage.getItem('token')
+  const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || 'null')
+  if (token && gebruiker) {
+    const bestemming = bestemmingPerRol[gebruiker.rol]
+    if (bestemming) router.push(bestemming)
+  }
+})
 
 async function handleLogin() {
   error.value = ''

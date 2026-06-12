@@ -29,8 +29,8 @@ INSERT INTO docent (gebruiker_id, titel, specialisatie, max_studenten) VALUES
 -- --------------------------------------------
 -- 4. BEDRIJF
 -- --------------------------------------------
-INSERT INTO bedrijf (naam, adres, sector, contact_email, contact_telefoonnummer) VALUES
-  ('Colruyt Group', 'Edingensesteenweg 196, Halle', 'Retail & IT', 'stage@colruyt.be', '02000001');
+INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer) VALUES
+  ('Colruyt Group', 'Edingensesteenweg', '196', '1500', 'Halle', 'Retail & IT', 'stage@colruyt.be', '02000001');
 
 -- --------------------------------------------
 -- 5. MENTOR
