@@ -46,7 +46,7 @@ const evaluaties = computed(() => ({
     vanaf: null,
   },
   eind: {
-    beschikbaar: false,
+    beschikbaar: stageStatus.value === 'actief' || stageStatus.value === 'afgerond',
     vanaf: null,
   },
 }))
@@ -192,7 +192,7 @@ const evaluaties = computed(() => ({
           <hr class="card-divider" />
           <p class="text-secondary text-sm" style="line-height:1.6;margin-bottom:16px;">
             <template v-if="evaluaties.eind.beschikbaar">
-              Je kunt nu de eindevaluatie invullen om je stage af te ronden met je mentor en docent.
+              Je kunt nu de eindevaluatie bekijken zodra je stage is afgerond.
             </template>
             <template v-else-if="evaluaties.eind.vanaf">
               Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode
@@ -208,7 +208,7 @@ const evaluaties = computed(() => ({
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen
+            Nu bekijken
           </RouterLink>
           <span
             v-else

@@ -3,12 +3,16 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
+import { useAuthStore } from '../stores/auth'
+import { getStageStatusLabel } from '../utils/stageStatus'
 
 const router = useRouter()
 const stageStore = useStageStore()
+const authStore = useAuthStore()
 
 // true zodra er al een aanvraag loopt of de stage actief is
-const alIngediend = computed(() => stageStore.status !== 'geen')
+const alIngediend = computed(() => stageStore.status === 'in_behandeling' || stageStore.status === 'actief')
+const statusLabel = computed(() => getStageStatusLabel(stageStore.status))
 
 // Navbar-links — Dashboard + Aanvraag
 const navLinks = ref([
@@ -45,6 +49,8 @@ const fouten = reactive({})
 
 // Modal-zichtbaarheid
 const toonBevestiging = ref(false)
+const isSubmitting = ref(false)
+const submitError = ref('')
 
 // Bij het laden: als er al een aanvraag is, vul de velden ermee in
 // zodat de student ziet wat hij heeft ingediend.
@@ -111,12 +117,38 @@ function bouwAanvraag() {
   }
 }
 
-function handleIndienen() {
+async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
 
-  stageStore.dienIn(bouwAanvraag())
-  toonBevestiging.value = true
+  isSubmitting.value = true
+  submitError.value = ''
+
+  try {
+    const response = await fetch('http://localhost:3000/api/aanvraag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`,
+      },
+      body: JSON.stringify(bouwAanvraag()),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      submitError.value = data.error || 'De aanvraag kon niet worden ingediend.'
+      return
+    }
+
+    stageStore.dienIn(bouwAanvraag())
+
+    toonBevestiging.value = true
+  } catch (error) {
+    submitError.value = 'Kan geen verbinding maken met de backend.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 function sluitModal() {
@@ -139,7 +171,7 @@ function naarDashboard() {
           v-if="alIngediend"
           class="badge badge-pill badge-yellow"
         >
-          In behandeling
+          {{ statusLabel }}
         </span>
       </div>
 
@@ -247,7 +279,8 @@ function naarDashboard() {
 
         <!-- Indienen-knop alleen tonen als er nog niet is ingediend -->
         <div v-if="!alIngediend" class="mt-24">
-          <button type="submit" class="btn btn-primary">Indienen</button>
+          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">{{ isSubmitting ? 'Indienen…' : 'Indienen' }}</button>
+          <p v-if="submitError" class="form-error" style="margin-top: 12px;">{{ submitError }}</p>
         </div>
 
       </form>

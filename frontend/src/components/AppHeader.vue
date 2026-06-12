@@ -1,5 +1,14 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+function logout() {
+  authStore.clearSession()
+  router.replace('/login')
+}
 </script>
 
 <template>
@@ -16,7 +25,7 @@ import { RouterLink } from 'vue-router'
     </nav>
     <div class="topbar-right">
       <span class="role-btn">Commissie</span>
-      <RouterLink to="/login" class="uitloggen">Uitloggen</RouterLink>
+      <button type="button" class="uitloggen" @click="logout">Uitloggen</button>
     </div>
   </header>
 </template>

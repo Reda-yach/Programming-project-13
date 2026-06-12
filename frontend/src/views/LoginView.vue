@@ -1,24 +1,15 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const email = ref('')
 const wachtwoord = ref('')
 const error = ref('')
-
-// Bestemming per rol. De backend bepaalt de rol — de frontend leidt die
-// NIET af uit het e-mailadres (dat is onbetrouwbaar en onveilig).
-// Past de backend "stagecommissie" anders aan (bv. docent + isAdmin-vlag)?
-// Dan pas je alleen de keuze hieronder aan; de rest blijft staan.
-const bestemmingPerRol = {
-  student:   '/student',
-  docent:    '/docent',
-  mentor:    '/mentor',
-  admin:     '/admin',
-  commissie: '/commissie', // docent die ook admin is (stagecommissie)
-}
+const loading = ref(false)
 
 async function handleLogin() {
   error.value = ''
@@ -28,17 +19,34 @@ async function handleLogin() {
     return
   }
 
-  // TODO: echte backend-aanroep. De backend antwoordt met o.a. de rol.
-  // const { rol } = await login(email.value, wachtwoord.value)
-  const rol = '' // placeholder tot de backend gekoppeld is
+  loading.value = true
 
-  const bestemming = bestemmingPerRol[rol]
-  if (!bestemming) {
-    error.value = 'Aanmelden mislukt. Controleer je gegevens.'
-    return
+  try {
+    const response = await fetch('http://localhost:3000/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value.trim(), wachtwoord: wachtwoord.value }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
+      return
+    }
+
+    authStore.saveSession({
+      token: data.token,
+      user: data.gebruiker,
+    })
+
+    const bestemming = authStore.getRoleHomePath(data.gebruiker?.rol)
+    router.replace(bestemming)
+  } catch (err) {
+    error.value = 'Kan niet verbinden met de backend. Controleer of de server draait.'
+  } finally {
+    loading.value = false
   }
-
-  router.push(bestemming)
 }
 </script>
 
@@ -80,8 +88,8 @@ async function handleLogin() {
           >
         </div>
 
-        <button type="submit" class="btn btn-primary w-full" aria-describedby="login-error">
-          Log in
+        <button type="submit" class="btn btn-primary w-full" aria-describedby="login-error" :disabled="loading">
+          {{ loading ? 'Bezig met inloggen…' : 'Log in' }}
         </button>
         <p id="login-error" role="alert" aria-live="polite">{{ error }}</p>
       </form>
