@@ -1190,43 +1190,54 @@ app.get('/api/docenten/mijn-evaluaties', verifyToken, (req, res) => {
 // MENTOR STAGIAIRS
 // ============================================================
 
+// Hulpfunctie: zet gebruiker_id om naar mentor_id
+function getMentorId(gebruiker_id, cb) {
+  db.query('SELECT mentor_id FROM mentor WHERE gebruiker_id = ?', [gebruiker_id], (err, rows) => {
+    if (err) return cb(err, null);
+    if (rows.length === 0) return cb(new Error('Geen mentor-profiel gevonden'), null);
+    cb(null, rows[0].mentor_id);
+  });
+}
+
 // Alle stagiairs van een specifieke mentor ophalen
 app.get('/api/mentors/:id/stagiairs', verifyToken, requireRol('mentor', 'admin', 'docent'), (req, res) => {
-  const { id } = req.params;
-  db.query(`
-    SELECT
-      s.stage_id,
-      g.voornaam,
-      g.naam AS student_naam,
-      st.studentnummer,
-      st.opleiding,
-      b.naam AS bedrijf,
-      s.startdatum,
-      s.einddatum,
-      s.status,
-      (
-        SELECT l.status
-        FROM logboek l
-        WHERE l.stage_id = s.stage_id
-        ORDER BY l.week_nummer DESC
-        LIMIT 1
-      ) AS logboek_status,
-      (
-        SELECT l.week_nummer
-        FROM logboek l
-        WHERE l.stage_id = s.stage_id
-        ORDER BY l.week_nummer DESC
-        LIMIT 1
-      ) AS laatste_week
-    FROM stage s
-    JOIN student st ON s.student_id = st.student_id
-    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
-    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-    WHERE s.mentor_id = ?
-    ORDER BY g.naam ASC
-  `, [id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
+  getMentorId(req.params.id, (err, mentor_id) => {
+    if (err) return res.status(404).json({ error: err.message });
+    db.query(`
+      SELECT
+        s.stage_id,
+        g.voornaam,
+        g.naam AS student_naam,
+        st.studentnummer,
+        st.opleiding,
+        b.naam AS bedrijf,
+        s.startdatum,
+        s.einddatum,
+        s.status,
+        (
+          SELECT l.status
+          FROM logboek l
+          WHERE l.stage_id = s.stage_id
+          ORDER BY l.week_nummer DESC
+          LIMIT 1
+        ) AS logboek_status,
+        (
+          SELECT l.week_nummer
+          FROM logboek l
+          WHERE l.stage_id = s.stage_id
+          ORDER BY l.week_nummer DESC
+          LIMIT 1
+        ) AS laatste_week
+      FROM stage s
+      JOIN student st ON s.student_id = st.student_id
+      JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      WHERE s.mentor_id = ?
+      ORDER BY g.naam ASC
+    `, [mentor_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
   });
 });
 
@@ -1236,67 +1247,128 @@ app.get('/api/mentors/:id/stagiairs', verifyToken, requireRol('mentor', 'admin',
 
 // Logboeken ophalen van alle stagiairs van een mentor
 app.get('/api/mentors/:id/logboeken', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
-  const { id } = req.params;
-  db.query(`
-    SELECT
-      l.logboek_id,
-      l.week_nummer,
-      l.activiteiten,
-      l.reflectie,
-      l.leerpunten,
-      l.uren,
-      l.status,
-      l.ingediend_op,
-      g.voornaam,
-      g.naam AS student_naam,
-      s.stage_id,
-      b.naam AS bedrijf
-    FROM logboek l
-    JOIN stage s ON l.stage_id = s.stage_id
-    JOIN student st ON l.student_id = st.student_id
-    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
-    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-    WHERE s.mentor_id = ?
-    ORDER BY g.naam ASC, l.week_nummer DESC
-  `, [id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
+  getMentorId(req.params.id, (err, mentor_id) => {
+    if (err) return res.status(404).json({ error: err.message });
+    db.query(`
+      SELECT
+        l.logboek_id,
+        l.week_nummer,
+        l.activiteiten,
+        l.reflectie,
+        l.leerpunten,
+        l.uren,
+        l.status,
+        l.ingediend_op,
+        g.voornaam,
+        g.naam AS student_naam,
+        s.stage_id,
+        b.naam AS bedrijf
+      FROM logboek l
+      JOIN stage s ON l.stage_id = s.stage_id
+      JOIN student st ON l.student_id = st.student_id
+      JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      WHERE s.mentor_id = ?
+      ORDER BY g.naam ASC, l.week_nummer DESC
+    `, [mentor_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
   });
 });
 
 // Logboek aftekenen als gelezen door mentor
 app.put('/api/logboeken/:id/aftekenen', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
   const { id } = req.params;
- db.query(`
-    UPDATE logboek
-    SET status = 'goedgekeurd',
-        gevalideerd_door = ?,
-        gevalideerd_op = NOW()
-    WHERE logboek_id = ?
-  `, [req.gebruiker.id, id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (results.affectedRows === 0) {
-      return res.status(404).json({ error: 'Logboek niet gevonden' });
-    }
-
-    // Notificatie sturen naar student
-    db.query(`
-      SELECT st.gebruiker_id, l.week_nummer
-      FROM logboek l
-      JOIN student st ON l.student_id = st.student_id
-      WHERE l.logboek_id = ?
-    `, [id], (err2, rows) => {
-      if (err2 || rows.length === 0) {
-        return res.json({ message: 'Logboek afgetekend!' });
+  db.query(
+    `UPDATE logboek SET status = 'goedgekeurd' WHERE logboek_id = ?`,
+    [id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (results.affectedRows === 0) {
+        return res.status(404).json({ error: 'Logboek niet gevonden' });
       }
       db.query(`
-        INSERT INTO notificatie (gebruiker_id, bericht)
-        VALUES (?, ?)
-      `, [rows[0].gebruiker_id, `Mentor heeft logboek week ${rows[0].week_nummer} bevestigd`], () => {
-        res.json({ message: 'Logboek afgetekend en student verwittigd!' });
+        SELECT st.gebruiker_id, l.week_nummer
+        FROM logboek l
+        JOIN student st ON l.student_id = st.student_id
+        WHERE l.logboek_id = ?
+      `, [id], (err2, rows) => {
+        if (err2 || rows.length === 0) {
+          return res.json({ message: 'Logboek afgetekend!' });
+        }
+        db.query(
+          `INSERT INTO notificatie (gebruiker_id, bericht) VALUES (?, ?)`,
+          [rows[0].gebruiker_id, `Mentor heeft logboek week ${rows[0].week_nummer} bevestigd`],
+          () => res.json({ message: 'Logboek afgetekend en student verwittigd!' })
+        );
       });
+    }
+  );
+});
+
+// ============================================================
+// MENTOR EVALUATIES
+// ============================================================
+
+// Evaluaties van de stagiairs van een mentor (type = mentor)
+app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'admin', 'docent'), (req, res) => {
+  getMentorId(req.params.id, (err, mentor_id) => {
+    if (err) return res.status(404).json({ error: err.message });
+    db.query(`
+      SELECT
+        e.evaluatie_id,
+        e.type,
+        e.totaalscore,
+        e.opmerking,
+        e.ingevuld_op,
+        g_student.voornaam,
+        g_student.naam AS student_naam,
+        b.naam AS bedrijf,
+        se.stage_id
+      FROM evaluatie e
+      JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+      JOIN student st ON se.student_id = st.student_id
+      JOIN gebruiker g_student ON st.gebruiker_id = g_student.gebruiker_id
+      JOIN stage s ON se.stage_id = s.stage_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      WHERE s.mentor_id = ? AND e.type = 'mentor'
+      ORDER BY g_student.naam ASC
+    `, [mentor_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
     });
   });
+});
+
+// Score per criterium opslaan (mentor)
+app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, (req, res) => {
+  const { criterium_id } = req.params;
+  const { score } = req.body;
+  db.query(
+    `UPDATE evaluatie_criterium SET score = ? WHERE criterium_id = ?`,
+    [score, criterium_id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (results.affectedRows === 0) return res.status(404).json({ error: 'Criterium niet gevonden' });
+      res.json({ message: 'Score opgeslagen!' });
+    }
+  );
+});
+
+// Evaluatie totaalscore en opmerking bijwerken
+app.put('/api/evaluaties/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { totaalscore, opmerking } = req.body;
+  db.query(
+    `UPDATE evaluatie SET totaalscore = ?, opmerking = ? WHERE evaluatie_id = ?`,
+    [totaalscore, opmerking, id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (results.affectedRows === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
+      res.json({ message: 'Evaluatie bijgewerkt!' });
+    }
+  );
 });
 
 // ============================================================
