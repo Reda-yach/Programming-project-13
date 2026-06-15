@@ -11,11 +11,25 @@ const alIngediend = computed(() =>
   stageStore.status === 'in_behandeling' || stageStore.status === 'goedgekeurd'
 )
 
-// Navbar-links — Dashboard + Aanvraag
-const navLinks = ref([
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-])
+const stageBezig = computed(() =>
+  stageStore.status === 'goedgekeurd' &&
+  !!stageStore.aanvraag?.startdatum &&
+  new Date() >= new Date(stageStore.aanvraag.startdatum)
+)
+
+const navLinks = computed(() =>
+  stageBezig.value
+    ? [
+        { label: 'Dashboard', to: '/student' },
+        { label: 'Aanvraag', to: '/student/aanvraag' },
+        { label: 'Logboek', to: '/student/logboek' },
+        { label: 'Evaluatie', to: '/student/evaluatie' },
+      ]
+    : [
+        { label: 'Dashboard', to: '/student' },
+        { label: 'Aanvraag', to: '/student/aanvraag' },
+      ]
+)
 
 const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
 
@@ -198,16 +212,23 @@ function naarDashboard() {
         <h1 class="page-title">Stage-aanvraag indienen</h1>
         <span
           v-if="alIngediend"
-          class="badge badge-pill badge-yellow"
+          class="badge badge-pill"
+          :class="stageStore.status === 'goedgekeurd' ? 'badge-green' : 'badge-yellow'"
         >
-          In behandeling
+          {{ stageStore.status === 'goedgekeurd' ? 'Goedgekeurd' : 'In behandeling' }}
         </span>
       </div>
 
       <!-- Bij ingediende aanvraag een korte toelichting bovenaan -->
       <p v-if="alIngediend" class="text-secondary text-sm" style="line-height:1.6;">
-        Je aanvraag is ingediend en wordt beoordeeld door de stagecommissie.
-        Hieronder zie je de gegevens die je hebt doorgegeven.
+        <template v-if="stageStore.status === 'goedgekeurd'">
+          Je stage-aanvraag is goedgekeurd door de stagecommissie.
+          Hieronder zie je de gegevens die je hebt doorgegeven.
+        </template>
+        <template v-else>
+          Je aanvraag is ingediend en wordt beoordeeld door de stagecommissie.
+          Hieronder zie je de gegevens die je hebt doorgegeven.
+        </template>
       </p>
 
       <form @submit.prevent="handleIndienen">

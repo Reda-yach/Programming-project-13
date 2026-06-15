@@ -19,9 +19,14 @@ const stageStatus = computed(() => stageStore.status)
 const stage = computed(() => stageStore.aanvraag)
 const motivatie = computed(() => stageStore.motivatie)
 
-// Navbar: extra tabs zodra de stage goedgekeurd (lopend) is.
+const stageBezig = computed(() =>
+  stageStatus.value === 'goedgekeurd' &&
+  !!stage.value?.startdatum &&
+  new Date() >= new Date(stage.value.startdatum)
+)
+
 const navLinks = computed(() =>
-  stageStatus.value === 'goedgekeurd'
+  stageBezig.value
     ? [
         { label: 'Dashboard', to: '/student' },
         { label: 'Aanvraag', to: '/student/aanvraag' },
@@ -62,17 +67,28 @@ function formatDatum(d) {
   return isNaN(dt) ? d : dt.toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// Evaluaties beschikbaar zodra de stage loopt (goedgekeurd).
-const evaluaties = computed(() => ({
-  tussentijds: {
-    beschikbaar: stageStatus.value === 'goedgekeurd',
-    vanaf: null,
-  },
-  eind: {
-    beschikbaar: false,
-    vanaf: null,
-  },
-}))
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+
+const evaluaties = computed(() => {
+  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum || !stage.value?.einddatum) {
+    return {
+      tussentijds: { beschikbaar: false, vanaf: null },
+      eind: { beschikbaar: false, vanaf: null },
+    }
+  }
+
+  const start = new Date(stage.value.startdatum)
+  const eind = new Date(stage.value.einddatum)
+  const nu = new Date()
+
+  const middenDatum = new Date((start.getTime() + eind.getTime()) / 2)
+  const eindeDatum = new Date(eind.getTime() - 2 * WEEK_MS)
+
+  return {
+    tussentijds: { beschikbaar: nu >= middenDatum, vanaf: middenDatum },
+    eind: { beschikbaar: nu >= eindeDatum, vanaf: eindeDatum },
+  }
+})
 </script>
 
 <template>
@@ -205,6 +221,9 @@ const evaluaties = computed(() => ({
             <template v-if="evaluaties.tussentijds.beschikbaar">
               Je kunt nu de tussentijdse evaluatie invullen om je voortgang te bespreken met je mentor en docent.
             </template>
+            <template v-else-if="evaluaties.tussentijds.vanaf">
+              Beschikbaar vanaf {{ formatDatum(evaluaties.tussentijds.vanaf) }} (midden van je stageperiode).
+            </template>
             <template v-else>
               Deze evaluatie wordt beschikbaar rond het midden van je stageperiode.
             </template>
@@ -228,9 +247,25 @@ const evaluaties = computed(() => ({
           </div>
           <hr class="card-divider" />
           <p class="text-secondary text-sm" style="line-height:1.6;margin-bottom:16px;">
-            Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode.
+            <template v-if="evaluaties.eind.beschikbaar">
+              Je kunt nu de eindevaluatie invullen.
+            </template>
+            <template v-else-if="evaluaties.eind.vanaf">
+              Beschikbaar vanaf {{ formatDatum(evaluaties.eind.vanaf) }} (laatste 2 weken van je stage).
+            </template>
+            <template v-else>
+              Deze evaluatie wordt beschikbaar in de laatste twee weken van je stageperiode.
+            </template>
           </p>
-          <span class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
+          <RouterLink
+            v-if="evaluaties.eind.beschikbaar"
+            to="/student/evaluatie"
+            class="flex items-center gap-8 font-semibold text-sm"
+            style="padding-top:8px;"
+          >
+            Nu invullen →
+          </RouterLink>
+          <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
             Nog niet beschikbaar 🔒︎
           </span>
         </div>
