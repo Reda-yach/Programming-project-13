@@ -303,3 +303,16 @@ CREATE TABLE competentie (
 
     PRIMARY KEY (competentie_id)
 );
+-- ------------------------------------------------------------
+-- 17. COMPETENTIESET
+-- ------------------------------------------------------------
+CREATE TABLE competentieset (
+    set_id              INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    opleiding           VARCHAR(255)    NOT NULL,
+    jaar                VARCHAR(20)     NOT NULL,
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (set_id)
+);
