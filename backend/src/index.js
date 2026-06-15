@@ -1272,3 +1272,95 @@ app.use('/api/aanvraag', require('./routes/aanvraag'));
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });
+// ============================================================
+// COMPETENTIESETS
+// ============================================================
+
+// Alle actieve competentiesets ophalen
+app.get('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
+  db.query(
+    'SELECT * FROM competentieset WHERE is_actief = TRUE ORDER BY naam ASC',
+    (err, sets) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (sets.length === 0) {
+        res.json([]);
+        return;
+      }
+
+      const setIds = sets.map(s => s.set_id);
+      db.query(
+        `SELECT c.*, cs.set_id
+         FROM competentie c
+         JOIN competentieset cs ON c.opleiding_id = cs.set_id
+         WHERE cs.is_actief = TRUE AND c.is_actief = TRUE AND cs.set_id IN (?)`,
+        [setIds],
+        (errComp, competenties) => {
+          if (errComp) {
+            res.status(500).json({ error: errComp.message });
+            return;
+          }
+
+          const result = sets.map(s => ({
+            ...s,
+            competenties: competenties
+              .filter(c => c.set_id === s.set_id)
+              .map(c => ({
+                id:           c.competentie_id,
+                naam:         c.naam,
+                omschrijving: c.omschrijving,
+                gewicht:      c.gewicht,
+              })),
+          }));
+
+          res.json(result);
+        }
+      );
+    }
+  );
+});
+
+// Nieuwe competentieset aanmaken
+app.post('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
+  const { naam, opleiding, jaar } = req.body;
+
+  if (!naam || !opleiding || !jaar) {
+    res.status(400).json({ error: 'Naam, opleiding en jaar zijn verplicht.' });
+    return;
+  }
+
+  db.query(
+    'INSERT INTO competentieset (naam, opleiding, jaar) VALUES (?, ?, ?)',
+    [naam.trim(), opleiding.trim(), jaar.trim()],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json({ message: 'Competentieset aangemaakt!', id: results.insertId });
+    }
+  );
+});
+
+// Competentieset deactiveren (soft delete)
+app.delete('/api/competentiesets/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+
+  db.query(
+    'UPDATE competentieset SET is_actief = FALSE WHERE set_id = ?',
+    [id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Competentieset niet gevonden.' });
+        return;
+      }
+      res.json({ message: 'Competentieset gedeactiveerd.' });
+    }
+  );
+});
