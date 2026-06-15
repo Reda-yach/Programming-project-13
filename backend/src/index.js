@@ -1142,6 +1142,50 @@ app.get('/api/docenten/mijn-logboeken', verifyToken, (req, res) => {
   );
 });
 
+// Alle evaluaties van studenten van de ingelogde docent
+app.get('/api/docenten/mijn-evaluaties', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(
+    'SELECT docent_id FROM docent WHERE gebruiker_id = ?',
+    [gebruiker_id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rows.length === 0) return res.status(404).json({ error: 'Geen docent-profiel gevonden' });
+
+      const docent_id = rows[0].docent_id;
+
+      db.query(`
+        SELECT
+          e.evaluatie_id,
+          e.type,
+          e.totaalscore,
+          e.opmerking,
+          e.ingevuld_op,
+          g_beoordelaar.voornaam AS beoordelaar_voornaam,
+          g_beoordelaar.naam AS beoordelaar_naam,
+          g_beoordelaar.rol AS beoordelaar_rol,
+          g_student.voornaam AS student_voornaam,
+          g_student.naam AS student_naam,
+          b.naam AS bedrijf,
+          se.stage_id
+        FROM evaluatie e
+        JOIN gebruiker g_beoordelaar ON e.beoordelaar_id = g_beoordelaar.gebruiker_id
+        JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+        JOIN student st ON se.student_id = st.student_id
+        JOIN gebruiker g_student ON st.gebruiker_id = g_student.gebruiker_id
+        JOIN stage s ON se.stage_id = s.stage_id
+        JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+        WHERE s.docent_id = ?
+        ORDER BY g_student.naam ASC, e.ingevuld_op DESC
+      `, [docent_id], (err2, results) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json(results);
+      });
+    }
+  );
+});
+
 // ============================================================
 // MENTOR STAGIAIRS
 // ============================================================
