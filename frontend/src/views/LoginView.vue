@@ -34,6 +34,7 @@ async function handleLogin() {
     })
     const data = await res.json()
 
+    
     if (!res.ok) {
       error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
       return

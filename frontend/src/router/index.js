@@ -1,8 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/',
+      redirect: '/login'
+    },
     {
       path: '/login',
       name: 'login',
@@ -49,10 +52,10 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
-  path: '/admin',
-  name: 'admin-dashboard',
-  component: () => import('../views/AdminCompetentiebeheer.vue'),
-},
+      path: '/admin',
+      name: 'admin-dashboard',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
+    },
     {
       path: '/admin/competenties',
       name: 'admin-competenties',
