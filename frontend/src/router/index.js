@@ -98,6 +98,25 @@ const router = createRouter({
       name: 'mentor-probleem',
       component: () => import('../views/MentorProbleemmelding.vue'),
     },
+    {
+      path: '/student/logboek',
+      name: 'student-logboek',
+      component: () => import('../views/StudentLogboek.vue'),
+    },
+    {
+      path: '/student/evaluatie',
+      name: 'student-evaluatie',
+      component: () => import('../views/StudentEvaluatie.vue'),
+    },
+    {
+      path: '/commissie',
+      redirect: '/docent-aanvragen',
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminDashboard.vue'),
+    },
   ],
 })
 
