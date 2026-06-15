@@ -1151,6 +1151,130 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
   });
 });
 
+// ============================================================
+// LOGBOEK — STUDENT
+// ============================================================
+
+// Haal logboek op voor een specifieke week; maakt het aan als het nog niet bestaat.
+app.get('/api/mijn-logboek/week/:week', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+  const week = parseInt(req.params.week);
+  if (isNaN(week) || week < 1) return res.status(400).json({ error: 'Ongeldig weeknummer' });
+
+  db.query('SELECT student_id FROM student WHERE gebruiker_id = ?', [gebruiker_id], (err, sRows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (sRows.length === 0) return res.status(403).json({ error: 'Geen student-account' });
+    const student_id = sRows[0].student_id;
+
+    db.query(
+      `SELECT stage_id FROM stage WHERE student_id = ? AND status IN ('goedgekeurd','bezig') ORDER BY ingediend_op DESC LIMIT 1`,
+      [student_id],
+      (err2, stageRows) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        if (stageRows.length === 0) return res.status(404).json({ error: 'Geen actieve stage' });
+        const stage_id = stageRows[0].stage_id;
+
+        db.query(
+          'SELECT * FROM logboek WHERE student_id = ? AND stage_id = ? AND week_nummer = ?',
+          [student_id, stage_id, week],
+          (err3, logRows) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+
+            const stuurResponse = (logboek) => {
+              db.query(
+                `SELECT * FROM logboek_dag WHERE logboek_id = ?
+                 ORDER BY FIELD(dag,'maandag','dinsdag','woensdag','donderdag','vrijdag')`,
+                [logboek.logboek_id],
+                (err4, dagRows) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  res.json({ logboek, dagen: dagRows });
+                }
+              );
+            };
+
+            if (logRows.length > 0) {
+              stuurResponse(logRows[0]);
+            } else {
+              db.query(
+                `INSERT INTO logboek (student_id, stage_id, week_nummer, status) VALUES (?, ?, ?, 'draft')`,
+                [student_id, stage_id, week],
+                (err4, insertResult) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  db.query('SELECT * FROM logboek WHERE logboek_id = ?', [insertResult.insertId], (err5, newRows) => {
+                    if (err5) return res.status(500).json({ error: err5.message });
+                    stuurResponse(newRows[0]);
+                  });
+                }
+              );
+            }
+          }
+        );
+      }
+    );
+  });
+});
+
+// Sla dagelijkse invoer op (upsert via check-then-insert/update).
+app.put('/api/logboeken/:id/dag', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { dag, activiteiten, reflectie, leerpunten } = req.body;
+  const dagOpties = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag'];
+  if (!dagOpties.includes(dag)) return res.status(400).json({ error: 'Ongeldige dag' });
+
+  db.query('SELECT dag_id FROM logboek_dag WHERE logboek_id = ? AND dag = ?', [id, dag], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length > 0) {
+      db.query(
+        'UPDATE logboek_dag SET activiteiten=?, reflectie=?, leerpunten=? WHERE dag_id=?',
+        [activiteiten, reflectie, leerpunten, rows[0].dag_id],
+        (err2) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ message: 'Dag bijgewerkt!' });
+        }
+      );
+    } else {
+      db.query(
+        'INSERT INTO logboek_dag (logboek_id, dag, activiteiten, reflectie, leerpunten) VALUES (?, ?, ?, ?, ?)',
+        [id, dag, activiteiten, reflectie, leerpunten],
+        (err2) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ message: 'Dag opgeslagen!' });
+        }
+      );
+    }
+  });
+});
+
+// Week indienen bij mentor.
+app.put('/api/logboeken/:id/indienen', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(
+    `UPDATE logboek SET status = 'ingediend', ingediend_op = NOW() WHERE logboek_id = ?`,
+    [id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Logboek ingediend!' });
+    }
+  );
+});
+
+// Haal feedback op voor een logboek.
+app.get('/api/logboeken/:id/feedback', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(
+    `SELECT lf.feedback_id, lf.opmerking, lf.created_at, g.voornaam, g.naam AS auteur
+     FROM logboek_feedback lf
+     JOIN gebruiker g ON lf.gebruiker_id = g.gebruiker_id
+     WHERE lf.logboek_id = ?
+     ORDER BY lf.created_at ASC`,
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
 const PORT = process.env.PORT || 3000;
 app.use('/api/aanvraag', require('./routes/aanvraag'));
 app.listen(PORT, () => {

@@ -109,3 +109,10 @@ CREATE TABLE logboek_dag (
 -- --------------------------------------------
 ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
+
+-- --------------------------------------------
+-- MIGRATIE 13: reflectie en leerpunten toevoegen aan logboek_dag
+-- --------------------------------------------
+ALTER TABLE logboek_dag
+  ADD COLUMN reflectie TEXT AFTER activiteiten,
+  ADD COLUMN leerpunten TEXT AFTER reflectie;

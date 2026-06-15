@@ -6,8 +6,9 @@ import { useStageStore } from '../stores/stage'
 
 const stageStore = useStageStore()
 
-onMounted(() => {
-  stageStore.laad()
+onMounted(async () => {
+  await stageStore.laad()
+  await laadLogboekStatus()
 })
 
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
@@ -39,7 +40,28 @@ const navLinks = computed(() =>
       ],
 )
 
-const logboekDagen = ref([])
+const logboekWeek = ref(null)
+const logboekStatus = ref(null)
+const logboekDagenIngevuld = ref(0)
+
+async function laadLogboekStatus() {
+  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum) return
+  const start = new Date(stage.value.startdatum)
+  const nu = new Date()
+  if (nu < start) return
+  const week = Math.floor((nu - start) / (7 * 24 * 60 * 60 * 1000)) + 1
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/mijn-logboek/week/${week}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    logboekWeek.value = data.logboek.week_nummer
+    logboekStatus.value = data.logboek.status
+    logboekDagenIngevuld.value = data.dagen.length
+  } catch {}
+}
 
 function formatTijd(ts) {
   if (!ts) return ''
@@ -189,23 +211,50 @@ const evaluaties = computed(() => {
         <div class="card">
           <div class="card-header">
             <span class="card-title">Logboek deze week</span>
+            <span
+              v-if="logboekStatus"
+              class="badge badge-pill"
+              :class="{
+                'badge-green': logboekStatus === 'goedgekeurd',
+                'badge-yellow': logboekStatus === 'ingediend',
+                'badge-gray': logboekStatus === 'draft',
+              }"
+            >
+              {{ logboekStatus === 'goedgekeurd' ? 'Bevestigd' : logboekStatus === 'ingediend' ? 'Ingediend' : 'In uitvoering' }}
+            </span>
           </div>
           <hr class="card-divider" />
 
-          <template v-if="logboekDagen.length">
-            <div class="flex justify-between" style="margin-bottom:16px;">
-              <div v-for="dag in logboekDagen" :key="dag.dag" style="text-align:center;">
-                <div class="text-xs text-secondary" style="margin-bottom:6px;">{{ dag.dag }}</div>
-                <div style="width:36px;height:36px;border-radius:9999px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-size:16px;">–</div>
+          <template v-if="stageStatus === 'goedgekeurd' && logboekWeek !== null">
+            <div class="font-semibold" style="font-size:15px;margin-bottom:8px;">Week {{ logboekWeek }}</div>
+            <div class="flex gap-8" style="margin-bottom:16px;">
+              <div
+                v-for="(dag, i) in ['Ma','Di','Wo','Do','Vr']"
+                :key="dag"
+                style="text-align:center;"
+              >
+                <div class="text-xs text-secondary" style="margin-bottom:6px;">{{ dag }}</div>
+                <div
+                  style="width:36px;height:36px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:14px;"
+                  :style="i < logboekDagenIngevuld
+                    ? 'background:var(--green,#16a34a);color:#fff;border:2px solid var(--green,#16a34a);'
+                    : 'border:2px solid var(--border);color:var(--text-secondary);'"
+                >{{ i < logboekDagenIngevuld ? '✓' : '–' }}</div>
               </div>
             </div>
-            <RouterLink to="/student/logboek" class="btn btn-primary w-full" style="margin-top:8px;">
-              Logboek invullen
+            <p class="text-secondary text-sm" style="margin-bottom:16px;">
+              {{ logboekDagenIngevuld }} van 5 dagen ingevuld
+            </p>
+            <RouterLink to="/student/logboek" class="btn btn-primary">
+              Logboek invullen →
             </RouterLink>
           </template>
 
           <template v-else>
             <div class="font-semibold" style="font-size:16px;">Geen logboek beschikbaar</div>
+            <p class="text-secondary text-sm" style="margin-top:4px;">
+              Het logboek wordt beschikbaar zodra je stage goedgekeurd is en gestart is.
+            </p>
           </template>
         </div>
       </section>
