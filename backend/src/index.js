@@ -329,17 +329,26 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
 // Nieuwe stage aanmaken (stage-aanvraag indienen)
 app.post('/api/stages', verifyToken, (req, res) => {
   const { student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum } = req.body;
-  db.query(`
-    INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
-  (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+
+  db.query(
+    `SELECT stage_id FROM stage WHERE student_id = ? AND status NOT IN ('afgewezen', 'afgerond')`,
+    [student_id],
+    (err, bestaande) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (bestaande.length > 0) {
+        return res.status(400).json({ error: 'Je hebt al een actieve stage-aanvraag.' });
+      }
+
+      db.query(`
+        INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
+      (err2, results) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ message: 'Stage aangemaakt!', id: results.insertId });
+      });
     }
-    res.json({ message: 'Stage aangemaakt!', id: results.insertId });
-  });
+  );
 });
 
 

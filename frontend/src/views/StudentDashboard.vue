@@ -26,7 +26,7 @@ const stageBezig = computed(() =>
 )
 
 const navLinks = computed(() =>
-  stageBezig.value
+  stageStatus.value === 'goedgekeurd'
     ? [
         { label: 'Dashboard', to: '/student' },
         { label: 'Aanvraag', to: '/student/aanvraag' },

@@ -18,7 +18,7 @@ const stageBezig = computed(() =>
 )
 
 const navLinks = computed(() =>
-  stageBezig.value
+  stageStore.status === 'goedgekeurd'
     ? [
         { label: 'Dashboard', to: '/student' },
         { label: 'Aanvraag', to: '/student/aanvraag' },
@@ -67,11 +67,10 @@ const fouten = reactive({})
 // Modal-zichtbaarheid
 const toonBevestiging = ref(false)
 
-// Bij het laden: als er al een aanvraag is, vul de velden ermee in
-// zodat de student ziet wat hij heeft ingediend.
 onMounted(async () => {
   await stageStore.laad()
-  if (stageStore.status === 'aanpassing_gevraagd' && stageStore.aanvraag) {
+  const vulIn = ['in_behandeling', 'goedgekeurd', 'aanpassing_gevraagd']
+  if (vulIn.includes(stageStore.status) && stageStore.aanvraag) {
     const a = stageStore.aanvraag
     bedrijf.value = a.bedrijf || ''
     sector.value = a.bedrijf_sector || ''
@@ -350,7 +349,9 @@ function naarDashboard() {
 
         <!-- Indienen-knop alleen tonen als er nog niet is ingediend -->
         <div v-if="!alIngediend" class="mt-24">
-          <button type="submit" class="btn btn-primary">Indienen</button>
+          <button type="submit" class="btn btn-primary">
+            {{ stageStore.status === 'aanpassing_gevraagd' ? 'Opnieuw indienen' : 'Indienen' }}
+          </button>
         </div>
 
       </form>
