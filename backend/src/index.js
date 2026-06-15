@@ -1099,6 +1099,49 @@ app.get('/api/docenten/mijn-studenten', verifyToken, (req, res) => {
   );
 });
 
+// Alle logboeken van studenten van de ingelogde docent
+app.get('/api/docenten/mijn-logboeken', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(
+    'SELECT docent_id FROM docent WHERE gebruiker_id = ?',
+    [gebruiker_id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rows.length === 0) return res.status(404).json({ error: 'Geen docent-profiel gevonden' });
+
+      const docent_id = rows[0].docent_id;
+
+      db.query(`
+        SELECT
+          l.logboek_id,
+          l.week_nummer,
+          l.activiteiten,
+          l.reflectie,
+          l.leerpunten,
+          l.uren,
+          l.status,
+          l.ingediend_op,
+          g.voornaam,
+          g.naam AS student_naam,
+          st.studentnummer,
+          s.stage_id,
+          b.naam AS bedrijf
+        FROM logboek l
+        JOIN stage s ON l.stage_id = s.stage_id
+        JOIN student st ON l.student_id = st.student_id
+        JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+        JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+        WHERE s.docent_id = ?
+        ORDER BY g.naam ASC, l.week_nummer DESC
+      `, [docent_id], (err2, results) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json(results);
+      });
+    }
+  );
+});
+
 // ============================================================
 // MENTOR STAGIAIRS
 // ============================================================

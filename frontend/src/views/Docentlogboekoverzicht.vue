@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 
 const navLinks = ref([
@@ -9,44 +9,57 @@ const navLinks = ref([
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])
 
-const logboeken = ref([
-  {
-    id: 1,
-    naam: 'Emma De Smedt',
-    opleiding: 'Toegepaste Informatica',
-    bedrijf: 'Cronos Group NV',
-    recenteWeek: 'Week 8',
-    recenteDatum: '20–24 jan 2025',
-    aantalEntries: 4,
-  },
-  {
-    id: 2,
-    naam: 'Thomas Maes',
-    opleiding: 'Bedrijfsmanagement',
-    bedrijf: 'Proximus NV',
-    recenteWeek: 'Week 7',
-    recenteDatum: '13–17 jan 2025',
-    aantalEntries: 3,
-  },
-  {
-    id: 3,
-    naam: 'Lisa Van den Berg',
-    opleiding: 'Communicatiemanagement',
-    bedrijf: 'Colruyt Group',
-    recenteWeek: '',
-    recenteDatum: '',
-    aantalEntries: 0,
-  },
-  {
-    id: 4,
-    naam: 'Remi Jacobs',
-    opleiding: 'Toegepaste Informatica',
-    bedrijf: 'Belfius Bank SA',
-    recenteWeek: 'Week 8',
-    recenteDatum: '20–24 jan 2025',
-    aantalEntries: 4,
-  },
-])
+const logboeken = ref([])
+const laadFout = ref('')
+
+onMounted(async () => {
+  await laadLogboeken()
+})
+
+async function laadLogboeken() {
+  laadFout.value = ''
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch('http://localhost:3000/api/docenten/mijn-logboeken', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Ophalen mislukt')
+    logboeken.value = await res.json()
+  } catch {
+    laadFout.value = 'Logboeken konden niet geladen worden.'
+  }
+}
+
+// Groepeer logboeken per student (op stage_id)
+const perStudent = computed(() => {
+  const groepen = {}
+  logboeken.value.forEach((l) => {
+    const key = l.stage_id
+    if (!groepen[key]) {
+      groepen[key] = {
+        stage_id: l.stage_id,
+        naam: `${l.voornaam} ${l.student_naam}`,
+        studentnummer: l.studentnummer,
+        bedrijf: l.bedrijf,
+        entries: [],
+      }
+    }
+    groepen[key].entries.push(l)
+  })
+  return Object.values(groepen)
+})
+
+function logboekBadge(status) {
+  if (status === 'goedgekeurd') return 'badge-green'
+  if (status === 'ingediend') return 'badge-yellow'
+  if (status === 'draft') return 'badge-red'
+  return ''
+}
+
+function formatDatum(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })
+}
 </script>
 
 <template>
@@ -55,32 +68,42 @@ const logboeken = ref([
 
     <main class="content">
       <h1 class="page-title">Logboeken</h1>
-      <div class="table-wrapper">
-        <section
-          v-for="log in logboeken"
-          :key="log.id"
-          class="card"
-          style="border:none;border-bottom:1px solid var(--border);border-radius:0;"
-        >
-          <div class="flex justify-between items-center">
-            <div>
-              <div class="td-name">{{ log.naam }}</div>
-              <div class="td-sub">{{ log.opleiding }} · {{ log.bedrijf }}</div>
-              <div class="text-secondary text-xs mt-8">
-                <template v-if="log.aantalEntries">
-                  <span class="font-semibold">Meest recente entry:</span>
-                  {{ log.recenteWeek }} · {{ log.recenteDatum }} · {{ log.aantalEntries }} entries
-                </template>
-                <template v-else>
-                  <span class="font-semibold">Meest recente entry:</span> Nog geen entries
-                </template>
-              </div>
+
+      <p v-if="laadFout" class="text-secondary mt-16" style="color:#dc2626;">{{ laadFout }}</p>
+
+      <div v-if="perStudent.length === 0 && !laadFout" class="card mt-24">
+        <p class="text-secondary">Geen logboeken gevonden.</p>
+      </div>
+
+      <div
+        v-for="student in perStudent"
+        :key="student.stage_id"
+        class="card mt-16"
+      >
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="td-name">{{ student.naam }}</div>
+            <div class="td-sub">{{ student.bedrijf }} · {{ student.studentnummer }}</div>
+            <div class="text-secondary text-xs mt-8">
+              <span class="font-semibold">Meest recente entry:</span>
+              <template v-if="student.entries.length">
+                Week {{ student.entries[0].week_nummer }} ·
+                {{ formatDatum(student.entries[0].ingediend_op) }} ·
+                {{ student.entries.length }} {{ student.entries.length === 1 ? 'entry' : 'entries' }}
+                <span class="badge badge-pill ml-8" :class="logboekBadge(student.entries[0].status)">
+                  {{ student.entries[0].status }}
+                </span>
+              </template>
+              <template v-else>Nog geen entries</template>
             </div>
-            <router-link to="/docent-logboek-detail" class="btn btn-primary btn-sm">
-              Logboeken inkijken →
-            </router-link>
           </div>
-        </section>
+          <router-link
+            :to="`/docent-logboek-detail/${student.stage_id}`"
+            class="btn btn-primary btn-sm"
+          >
+            Logboeken inkijken →
+          </router-link>
+        </div>
       </div>
     </main>
   </div>
