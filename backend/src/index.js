@@ -1043,6 +1043,63 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 });
 
 // ============================================================
+// DOCENTEN
+// ============================================================
+
+// Alle stages toegewezen aan de ingelogde docent
+app.get('/api/docenten/mijn-studenten', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(
+    'SELECT docent_id FROM docent WHERE gebruiker_id = ?',
+    [gebruiker_id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rows.length === 0) return res.status(404).json({ error: 'Geen docent-profiel gevonden' });
+
+      const docent_id = rows[0].docent_id;
+
+      db.query(`
+        SELECT
+          s.stage_id,
+          g.voornaam,
+          g.naam AS student_naam,
+          st.studentnummer,
+          st.opleiding,
+          b.naam AS bedrijf,
+          s.stagetitel,
+          s.startdatum,
+          s.einddatum,
+          s.status,
+          (
+            SELECT l.week_nummer
+            FROM logboek l
+            WHERE l.stage_id = s.stage_id
+            ORDER BY l.week_nummer DESC
+            LIMIT 1
+          ) AS laatste_week,
+          (
+            SELECT l.status
+            FROM logboek l
+            WHERE l.stage_id = s.stage_id
+            ORDER BY l.week_nummer DESC
+            LIMIT 1
+          ) AS logboek_status
+        FROM stage s
+        JOIN student st ON s.student_id = st.student_id
+        JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+        JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+        WHERE s.docent_id = ?
+        ORDER BY g.naam ASC
+      `, [docent_id], (err2, results) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json(results);
+      });
+    }
+  );
+});
+
+// ============================================================
 // MENTOR STAGIAIRS
 // ============================================================
 
