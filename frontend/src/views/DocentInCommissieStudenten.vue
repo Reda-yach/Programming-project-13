@@ -162,6 +162,12 @@ function formatDatum(d) {
             >
               Logboek →
             </router-link>
+            <router-link
+              :to="`/docent/evaluaties/${student.stage_id}`"
+              class="btn btn-secondary btn-sm"
+            >
+              Evaluaties →
+            </router-link>
           </div>
         </div>
 

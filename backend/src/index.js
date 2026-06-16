@@ -765,6 +765,7 @@ app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
       g.voornaam,
       g.naam AS beoordelaar,
       e.type,
+      e.fase,
       e.totaalscore,
       e.opmerking,
       e.ingevuld_op
@@ -822,6 +823,93 @@ app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
         res.json(evaluatie);
       });
     });
+  });
+});
+
+// Evaluatie starten voor een stage: maakt evaluatie + criteria aan op basis van competenties
+app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, requireRol('docent', 'mentor', 'admin'), (req, res) => {
+  const { id } = req.params;
+  const { fase, type } = req.body;
+  const beoordelaar_id = req.gebruiker.id;
+
+  if (!['tussentijds', 'finaal'].includes(fase)) {
+    return res.status(400).json({ error: 'fase moet tussentijds of finaal zijn' });
+  }
+  if (!['docent', 'mentor', 'student'].includes(type)) {
+    return res.status(400).json({ error: 'type moet docent, mentor of student zijn' });
+  }
+
+  // Haal student_id op voor deze stage
+  db.query('SELECT student_id FROM stage WHERE stage_id = ?', [id], (err, stageRows) => {
+    if (err || stageRows.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+    const student_id = stageRows[0].student_id;
+
+    // Maak de evaluatie aan
+    db.query(
+      'INSERT INTO evaluatie (beoordelaar_id, type, fase) VALUES (?, ?, ?)',
+      [beoordelaar_id, type, fase],
+      (err2, result) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        const evaluatie_id = result.insertId;
+
+        // Koppel aan student via student_evaluatie
+        db.query(
+          'INSERT INTO student_evaluatie (student_id, evaluatie_id, stage_id) VALUES (?, ?, ?)',
+          [student_id, evaluatie_id, id],
+          (err3) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+
+            // Haal competenties op (opleiding_id=1 als standaard)
+            db.query(
+              'SELECT naam, omschrijving, gewicht FROM competentie ORDER BY naam ASC',
+              (err4, competenties) => {
+                if (err4 || competenties.length === 0) {
+                  // Geen competenties in DB: geef evaluatie terug zonder criteria
+                  return res.json({ message: 'Evaluatie aangemaakt (geen competenties gevonden)', evaluatie_id });
+                }
+
+                // Maak criteria aan per competentie
+                const values = competenties.map((c, i) => [evaluatie_id, c.naam, c.naam, null, c.gewicht || 1, i + 1]);
+                db.query(
+                  'INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, gewicht, volgorde) VALUES ?',
+                  [values],
+                  (err5) => {
+                    if (err5) return res.status(500).json({ error: err5.message });
+                    res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+});
+
+// Alle evaluaties voor een stage ophalen (overzicht per fase/type)
+app.get('/api/stages/:id/evaluatie-overzicht', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      e.evaluatie_id,
+      e.type,
+      e.fase,
+      e.totaalscore,
+      e.opmerking,
+      e.ingevuld_op,
+      g.voornaam AS beoordelaar_voornaam,
+      g.naam AS beoordelaar_naam,
+      (SELECT COUNT(*) FROM evaluatie_criterium ec WHERE ec.evaluatie_id = e.evaluatie_id AND ec.score IS NOT NULL) AS ingevulde_criteria,
+      (SELECT COUNT(*) FROM evaluatie_criterium ec WHERE ec.evaluatie_id = e.evaluatie_id) AS totaal_criteria
+    FROM evaluatie e
+    JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+    JOIN gebruiker g ON e.beoordelaar_id = g.gebruiker_id
+    WHERE se.stage_id = ?
+    ORDER BY e.ingevuld_op DESC
+  `, [id], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
   });
 });
 
