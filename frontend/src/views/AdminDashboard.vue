@@ -8,6 +8,7 @@ const links = ref([
   { label: 'Aanvragen', to: '/docent-aanvragen', beschrijving: 'Openstaande stage-aanvragen beoordelen' },
   { label: 'Evaluaties', to: '/docent-evaluaties', beschrijving: 'Alle evaluaties bekijken' },
   { label: 'Logboeken', to: '/docent-logboek-overzicht', beschrijving: 'Alle logboeken bekijken' },
+  { label: 'Competenties', to: '/admin/competenties', beschrijving: 'Evaluatiecompetencies beheren per opleiding' },
 ])
 </script>
 

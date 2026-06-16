@@ -109,3 +109,16 @@ CREATE TABLE logboek_dag (
 -- --------------------------------------------
 ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
+-- --------------------------------------------
+-- MIGRATIE 13: competentie tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE competentie (
+    competentie_id      INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    omschrijving        TEXT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
+    opleiding_id        INT             NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (competentie_id)
+);

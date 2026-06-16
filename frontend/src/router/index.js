@@ -110,12 +110,18 @@ const router = createRouter({
     },
     {
       path: '/commissie',
-      redirect: '/docent-aanvragen',
+      name: 'commissie',
+      component: () => import('../views/CommissieDashboard.vue'),
     },
     {
       path: '/admin',
       name: 'admin',
       component: () => import('../views/AdminDashboard.vue'),
+    },
+    {
+      path: '/admin/competenties',
+      name: 'admin-competenties',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
   ],
 })

@@ -954,16 +954,54 @@ app.put('/api/notificaties/:id/gelezen', verifyToken, (req, res) => {
 // Nieuwe commissiebeslissing toevoegen (alleen commissie en admin)
 app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   const { stage_id, commissielid_id, beslissing, motivatie } = req.body;
+
+  const toegestaneBeslissingen = ['goedgekeurd', 'afgekeurd', 'aanpassing_vereist'];
+  if (!toegestaneBeslissingen.includes(beslissing)) {
+    return res.status(400).json({ error: `Ongeldige beslissing. Kies uit: ${toegestaneBeslissingen.join(', ')}` });
+  }
+
   db.query(`
     INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivatie)
     VALUES (?, ?, ?, ?)
   `, [stage_id, commissielid_id, beslissing, motivatie],
   (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json({ message: 'Beslissing toegevoegd!', id: results.insertId });
+    if (err) return res.status(500).json({ error: err.message });
+
+    const beslissing_id = results.insertId;
+
+    const nieuweStatus = beslissing === 'goedgekeurd' ? 'goedgekeurd'
+      : beslissing === 'afgekeurd' ? 'afgekeurd'
+      : 'aanpassing_vereist';
+
+    db.query(`
+      UPDATE stage SET status = ? WHERE stage_id = ?
+    `, [nieuweStatus, stage_id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+
+      db.query(`
+        SELECT st.gebruiker_id
+        FROM stage s
+        JOIN student st ON s.student_id = st.student_id
+        WHERE s.stage_id = ?
+      `, [stage_id], (err3, rows) => {
+        if (err3 || rows.length === 0) {
+          return res.json({ message: 'Beslissing opgeslagen!', id: beslissing_id });
+        }
+
+        const bericht = beslissing === 'goedgekeurd'
+          ? 'Je stage-aanvraag is goedgekeurd!'
+          : beslissing === 'afgekeurd'
+          ? `Je stage-aanvraag is afgekeurd. Reden: ${motivatie}`
+          : `Je stage-aanvraag vereist aanpassingen: ${motivatie}`;
+
+        db.query(`
+          INSERT INTO notificatie (gebruiker_id, bericht)
+          VALUES (?, ?)
+        `, [rows[0].gebruiker_id, bericht], () => {
+          res.json({ message: 'Beslissing opgeslagen en student verwittigd!', id: beslissing_id });
+        });
+      });
+    });
   });
 });
 
@@ -1050,7 +1088,90 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
     });
   });
 });
-
+// ============================================================
+// COMPETENTIES
+// ============================================================
+ 
+// Alle competenties per opleiding ophalen
+app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (req, res) => {
+  const { opleiding_id } = req.params;
+  db.query(
+    'SELECT * FROM competentie WHERE opleiding_id = ? ORDER BY naam ASC',
+    [opleiding_id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json(results);
+    }
+  );
+});
+ 
+// Nieuwe competentie aanmaken
+app.post('/api/competenties', verifyToken, requireRol('admin'), (req, res) => {
+  const { naam, omschrijving, gewicht, opleiding_id } = req.body;
+ 
+  if (!naam || !opleiding_id) {
+    res.status(400).json({ error: 'Naam en opleiding_id zijn verplicht.' });
+    return;
+  }
+ 
+  db.query(
+    'INSERT INTO competentie (naam, omschrijving, gewicht, opleiding_id) VALUES (?, ?, ?, ?)',
+    [naam, omschrijving, gewicht, opleiding_id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      res.json({ message: 'Competentie aangemaakt!', id: results.insertId });
+    }
+  );
+});
+ 
+// Competentie bewerken
+app.put('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { naam, omschrijving, gewicht } = req.body;
+ 
+  db.query(
+    'UPDATE competentie SET naam = ?, omschrijving = ?, gewicht = ? WHERE competentie_id = ?',
+    [naam, omschrijving, gewicht, id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Competentie niet gevonden' });
+        return;
+      }
+      res.json({ message: 'Competentie bijgewerkt!' });
+    }
+  );
+});
+ 
+// Competentie verwijderen
+app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+ 
+  db.query(
+    'DELETE FROM competentie WHERE competentie_id = ?',
+    [id],
+    (err, results) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Competentie niet gevonden' });
+        return;
+      }
+      res.json({ message: 'Competentie verwijderd!' });
+    }
+  );
+});
 // ============================================================
 // DOCENTEN
 // ============================================================
