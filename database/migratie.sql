@@ -112,7 +112,7 @@ ALTER TABLE evaluatie
 -- --------------------------------------------
 -- MIGRATIE 13: competentie tabel aanmaken
 -- --------------------------------------------
-CREATE TABLE competentie (
+CREATE TABLE IF NOT EXISTS competentie (
     competentie_id      INT             NOT NULL AUTO_INCREMENT,
     naam                VARCHAR(255)    NOT NULL,
     omschrijving        TEXT,
@@ -122,3 +122,20 @@ CREATE TABLE competentie (
 
     PRIMARY KEY (competentie_id)
 );
+
+-- --------------------------------------------
+-- MIGRATIE 14: validatie kolommen toevoegen aan logboek
+-- --------------------------------------------
+ALTER TABLE logboek
+  ADD COLUMN gevalideerd_door INT NULL,
+  ADD COLUMN gevalideerd_op TIMESTAMP NULL,
+  ADD CONSTRAINT fk_logboek_mentor
+    FOREIGN KEY (gevalideerd_door) REFERENCES mentor(mentor_id)
+    ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- --------------------------------------------
+-- MIGRATIE 15: mentor score en feedback toevoegen aan evaluatie_criterium
+-- --------------------------------------------
+ALTER TABLE evaluatie_criterium
+  ADD COLUMN mentor_score INT NULL AFTER score,
+  ADD COLUMN mentor_feedback TEXT NULL AFTER mentor_score;
