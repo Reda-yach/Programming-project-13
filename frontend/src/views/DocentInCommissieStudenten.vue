@@ -10,11 +10,41 @@ const navLinks = ref([
 ])
 
 const studenten = ref([])
+const contracten = ref({})
+const berichtContract = ref({})
 const laadFout = ref('')
 
 onMounted(async () => {
   await laadStudenten()
 })
+
+async function laadContract(stageId) {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    contracten.value[stageId] = res.ok ? await res.json() : null
+  } catch {
+    contracten.value[stageId] = null
+  }
+}
+
+async function tekenContract(stageId) {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ rol: 'docent' }),
+    })
+    const data = await res.json()
+    berichtContract.value[stageId] = data.message || data.error
+    await laadContract(stageId)
+  } catch {
+    berichtContract.value[stageId] = 'Er ging iets mis.'
+  }
+}
 
 async function laadStudenten() {
   laadFout.value = ''
@@ -25,6 +55,11 @@ async function laadStudenten() {
     })
     if (!res.ok) throw new Error('Ophalen mislukt')
     studenten.value = await res.json()
+    for (const s of studenten.value) {
+      if (s.status === 'goedgekeurd' || s.status === 'bezig' || s.status === 'afgerond') {
+        await laadContract(s.stage_id)
+      }
+    }
   } catch {
     laadFout.value = 'Studenten konden niet geladen worden.'
   }
@@ -127,6 +162,28 @@ function formatDatum(d) {
             >
               Logboek →
             </router-link>
+          </div>
+        </div>
+
+        <!-- Contract -->
+        <div v-if="contracten[student.stage_id]"
+          class="mt-12" style="border-top:1px solid var(--border);padding-top:12px;">
+          <p class="text-secondary text-xs font-semibold mb-8">Stagecontract</p>
+          <div class="flex gap-16 items-center" style="flex-wrap:wrap;">
+            <span class="text-sm">Student: {{ contracten[student.stage_id].getekend_student ? '✅' : '⏳' }}</span>
+            <span class="text-sm">Mentor: {{ contracten[student.stage_id].getekend_mentor ? '✅' : '⏳' }}</span>
+            <span class="text-sm">Docent: {{ contracten[student.stage_id].getekend_docent ? '✅' : '⏳' }}</span>
+            <span v-if="berichtContract[student.stage_id]" class="text-sm" style="color:#16a34a;">
+              {{ berichtContract[student.stage_id] }}
+            </span>
+            <button
+              v-if="!contracten[student.stage_id].getekend_docent"
+              class="btn btn-primary btn-sm"
+              @click="tekenContract(student.stage_id)"
+            >
+              Contract ondertekenen
+            </button>
+            <span v-else class="text-sm" style="color:#16a34a;">Jij hebt al ondertekend</span>
           </div>
         </div>
       </div>

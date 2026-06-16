@@ -43,8 +43,8 @@ function terugNaarLijst() {
   bericht.value = ''
 }
 
-async function beslis(beslissing) {
-  if ((beslissing === 'afgekeurd' || beslissing === 'aanpassing_gevraagd') && !motivatie.value.trim()) {
+async function beslis(actie) {
+  if ((actie === 'afkeuren' || actie === 'aanpassing') && !motivatie.value.trim()) {
     bericht.value = 'Vul een motivatie in voor deze beslissing.'
     return
   }
@@ -54,7 +54,7 @@ async function beslis(beslissing) {
     const res = await fetch(`http://localhost:3000/api/stages/${geselecteerde.value.stage_id}/beslissing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ beslissing, motivatie: motivatie.value }),
+      body: JSON.stringify({ beslissing: actie, motivatie: motivatie.value }),
     })
     const data = await res.json()
     if (res.ok) {
@@ -184,15 +184,15 @@ function formatDatum(d) {
           </div>
 
           <div class="flex gap-8 mt-16" style="flex-wrap:wrap;">
-            <button class="btn btn-primary" @click="beslis('goedgekeurd')" :disabled="bezig"
+            <button class="btn btn-primary" @click="beslis('goedkeuren')" :disabled="bezig"
               style="background:#16a34a;">
               Goedkeuren
             </button>
-            <button class="btn btn-primary" @click="beslis('aanpassing_gevraagd')" :disabled="bezig"
+            <button class="btn btn-primary" @click="beslis('aanpassing')" :disabled="bezig"
               style="background:#d97706;">
               Aanpassingen vereist
             </button>
-            <button class="btn btn-primary" @click="beslis('afgekeurd')" :disabled="bezig"
+            <button class="btn btn-primary" @click="beslis('afkeuren')" :disabled="bezig"
               style="background:#dc2626;">
               Afkeuren
             </button>

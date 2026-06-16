@@ -493,11 +493,28 @@ app.post('/api/stages/:id/beslissing', verifyToken, (req, res) => {
             res.status(404).json({ error: 'Stage niet gevonden' });
             return;
           }
-          res.json({
-            message: 'Beslissing opgeslagen en status bijgewerkt!',
-            beslissing_id: insertResult.insertId,
-            nieuwe_status: waarde,
-          });
+
+          // Bij goedkeuring automatisch een contract aanmaken (als dat nog niet bestaat)
+          if (waarde === 'goedgekeurd') {
+            db.query(
+              `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+               VALUES (?, FALSE, FALSE, FALSE)`,
+              [id],
+              () => {
+                res.json({
+                  message: 'Beslissing opgeslagen, status bijgewerkt en contract aangemaakt!',
+                  beslissing_id: insertResult.insertId,
+                  nieuwe_status: waarde,
+                });
+              }
+            );
+          } else {
+            res.json({
+              message: 'Beslissing opgeslagen en status bijgewerkt!',
+              beslissing_id: insertResult.insertId,
+              nieuwe_status: waarde,
+            });
+          }
         }
       );
     }

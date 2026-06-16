@@ -99,6 +99,11 @@ const router = createRouter({
       component: () => import('../views/MentorProbleemmelding.vue'),
     },
     {
+      path: '/student/contract',
+      name: 'student-contract',
+      component: () => import('../views/StudentContract.vue'),
+    },
+    {
       path: '/student/logboek',
       name: 'student-logboek',
       component: () => import('../views/StudentLogboek.vue'),
@@ -126,7 +131,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const openRoutes = ['login']
   const token = localStorage.getItem('token')
   if (!openRoutes.includes(to.name) && !token) {
