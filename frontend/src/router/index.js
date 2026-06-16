@@ -39,7 +39,7 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
-      path: '/docent-logboek-detail',
+      path: '/docent-logboek-detail/:stageId',
       name: 'docent-logboek-detail',
       component: () => import('../views/DocentLogboekDetail.vue'),
     },
@@ -50,7 +50,7 @@ const router = createRouter({
     },
     {
       path: '/docent/studenten',
-      name: 'docent-mijn-studenten',
+      name: 'docent-studenten-overzicht',
       component: () => import('../views/DocentStudenten.vue'),
     },
     {
@@ -59,9 +59,29 @@ const router = createRouter({
       component: () => import('../views/DocentStudentDetail.vue'),
     },
     {
-      path: '/docent/logboek/:stageId',
-      name: 'docent-logboek',
+      path: '/docent/logboek/:studentId',
+      name: 'docent-logboek-detail-nieuw',
       component: () => import('../views/DocentLogboekDetail.vue'),
+    },
+    {
+      path: '/docent/aanvragen',
+      name: 'docent-aanvragen-overzicht',
+      component: () => import('../views/DocentAanvragen.vue'),
+    },
+    {
+      path: '/docent/evaluaties/:stageId',
+      name: 'docent-evaluatie-overzicht',
+      component: () => import('../views/DocentEvaluatieOverzicht.vue'),
+    },
+    {
+      path: '/docent/evaluatie/:stageId/:type',
+      name: 'docent-evaluatie',
+      component: () => import('../views/DocentEvaluatie.vue'),
+    },
+    {
+      path: '/docent/evaluatie/:stageId/:type/invullen',
+      name: 'docent-evaluatie-invullen',
+      component: () => import('../views/DocentEvaluatieInvullen.vue'),
     },
     {
       path: '/mentor',
@@ -73,10 +93,55 @@ const router = createRouter({
       name: 'mentor-logboeken',
       component: () => import('../views/MentorLogboeken.vue'),
     },
+    {
+      path: '/mentor/evaluatie',
+      name: 'mentor-evaluatie',
+      component: () => import('../views/MentorEvaluatie.vue'),
+    },
+    {
+      path: '/mentor/probleem',
+      name: 'mentor-probleem',
+      component: () => import('../views/MentorProbleemmelding.vue'),
+    },
+    {
+      path: '/student/contract',
+      name: 'student-contract',
+      component: () => import('../views/StudentContract.vue'),
+    },
+    {
+      path: '/student/logboek',
+      name: 'student-logboek',
+      component: () => import('../views/StudentLogboek.vue'),
+    },
+    {
+      path: '/student/evaluatie',
+      name: 'student-evaluatie',
+      component: () => import('../views/StudentEvaluatie.vue'),
+    },
+    {
+      path: '/student/eindoverzicht',
+      name: 'student-eindoverzicht',
+      component: () => import('../views/StudentEindoverzicht.vue'),
+    },
+    {
+      path: '/commissie',
+      name: 'commissie',
+      component: () => import('../views/CommissieDashboard.vue'),
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('../views/AdminDashboard.vue'),
+    },
+    {
+      path: '/admin/competenties',
+      name: 'admin-competenties',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
+    },
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const openRoutes = ['login']
   const token = localStorage.getItem('token')
   if (!openRoutes.includes(to.name) && !token) {

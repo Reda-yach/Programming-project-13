@@ -9,61 +9,64 @@
 USE stageverloop;
 
 -- --------------------------------------------
--- MIGRATIE 1: Nieuw evaluatiecriterium toevoegen
+-- SCHEMA MIGRATIE 1: voornaam toevoegen aan gebruiker
 -- --------------------------------------------
--- Wanneer de opleiding een nieuwe competentie
--- toevoegt aan het evaluatieformulier
-INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, volgorde)
-VALUES
-  (1, 'Toegepaste Informatica', 'Projectmatig werken', 'Plannen en organiseren', NULL, 4);
+ALTER TABLE gebruiker
+  ADD COLUMN voornaam VARCHAR(100) NOT NULL DEFAULT '' AFTER gebruiker_id;
 
 -- --------------------------------------------
--- MIGRATIE 2: Score aanpassen van een criterium
+-- SCHEMA MIGRATIE 2: studentnummer toevoegen aan student
 -- --------------------------------------------
--- Wanneer een docent of mentor een score
--- wil corrigeren
+ALTER TABLE student
+  ADD COLUMN studentnummer VARCHAR(20) UNIQUE AFTER gebruiker_id;
+
+-- --------------------------------------------
+-- SCHEMA MIGRATIE 3: reflectie en leerpunten toevoegen aan logboek
+-- --------------------------------------------
+ALTER TABLE logboek
+  ADD COLUMN reflectie TEXT AFTER activiteiten,
+  ADD COLUMN leerpunten TEXT AFTER reflectie;
+
+-- --------------------------------------------
+-- SCHEMA MIGRATIE 4: gewicht toevoegen aan evaluatie_criterium
+-- --------------------------------------------
+ALTER TABLE evaluatie_criterium
+  ADD COLUMN gewicht DECIMAL(5,2) NOT NULL DEFAULT 1.00 AFTER score;
+
+-- --------------------------------------------
+-- MIGRATIE 5: Nieuw evaluatiecriterium toevoegen
+-- --------------------------------------------
+INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, gewicht, volgorde)
+VALUES
+  (1, 'Toegepaste Informatica', 'Projectmatig werken', 'Plannen en organiseren', NULL, 1.00, 4);
+
+-- --------------------------------------------
+-- MIGRATIE 6: Score aanpassen van een criterium
+-- --------------------------------------------
 UPDATE evaluatie_criterium
 SET score = 9
 WHERE naam = 'Kwaliteit van code'
   AND evaluatie_id = 1;
 
 -- --------------------------------------------
--- MIGRATIE 3: Stagecontract tekenen
+-- MIGRATIE 7: Stagecontract tekenen
 -- --------------------------------------------
--- Wanneer de student het contract ondertekent
-UPDATE stagecontract
-SET getekend_student = TRUE
-WHERE stage_id = 1;
-
--- Wanneer de mentor het contract ondertekent
-UPDATE stagecontract
-SET getekend_mentor = TRUE
-WHERE stage_id = 1;
-
--- Wanneer de docent het contract ondertekent
--- en de datum invullen
+UPDATE stagecontract SET getekend_student = TRUE WHERE stage_id = 1;
+UPDATE stagecontract SET getekend_mentor = TRUE WHERE stage_id = 1;
 UPDATE stagecontract
 SET getekend_docent = TRUE,
     getekend_op = CURRENT_TIMESTAMP
 WHERE stage_id = 1;
 
 -- --------------------------------------------
--- MIGRATIE 4: Stage status updaten
+-- MIGRATIE 8: Stage status updaten
 -- --------------------------------------------
--- Wanneer de commissie een stage goedkeurt
--- wordt de status aangepast
-UPDATE stage
-SET status = 'goedgekeurd'
-WHERE stage_id = 1;
+UPDATE stage SET status = 'goedgekeurd' WHERE stage_id = 1;
 
 -- --------------------------------------------
--- MIGRATIE 5: Notificatie als gelezen markeren
+-- MIGRATIE 9: Notificatie als gelezen markeren
 -- --------------------------------------------
--- Wanneer een gebruiker een notificatie
--- heeft gelezen
-UPDATE notificatie
-SET gelezen = TRUE
-WHERE gebruiker_id = 1;
+UPDATE notificatie SET gelezen = TRUE WHERE gebruiker_id = 1;
 
 -- --------------------------------------------
 -- Controleer het resultaat
@@ -84,4 +87,25 @@ SELECT 'Stage status:' AS info;
 SELECT stagetitel, status FROM stage WHERE stage_id = 1;
 
 SELECT 'Evaluatiecriteria:' AS info;
-SELECT naam, score, volgorde FROM evaluatie_criterium WHERE evaluatie_id = 1;
+SELECT naam, score, gewicht, volgorde FROM evaluatie_criterium WHERE evaluatie_id = 1;
+-- --------------------------------------------
+-- MIGRATIE 10: bestand_pad toevoegen aan stagecontract
+-- --------------------------------------------
+ALTER TABLE stagecontract ADD COLUMN bestand_pad VARCHAR(255) NULL;
+
+-- --------------------------------------------
+-- MIGRATIE 11: logboek_dag tabel aanmaken voor dagelijkse invoer
+-- --------------------------------------------
+CREATE TABLE logboek_dag (
+  dag_id INT AUTO_INCREMENT PRIMARY KEY,
+  logboek_id INT NOT NULL,
+  dag ENUM('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag') NOT NULL,
+  activiteiten TEXT,
+  uren DECIMAL(4,2),
+  FOREIGN KEY (logboek_id) REFERENCES logboek(logboek_id) ON DELETE CASCADE
+);
+-- --------------------------------------------
+-- MIGRATIE 12: evaluatie_fase kolom toevoegen aan evaluatie
+-- --------------------------------------------
+ALTER TABLE evaluatie
+  ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
