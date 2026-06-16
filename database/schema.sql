@@ -290,7 +290,28 @@ CREATE TABLE notificatie (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 -- ------------------------------------------------------------
--- 16. COMPETENTIE
+-- 16. PROBLEEMMELDING
+-- ------------------------------------------------------------
+CREATE TABLE probleemmelding (
+    melding_id          INT             NOT NULL AUTO_INCREMENT,
+    mentor_id           INT             NOT NULL,
+    stage_id            INT             NOT NULL,
+    titel               VARCHAR(255)    NOT NULL,
+    beschrijving        TEXT            NOT NULL,
+    status              ENUM('open','in_behandeling','opgelost') NOT NULL DEFAULT 'open',
+    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (melding_id),
+    CONSTRAINT fk_melding_mentor
+        FOREIGN KEY (mentor_id) REFERENCES mentor(mentor_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_melding_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 17. COMPETENTIE
 -- ------------------------------------------------------------
 CREATE TABLE competentie (
     competentie_id      INT             NOT NULL AUTO_INCREMENT,
