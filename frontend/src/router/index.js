@@ -49,9 +49,14 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
-      path: '/docent-logboek-detail',
+      path: '/docent-logboek-detail/:stage_id',
       name: 'docent-logboek-detail',
       component: () => import('../views/DocentLogboekDetail.vue'),
+    },
+    {
+      path: '/mentor',
+      name: 'mentor',
+      component: () => import('../views/MentorLogboek.vue'),
     },
     {
       path: '/docent-studenten',

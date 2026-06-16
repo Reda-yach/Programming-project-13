@@ -1,6 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+
+const API = 'http://localhost:3000/api'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -9,44 +11,31 @@ const navLinks = ref([
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])
 
-const logboeken = ref([
-  {
-    id: 1,
-    naam: 'Emma De Smedt',
-    opleiding: 'Toegepaste Informatica',
-    bedrijf: 'Cronos Group NV',
-    recenteWeek: 'Week 8',
-    recenteDatum: '20–24 jan 2025',
-    aantalEntries: 4,
-  },
-  {
-    id: 2,
-    naam: 'Thomas Maes',
-    opleiding: 'Bedrijfsmanagement',
-    bedrijf: 'Proximus NV',
-    recenteWeek: 'Week 7',
-    recenteDatum: '13–17 jan 2025',
-    aantalEntries: 3,
-  },
-  {
-    id: 3,
-    naam: 'Lisa Van den Berg',
-    opleiding: 'Communicatiemanagement',
-    bedrijf: 'Colruyt Group',
-    recenteWeek: '',
-    recenteDatum: '',
-    aantalEntries: 0,
-  },
-  {
-    id: 4,
-    naam: 'Remi Jacobs',
-    opleiding: 'Toegepaste Informatica',
-    bedrijf: 'Belfius Bank SA',
-    recenteWeek: 'Week 8',
-    recenteDatum: '20–24 jan 2025',
-    aantalEntries: 4,
-  },
-])
+const studenten = ref([])
+const laden = ref(false)
+const fout = ref(null)
+
+async function laadStudenten() {
+  laden.value = true
+  fout.value = null
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`${API}/docent/logboeken`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Laden mislukt')
+    studenten.value = data
+  } catch (e) {
+    fout.value = e.message
+  } finally {
+    laden.value = false
+  }
+}
+
+onMounted(() => {
+  laadStudenten()
+})
 </script>
 
 <template>
@@ -55,28 +44,57 @@ const logboeken = ref([
 
     <main class="content">
       <h1 class="page-title">Logboeken</h1>
-      <div class="table-wrapper">
+
+      <div v-if="laden" class="text-secondary text-sm">Laden…</div>
+      <div v-else-if="fout" style="color:var(--red,#dc2626);font-size:14px;">{{ fout }}</div>
+
+      <div v-else-if="!studenten.length" class="text-secondary text-sm" style="margin-top:8px;">
+        Geen studenten gekoppeld aan jou.
+      </div>
+
+      <div v-else class="table-wrapper">
         <section
-          v-for="log in logboeken"
-          :key="log.id"
+          v-for="s in studenten"
+          :key="s.stage_id"
           class="card"
           style="border:none;border-bottom:1px solid var(--border);border-radius:0;"
         >
           <div class="flex justify-between items-center">
             <div>
-              <div class="td-name">{{ log.naam }}</div>
-              <div class="td-sub">{{ log.opleiding }} · {{ log.bedrijf }}</div>
-              <div class="text-secondary text-xs mt-8">
-                <template v-if="log.aantalEntries">
-                  <span class="font-semibold">Meest recente entry:</span>
-                  {{ log.recenteWeek }} · {{ log.recenteDatum }} · {{ log.aantalEntries }} entries
+              <div class="td-name">{{ s.student_voornaam }} {{ s.student_naam }}</div>
+              <div class="td-sub">{{ s.opleiding }} · {{ s.bedrijf }}</div>
+
+              <div class="flex items-center gap-8" style="margin-top:8px;flex-wrap:wrap;">
+                <template v-if="s.totaal_weken > 0">
+                  <span class="text-secondary text-xs">
+                    Week {{ s.laatste_week }} bereikt ·
+                  </span>
+                  <span
+                    v-if="s.weken_ingediend > 0"
+                    class="badge badge-yellow badge-pill"
+                    style="font-size:11px;"
+                  >{{ s.weken_ingediend }} wacht op bevestiging</span>
+                  <span
+                    v-if="s.weken_bevestigd > 0"
+                    class="badge badge-green badge-pill"
+                    style="font-size:11px;"
+                  >{{ s.weken_bevestigd }} bevestigd</span>
+                  <span
+                    v-if="Number(s.totaal_weken) - Number(s.weken_ingediend) - Number(s.weken_bevestigd) > 0"
+                    class="badge badge-pill"
+                    style="font-size:11px;background:var(--gray100,#f3f4f6);color:var(--text-secondary);"
+                  >
+                    {{ Number(s.totaal_weken) - Number(s.weken_ingediend) - Number(s.weken_bevestigd) }} concept
+                  </span>
                 </template>
-                <template v-else>
-                  <span class="font-semibold">Meest recente entry:</span> Nog geen entries
-                </template>
+                <span v-else class="text-secondary text-xs">Nog geen logboekentries</span>
               </div>
             </div>
-            <router-link to="/docent-logboek-detail" class="btn btn-primary btn-sm">
+
+            <router-link
+              :to="`/docent-logboek-detail/${s.stage_id}`"
+              class="btn btn-primary btn-sm"
+            >
               Logboeken inkijken →
             </router-link>
           </div>

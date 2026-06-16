@@ -190,35 +190,73 @@ app.get('/api/bedrijven/:id/mentors', verifyToken, (req, res) => {
   });
 });
 
-// Nieuwe mentor aanmaken (maakt eerst een gebruiker met rol 'mentor', dan het mentor-record)
-// Tijdelijk wachtwoord 'mentor123' — vereenvoudiging; mentor wijzigt dit later zelf.
+// Nieuwe mentor aanmaken of bestaande hergebruiken als het e-mailadres al bestaat.
 app.post('/api/mentors', verifyToken, async (req, res) => {
   const { voornaam, naam, email, telefoonnummer, functietitel, bedrijf_id } = req.body;
 
   try {
-    const hash = await bcrypt.hash('mentor123', 10);
-
+    // Kijk of er al een gebruiker met dit e-mailadres bestaat
     db.query(
-      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
-      [voornaam, naam, email, telefoonnummer, hash, 'mentor'],
-      (err, gebruikerResult) => {
-        if (err) {
-          res.status(500).json({ error: err.message });
-          return;
-        }
-        const gebruiker_id = gebruikerResult.insertId;
+      `SELECT g.gebruiker_id, m.mentor_id
+       FROM gebruiker g
+       LEFT JOIN mentor m ON g.gebruiker_id = m.gebruiker_id
+       WHERE g.email = ?`,
+      [email],
+      async (err, bestaande) => {
+        if (err) return res.status(500).json({ error: err.message });
 
-        db.query(
-          'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
-          [gebruiker_id, bedrijf_id, functietitel],
-          (err2, mentorResult) => {
-            if (err2) {
-              res.status(500).json({ error: err2.message });
-              return;
+        if (bestaande.length > 0) {
+          // Gebruiker bestaat al — gegevens bijwerken en mentor_id teruggeven
+          const { gebruiker_id, mentor_id } = bestaande[0];
+
+          db.query(
+            'UPDATE gebruiker SET voornaam=?, naam=?, telefoonnummer=? WHERE gebruiker_id=?',
+            [voornaam, naam, telefoonnummer, gebruiker_id],
+            (err2) => {
+              if (err2) return res.status(500).json({ error: err2.message });
+
+              if (mentor_id) {
+                db.query(
+                  'UPDATE mentor SET bedrijf_id=?, functietitel=? WHERE mentor_id=?',
+                  [bedrijf_id, functietitel, mentor_id],
+                  (err3) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ message: 'Mentor bijgewerkt!', mentor_id });
+                  }
+                );
+              } else {
+                db.query(
+                  'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
+                  [gebruiker_id, bedrijf_id, functietitel],
+                  (err3, result) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ message: 'Mentor aangemaakt!', mentor_id: result.insertId });
+                  }
+                );
+              }
             }
-            res.json({ message: 'Mentor aangemaakt!', mentor_id: mentorResult.insertId });
-          }
-        );
+          );
+        } else {
+          // Nieuwe mentor aanmaken
+          const hash = await bcrypt.hash('mentor123', 10);
+          db.query(
+            'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+            [voornaam, naam, email, telefoonnummer, hash, 'mentor'],
+            (err2, gebruikerResult) => {
+              if (err2) return res.status(500).json({ error: err2.message });
+              const gebruiker_id = gebruikerResult.insertId;
+
+              db.query(
+                'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
+                [gebruiker_id, bedrijf_id, functietitel],
+                (err3, mentorResult) => {
+                  if (err3) return res.status(500).json({ error: err3.message });
+                  res.json({ message: 'Mentor aangemaakt!', mentor_id: mentorResult.insertId });
+                }
+              );
+            }
+          );
+        }
       }
     );
   } catch (e) {
@@ -1273,6 +1311,159 @@ app.get('/api/logboeken/:id/feedback', verifyToken, (req, res) => {
       res.json(rows);
     }
   );
+});
+
+// ============================================================
+// LOGBOEK — MENTOR
+// ============================================================
+
+// Alle ingediende/goedgekeurde logboeken voor de ingelogde mentor
+app.get('/api/mentor/logboeken', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+  db.query('SELECT mentor_id FROM mentor WHERE gebruiker_id = ?', [gebruiker_id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length === 0) return res.status(403).json({ error: 'Geen mentor-account' });
+    const mentor_id = rows[0].mentor_id;
+
+    db.query(`
+      SELECT
+        l.logboek_id,
+        l.week_nummer,
+        l.status,
+        l.ingediend_op,
+        g.voornaam AS student_voornaam,
+        g.naam AS student_naam,
+        b.naam AS bedrijf,
+        s.stage_id,
+        s.startdatum
+      FROM logboek l
+      JOIN stage s ON l.stage_id = s.stage_id
+      JOIN student st ON s.student_id = st.student_id
+      JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      WHERE s.mentor_id = ? AND l.status IN ('ingediend', 'goedgekeurd')
+      ORDER BY l.status ASC, l.ingediend_op DESC
+    `, [mentor_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
+  });
+});
+
+// Volledig logboek ophalen (logboek + dagen + feedback) — voor mentor en docent
+app.get('/api/logboeken/:id/volledig', verifyToken, (req, res) => {
+  const { id } = req.params;
+
+  db.query(`
+    SELECT
+      l.logboek_id, l.week_nummer, l.status, l.ingediend_op,
+      g.voornaam AS student_voornaam,
+      g.naam AS student_naam,
+      b.naam AS bedrijf,
+      s.stage_id, s.startdatum, s.einddatum
+    FROM logboek l
+    JOIN student st ON l.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN stage s ON l.stage_id = s.stage_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE l.logboek_id = ?
+  `, [id], (err, logboekRows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (logboekRows.length === 0) return res.status(404).json({ error: 'Logboek niet gevonden' });
+
+    const logboek = logboekRows[0];
+
+    db.query(
+      `SELECT * FROM logboek_dag WHERE logboek_id = ?
+       ORDER BY FIELD(dag,'maandag','dinsdag','woensdag','donderdag','vrijdag')`,
+      [id],
+      (err2, dagRows) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+
+        db.query(
+          `SELECT lf.feedback_id, lf.opmerking, lf.created_at, g.voornaam, g.naam AS auteur, g.rol
+           FROM logboek_feedback lf
+           JOIN gebruiker g ON lf.gebruiker_id = g.gebruiker_id
+           WHERE lf.logboek_id = ?
+           ORDER BY lf.created_at ASC`,
+          [id],
+          (err3, feedbackRows) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+            res.json({ logboek, dagen: dagRows, feedback: feedbackRows });
+          }
+        );
+      }
+    );
+  });
+});
+
+// Logboek bevestigen door mentor (status → goedgekeurd + optionele feedback)
+app.put('/api/logboeken/:id/bevestigen', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { feedback } = req.body;
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(
+    `UPDATE logboek SET status = 'goedgekeurd' WHERE logboek_id = ?`,
+    [id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (feedback && feedback.trim()) {
+        db.query(
+          'INSERT INTO logboek_feedback (logboek_id, gebruiker_id, opmerking) VALUES (?, ?, ?)',
+          [id, gebruiker_id, feedback.trim()],
+          (err2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ message: 'Logboek bevestigd en feedback opgeslagen!' });
+          }
+        );
+      } else {
+        res.json({ message: 'Logboek bevestigd!' });
+      }
+    }
+  );
+});
+
+// ============================================================
+// LOGBOEK — DOCENT OVERZICHT
+// ============================================================
+
+// Overzicht van studenten + logboekstatus voor de ingelogde docent
+app.get('/api/docent/logboeken', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query('SELECT docent_id FROM docent WHERE gebruiker_id = ?', [gebruiker_id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length === 0) return res.status(403).json({ error: 'Geen docent-account' });
+    const docent_id = rows[0].docent_id;
+
+    db.query(`
+      SELECT
+        s.stage_id,
+        g.voornaam AS student_voornaam,
+        g.naam AS student_naam,
+        st_rec.opleiding,
+        b.naam AS bedrijf,
+        s.startdatum,
+        s.einddatum,
+        COALESCE(COUNT(l.logboek_id), 0) AS totaal_weken,
+        COALESCE(SUM(CASE WHEN l.status = 'ingediend' THEN 1 ELSE 0 END), 0) AS weken_ingediend,
+        COALESCE(SUM(CASE WHEN l.status = 'goedgekeurd' THEN 1 ELSE 0 END), 0) AS weken_bevestigd,
+        MAX(l.week_nummer) AS laatste_week
+      FROM stage s
+      JOIN student st_rec ON s.student_id = st_rec.student_id
+      JOIN gebruiker g ON st_rec.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      LEFT JOIN logboek l ON l.stage_id = s.stage_id
+      WHERE s.docent_id = ? AND s.status IN ('goedgekeurd', 'bezig', 'afgerond')
+      GROUP BY s.stage_id, g.voornaam, g.naam, st_rec.opleiding, b.naam, s.startdatum, s.einddatum
+      ORDER BY g.naam ASC
+    `, [docent_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
+  });
 });
 
 const PORT = process.env.PORT || 3000;
