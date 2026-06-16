@@ -192,6 +192,7 @@ CREATE TABLE evaluatie (
     evaluatie_id        INT             NOT NULL AUTO_INCREMENT,
     beoordelaar_id      INT             NOT NULL,
     type                ENUM('student','mentor','docent') NOT NULL,
+    fase                ENUM('tussentijds','finaal') NOT NULL DEFAULT 'tussentijds',
     totaalscore         DECIMAL(5,2),
     opmerking           TEXT,
     ingevuld_op         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
