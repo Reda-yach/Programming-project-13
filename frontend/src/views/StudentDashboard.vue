@@ -27,8 +27,10 @@ const navLinks = computed(() =>
     ? [
         { label: 'Dashboard', to: '/student' },
         { label: 'Aanvraag', to: '/student/aanvraag' },
+        { label: 'Contract', to: '/student/contract' },
         { label: 'Logboek', to: '/student/logboek' },
         { label: 'Evaluatie', to: '/student/evaluatie' },
+        { label: 'Eindoverzicht', to: '/student/eindoverzicht' },
       ]
     : [
         { label: 'Dashboard', to: '/student' },

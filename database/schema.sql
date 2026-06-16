@@ -154,6 +154,9 @@ CREATE TABLE logboek (
                                         NOT NULL DEFAULT 'draft',
     ingediend_op        TIMESTAMP       NULL,
 
+    gevalideerd_door    INT             NULL,
+    gevalideerd_op      TIMESTAMP       NULL,
+
     PRIMARY KEY (logboek_id),
     CONSTRAINT fk_logboek_student
         FOREIGN KEY (student_id) REFERENCES student(student_id)
@@ -189,6 +192,7 @@ CREATE TABLE evaluatie (
     evaluatie_id        INT             NOT NULL AUTO_INCREMENT,
     beoordelaar_id      INT             NOT NULL,
     type                ENUM('student','mentor','docent') NOT NULL,
+    fase                ENUM('tussentijds','finaal') NOT NULL DEFAULT 'tussentijds',
     totaalscore         DECIMAL(5,2),
     opmerking           TEXT,
     ingevuld_op         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -230,6 +234,8 @@ CREATE TABLE evaluatie_criterium (
     competentie         VARCHAR(150)    NOT NULL,
     naam                VARCHAR(150)    NOT NULL,
     score               INT,
+    mentor_score        INT,
+    mentor_feedback     TEXT,
     gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 1.00,
     volgorde            INT             NOT NULL DEFAULT 0,
 
@@ -288,4 +294,38 @@ CREATE TABLE notificatie (
     CONSTRAINT fk_notificatie_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
+);
+-- ------------------------------------------------------------
+-- 16. PROBLEEMMELDING
+-- ------------------------------------------------------------
+CREATE TABLE probleemmelding (
+    melding_id          INT             NOT NULL AUTO_INCREMENT,
+    mentor_id           INT             NOT NULL,
+    stage_id            INT             NOT NULL,
+    titel               VARCHAR(255)    NOT NULL,
+    beschrijving        TEXT            NOT NULL,
+    status              ENUM('open','in_behandeling','opgelost') NOT NULL DEFAULT 'open',
+    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (melding_id),
+    CONSTRAINT fk_melding_mentor
+        FOREIGN KEY (mentor_id) REFERENCES mentor(mentor_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_melding_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 17. COMPETENTIE
+-- ------------------------------------------------------------
+CREATE TABLE competentie (
+    competentie_id      INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    omschrijving        TEXT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
+    opleiding_id        INT             NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (competentie_id)
 );
