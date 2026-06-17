@@ -98,13 +98,7 @@ onMounted(() => {
               Logboeken inkijken →
             </router-link>
           </div>
-          <router-link
-            :to="`/docent-logboek-detail/${student.stage_id}`"
-            class="btn btn-primary btn-sm"
-          >
-            Logboeken inkijken →
-          </router-link>
-        </div>
+        </section>
       </div>
     </main>
   </div>
