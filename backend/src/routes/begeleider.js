@@ -149,6 +149,16 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
     // 2. Stage-status bijwerken.
     await conn.execute('UPDATE stage SET status = ? WHERE stage_id = ?', [nieuweStatus, stageId]);
 
+    // 2b. Bij goedkeuring: de stageovereenkomst alvast aanmaken zodat ze meteen
+    //     ondertekend kan worden (de commissie tekent direct na goedkeuren).
+    if (beslissing === 'goedgekeurd') {
+      await conn.execute(
+        `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+         VALUES (?, FALSE, FALSE, FALSE)`,
+        [stageId],
+      );
+    }
+
     // 3. Student op de hoogte brengen.
     const melding = bouwMelding(beslissing, motivatie?.trim());
     await conn.execute(

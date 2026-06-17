@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import SignaturePad from '@/components/SignaturePad.vue'
 import { useAuthStore } from '@/stores/auth'
 import { getStageStatusLabel } from '@/utils/stageStatus'
 
@@ -19,6 +20,10 @@ const fout = ref('')
 const detailLaden = ref(false)
 const verwerken = ref(false)
 const melding = ref('')
+
+// Bij goedkeuren moet de commissie meteen ondertekenen.
+const tekenModus = ref(false)
+const pad = ref(null)
 
 function authHeaders() {
   return { Authorization: `Bearer ${auth.token}` }
@@ -70,6 +75,7 @@ async function selecteer(id) {
   geselecteerdeId.value = id
   feedback.value = ''
   melding.value = ''
+  tekenModus.value = false
   detail.value = null
   detailLaden.value = true
   try {
@@ -92,6 +98,13 @@ const BESLISSING_MAP = {
 }
 
 async function handleDecision(type) {
+  // Goedkeuren vereist een handtekening: open eerst het teken-canvas.
+  if (type === 'goedkeuren') {
+    melding.value = ''
+    tekenModus.value = true
+    return
+  }
+
   const beslissing = BESLISSING_MAP[type]
   if ((beslissing === 'meer_info' || beslissing === 'afgewezen') && !feedback.value.trim()) {
     melding.value = 'Feedback is verplicht bij aanpassingen vragen of afkeuren.'
@@ -119,6 +132,57 @@ async function handleDecision(type) {
   } finally {
     verwerken.value = false
   }
+}
+
+// Goedkeuring bevestigen: eerst goedkeuren (maakt de overeenkomst aan),
+// daarna meteen ondertekenen met de handtekening van de commissie.
+async function bevestigGoedkeuring() {
+  const handtekening = pad.value?.getData()
+  if (!handtekening) {
+    melding.value = 'Teken eerst je handtekening om de goedkeuring te bevestigen.'
+    return
+  }
+
+  const stageId = geselecteerdeId.value
+  verwerken.value = true
+  melding.value = ''
+  try {
+    const res = await fetch(`${API}/begeleider/${stageId}/beslissing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ beslissing: 'goedgekeurd', motivatie: feedback.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      melding.value = data.error || 'De goedkeuring kon niet worden verwerkt.'
+      return
+    }
+
+    const tekenRes = await fetch(`${API}/contracten/${stageId}/tekenen`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ rol: 'docent', handtekening }),
+    })
+    if (!tekenRes.ok) {
+      const tekenData = await tekenRes.json()
+      melding.value = tekenData.error || 'Goedgekeurd, maar ondertekenen mislukte.'
+      return
+    }
+
+    // Afgehandeld → verdwijnt uit de openstaande lijst.
+    tekenModus.value = false
+    geselecteerdeId.value = null
+    await laadAanvragen()
+  } catch {
+    melding.value = 'Kan geen verbinding maken met de server.'
+  } finally {
+    verwerken.value = false
+  }
+}
+
+function annuleerTekenen() {
+  tekenModus.value = false
+  melding.value = ''
 }
 
 onMounted(laadAanvragen)
@@ -223,29 +287,51 @@ onMounted(laadAanvragen)
           <div class="card">
             <h3 class="card-title" style="margin-bottom:16px;">Beoordeling</h3>
             <hr class="card-divider">
-            <div class="form-group" style="margin-bottom:20px;">
-              <label for="feedback">
-                Feedback of motivatie (verplicht bij afkeuren of aanpassing)
-              </label>
-              <textarea
-                id="feedback"
-                v-model="feedback"
-                rows="4"
-                placeholder="Schrijf hier je feedback of motivatie..."
-              ></textarea>
-            </div>
-            <div class="flex gap-12">
-              <button class="btn btn-outline-green" :disabled="verwerken" @click="handleDecision('goedkeuren')">
-                ✔ Goedkeuren
-              </button>
-              <button class="btn btn-outline-orange" :disabled="verwerken" @click="handleDecision('aanpassing')">
-                ✎ Aanpassingen vragen
-              </button>
-              <button class="btn btn-outline-red" :disabled="verwerken" @click="handleDecision('afkeuren')">
-                ✖ Afkeuren
-              </button>
-            </div>
-            <p v-if="melding" class="form-error" style="margin-top:12px;">{{ melding }}</p>
+
+            <!-- Teken-modus: commissie ondertekent de overeenkomst bij goedkeuring -->
+            <template v-if="tekenModus">
+              <p class="text-sm" style="margin-bottom:12px;">
+                Onderteken de stageovereenkomst om de goedkeuring te bevestigen.
+                De aanvraag wordt daarna goedgekeurd en de overeenkomst aangemaakt.
+              </p>
+              <SignaturePad ref="pad" />
+              <div class="flex gap-12" style="margin-top:16px;">
+                <button class="btn btn-outline-green" :disabled="verwerken" @click="bevestigGoedkeuring">
+                  ✔ Goedkeuring bevestigen &amp; ondertekenen
+                </button>
+                <button class="btn btn-outline" :disabled="verwerken" @click="annuleerTekenen">
+                  Annuleren
+                </button>
+              </div>
+              <p v-if="melding" class="form-error" style="margin-top:12px;">{{ melding }}</p>
+            </template>
+
+            <!-- Standaard beoordeling -->
+            <template v-else>
+              <div class="form-group" style="margin-bottom:20px;">
+                <label for="feedback">
+                  Feedback of motivatie (verplicht bij afkeuren of aanpassing)
+                </label>
+                <textarea
+                  id="feedback"
+                  v-model="feedback"
+                  rows="4"
+                  placeholder="Schrijf hier je feedback of motivatie..."
+                ></textarea>
+              </div>
+              <div class="flex gap-12">
+                <button class="btn btn-outline-green" :disabled="verwerken" @click="handleDecision('goedkeuren')">
+                  ✔ Goedkeuren
+                </button>
+                <button class="btn btn-outline-orange" :disabled="verwerken" @click="handleDecision('aanpassing')">
+                  ✎ Aanpassingen vragen
+                </button>
+                <button class="btn btn-outline-red" :disabled="verwerken" @click="handleDecision('afkeuren')">
+                  ✖ Afkeuren
+                </button>
+              </div>
+              <p v-if="melding" class="form-error" style="margin-top:12px;">{{ melding }}</p>
+            </template>
           </div>
         </template>
 

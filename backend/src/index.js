@@ -1262,15 +1262,40 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
       sc.stage_id,
       g.voornaam,
       g.naam AS student,
+      g.email AS student_email,
+      st.studentnummer,
+      st.opleiding,
       s.stagetitel,
+      s.beschrijving,
+      s.startdatum,
+      s.einddatum,
+      b.naam AS bedrijf,
+      b.straatnaam AS bedrijf_straatnaam,
+      b.huisnummer AS bedrijf_huisnummer,
+      b.postcode AS bedrijf_postcode,
+      b.gemeente AS bedrijf_gemeente,
+      b.sector AS bedrijf_sector,
+      gm.voornaam AS mentor_voornaam,
+      gm.naam AS mentor_naam,
+      gm.email AS mentor_email,
+      m.functietitel AS mentor_functie,
       sc.getekend_student,
       sc.getekend_mentor,
       sc.getekend_docent,
+      sc.handtekening_student,
+      sc.handtekening_mentor,
+      sc.handtekening_docent,
+      sc.getekend_student_op,
+      sc.getekend_mentor_op,
+      sc.getekend_docent_op,
       sc.getekend_op
     FROM stagecontract sc
     JOIN stage s ON sc.stage_id = s.stage_id
     JOIN student st ON s.student_id = st.student_id
     JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    JOIN mentor m ON s.mentor_id = m.mentor_id
+    JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
     WHERE sc.stage_id = ?
   `, [stage_id], (err, results) => {
     if (err) {
@@ -1285,10 +1310,12 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
   });
 });
 
-// Contract tekenen (student, mentor of docent)
+// Contract tekenen (student, mentor of docent-in-commissie).
+// Body: { rol, handtekening } waarbij handtekening een base64 PNG data-URL is.
+// Vrije volgorde: er is geen verplichte ondertekenvolgorde.
 app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
   const { stage_id } = req.params;
-  const { rol } = req.body;
+  const { rol, handtekening } = req.body;
 
   const toegestaneRollen = ['student', 'mentor', 'docent'];
   if (!toegestaneRollen.includes(rol)) {
@@ -1296,11 +1323,21 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
     return;
   }
 
-  const kolom = `getekend_${rol}`;
+  if (!handtekening || typeof handtekening !== 'string' || !handtekening.startsWith('data:image')) {
+    res.status(400).json({ error: 'Een handtekening is verplicht om te tekenen.' });
+    return;
+  }
+
+  // rol is gevalideerd tegen een vaste allowlist, dus veilig in de kolomnaam.
+  const kolomGetekend = `getekend_${rol}`;
+  const kolomHandtekening = `handtekening_${rol}`;
+  const kolomOp = `getekend_${rol}_op`;
 
   db.query(`
-    UPDATE stagecontract SET ${kolom} = TRUE WHERE stage_id = ?
-  `, [stage_id], (err, results) => {
+    UPDATE stagecontract
+    SET ${kolomGetekend} = TRUE, ${kolomHandtekening} = ?, ${kolomOp} = NOW()
+    WHERE stage_id = ?
+  `, [handtekening, stage_id], (err, results) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1723,6 +1760,7 @@ app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'admin'
       SELECT
         e.evaluatie_id,
         e.type,
+        e.fase,
         e.totaalscore,
         e.opmerking,
         e.ingevuld_op,

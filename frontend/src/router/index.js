@@ -60,11 +60,6 @@ const router = createRouter({
       component: () => import('../views/DocentLogboekDetail.vue'),
     },
     {
-      path: '/mentor',
-      name: 'mentor',
-      component: () => import('../views/MentorLogboek.vue'),
-    },
-    {
       path: '/docent-studenten',
       name: 'docent-studenten',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
@@ -111,8 +106,8 @@ const router = createRouter({
     },
     {
       path: '/mentor',
-      name: 'mentor-dashboard',
-      component: () => import('../views/MentorDashboard.vue'),
+      name: 'mentor-studenten',
+      component: () => import('../views/MentorStudenten.vue'),
     },
     {
       path: '/mentor/logboeken',
@@ -168,11 +163,6 @@ const router = createRouter({
       path: '/admin/studenten/nieuw',
       name: 'admin-student-nieuw',
       component: () => import('../views/AdminStudentNieuw.vue'),
-    },
-    {
-      path: '/admin/competenties',
-      name: 'admin-competenties',
-      component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {
       path: '/wachtwoord-vergeten',

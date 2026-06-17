@@ -133,6 +133,14 @@ CREATE TABLE stagecontract (
     getekend_student    BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_mentor     BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_docent     BOOLEAN         NOT NULL DEFAULT FALSE,
+    -- Muis-handtekeningen, opgeslagen als base64 PNG data-URL uit het canvas.
+    -- 'docent' = de docent in de stagecommissie (zelfde persoon die goedkeurt).
+    handtekening_student LONGTEXT       NULL,
+    handtekening_mentor  LONGTEXT       NULL,
+    handtekening_docent  LONGTEXT       NULL,
+    getekend_student_op  TIMESTAMP      NULL,
+    getekend_mentor_op   TIMESTAMP      NULL,
+    getekend_docent_op   TIMESTAMP      NULL,
     getekend_op         TIMESTAMP       NULL,
 
     PRIMARY KEY (contract_id),

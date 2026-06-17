@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
+import SignaturePad from '../components/SignaturePad.vue'
+import OvereenkomstDocument from '../components/OvereenkomstDocument.vue'
 import { useStageStore } from '../stores/stage'
 
 const stageStore = useStageStore()
@@ -17,6 +19,7 @@ const contract = ref(null)
 const laadFout = ref('')
 const bericht = ref('')
 const bezig = ref(false)
+const pad = ref(null)
 
 onMounted(async () => {
   await stageStore.laad()
@@ -24,10 +27,7 @@ onMounted(async () => {
 })
 
 const stageId = computed(() => stageStore.aanvraag?.stage_id || null)
-const stageGoedgekeurd = computed(() => {
-  const s = stageStore.status
-  return s === 'goedgekeurd'
-})
+const stageGoedgekeurd = computed(() => stageStore.status === 'goedgekeurd')
 
 async function laadContract() {
   if (!stageId.value) return
@@ -49,6 +49,11 @@ async function laadContract() {
 }
 
 async function tekenContract() {
+  const handtekening = pad.value?.getData()
+  if (!handtekening) {
+    bericht.value = 'Teken eerst je handtekening in het vak hierboven.'
+    return
+  }
   bezig.value = true
   bericht.value = ''
   const token = localStorage.getItem('token')
@@ -56,7 +61,7 @@ async function tekenContract() {
     const res = await fetch(`http://localhost:3000/api/contracten/${stageId.value}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rol: 'student' }),
+      body: JSON.stringify({ rol: 'student', handtekening }),
     })
     const data = await res.json()
     if (res.ok) {
@@ -70,11 +75,6 @@ async function tekenContract() {
   } finally {
     bezig.value = false
   }
-}
-
-function formatDatum(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 </script>
 
@@ -109,60 +109,9 @@ function formatDatum(d) {
 
       <!-- Contract beschikbaar -->
       <template v-else-if="contract">
-
-        <!-- Status handtekeningen -->
-        <div class="card mt-24">
-          <h2 class="form-section-title">Status ondertekening</h2>
-          <p class="text-secondary text-sm mt-4 mb-16">
-            Alle drie partijen moeten het contract ondertekenen voordat de stage van start kan gaan.
-          </p>
-
-          <div class="flex gap-24" style="flex-wrap:wrap;">
-            <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_student ? '✅' : '⏳' }}</span>
-              <div>
-                <p class="font-semibold text-sm">Student</p>
-                <p class="text-secondary text-xs">{{ contract.getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_mentor ? '✅' : '⏳' }}</span>
-              <div>
-                <p class="font-semibold text-sm">Stagementor</p>
-                <p class="text-secondary text-xs">{{ contract.getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_docent ? '✅' : '⏳' }}</span>
-              <div>
-                <p class="font-semibold text-sm">EhB-docent</p>
-                <p class="text-secondary text-xs">{{ contract.getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="contract.getekend_student && contract.getekend_mentor && contract.getekend_docent"
-            class="mt-16 card" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-            <p class="font-semibold" style="color:#15803d;">Contract volledig ondertekend</p>
-            <p class="text-secondary text-sm mt-4">
-              Ondertekend op {{ formatDatum(contract.getekend_op) }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Stagegegevens -->
-        <div class="card mt-16">
-          <h2 class="form-section-title">Stagegegevens</h2>
-          <div class="form-grid-2 mt-12">
-            <div>
-              <p class="text-secondary text-sm">Student</p>
-              <p class="font-semibold">{{ contract.voornaam }} {{ contract.student }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-sm">Stagetitel</p>
-              <p>{{ contract.stagetitel }}</p>
-            </div>
-          </div>
+        <!-- De volledige overeenkomst als pagina -->
+        <div class="mt-24">
+          <OvereenkomstDocument :contract="contract" />
         </div>
 
         <!-- Actie: teken -->
@@ -181,18 +130,18 @@ function formatDatum(d) {
               en alle bijhorende afspraken met het bedrijf en EhB.
             </p>
 
-            <div v-if="bericht" class="card mb-12" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+            <SignaturePad ref="pad" />
+
+            <div v-if="bericht" class="card mt-12" style="background:#f0fdf4;border:1px solid #bbf7d0;">
               <p style="color:#15803d;">{{ bericht }}</p>
             </div>
 
-            <button class="btn btn-primary" @click="tekenContract" :disabled="bezig">
+            <button class="btn btn-primary mt-12" @click="tekenContract" :disabled="bezig">
               {{ bezig ? 'Bezig...' : 'Contract ondertekenen' }}
             </button>
           </div>
         </div>
-
       </template>
-
     </main>
   </div>
 </template>
