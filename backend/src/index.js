@@ -264,6 +264,49 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
   }
 });
 
+// Nieuwe student aanmaken (alleen admin). Maakt gebruiker (rol student) + student-rij.
+// Standaardwachtwoord 'student123' — student reset dit via wachtwoord-vergeten.
+app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, academiejaar } = req.body;
+
+  if (!voornaam || !naam || !email || !studentnummer || !opleiding || !academiejaar) {
+    return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('student123', 10);
+    db.query(
+      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+      [voornaam, naam, email, telefoonnummer || null, hash, 'student'],
+      (err, gebruikerResult) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        db.query(
+          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES (?, ?, ?, ?)',
+          [gebruikerResult.insertId, studentnummer, opleiding, academiejaar],
+          (err2, studentResult) => {
+            if (err2) {
+              // ponytail: dubbel studentnummer laat de zojuist aangemaakte gebruiker-rij wees achter;
+              // wrap in een transactie als dat in de praktijk voorkomt.
+              if (err2.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Dit studentnummer is al in gebruik.' });
+              }
+              return res.status(500).json({ error: err2.message });
+            }
+            res.status(201).json({ message: 'Student aangemaakt!', student_id: studentResult.insertId });
+          }
+        );
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // STAGES
 // ============================================================

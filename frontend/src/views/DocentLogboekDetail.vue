@@ -168,11 +168,6 @@ function statusBadge(status) {
   if (status === 'draft') return 'badge-red'
   return ''
 }
-
-function formatDatum(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })
-}
 </script>
 
 <template>

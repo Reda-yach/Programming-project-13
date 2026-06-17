@@ -1,9 +1,19 @@
 <script setup>
 import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+function uitloggen() {
+  authStore.clearSession()
+  router.push('/login')
+}
 
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
 const links = ref([
+  { label: 'Nieuwe student', to: '/admin/studenten/nieuw', beschrijving: 'Een student toevoegen aan het systeem' },
   { label: 'Alle stages', to: '/docent-studenten', beschrijving: 'Bekijk alle stages in het systeem' },
   { label: 'Aanvragen', to: '/docent-aanvragen', beschrijving: 'Openstaande stage-aanvragen beoordelen' },
   { label: 'Evaluaties', to: '/docent-evaluaties', beschrijving: 'Alle evaluaties bekijken' },
@@ -20,7 +30,7 @@ const links = ref([
         <span class="logo-text">Stage Monitor</span>
       </div>
       <div class="topbar-right">
-        <RouterLink to="/login" class="uitloggen">Uitloggen</RouterLink>
+        <button class="uitloggen" type="button" @click="uitloggen">Uitloggen</button>
       </div>
     </header>
 

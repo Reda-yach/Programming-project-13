@@ -177,6 +177,8 @@ CREATE TABLE logboek_dag (
     logboek_id          INT             NOT NULL,
     dag                 ENUM('maandag','dinsdag','woensdag','donderdag','vrijdag') NOT NULL,
     activiteiten        TEXT,
+    reflectie           TEXT,
+    leerpunten          TEXT,
     uren                DECIMAL(4,2),
 
     PRIMARY KEY (dag_id),
