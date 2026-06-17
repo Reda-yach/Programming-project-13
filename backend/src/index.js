@@ -264,6 +264,49 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
   }
 });
 
+// Nieuwe student aanmaken (alleen admin). Maakt gebruiker (rol student) + student-rij.
+// Standaardwachtwoord 'student123' — student reset dit via wachtwoord-vergeten.
+app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, academiejaar } = req.body;
+
+  if (!voornaam || !naam || !email || !studentnummer || !opleiding || !academiejaar) {
+    return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('student123', 10);
+    db.query(
+      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+      [voornaam, naam, email, telefoonnummer || null, hash, 'student'],
+      (err, gebruikerResult) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        db.query(
+          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES (?, ?, ?, ?)',
+          [gebruikerResult.insertId, studentnummer, opleiding, academiejaar],
+          (err2, studentResult) => {
+            if (err2) {
+              // ponytail: dubbel studentnummer laat de zojuist aangemaakte gebruiker-rij wees achter;
+              // wrap in een transactie als dat in de praktijk voorkomt.
+              if (err2.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Dit studentnummer is al in gebruik.' });
+              }
+              return res.status(500).json({ error: err2.message });
+            }
+            res.status(201).json({ message: 'Student aangemaakt!', student_id: studentResult.insertId });
+          }
+        );
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // STAGES
 // ============================================================
@@ -1156,7 +1199,7 @@ app.put('/api/notificaties/:id/gelezen', verifyToken, (req, res) => {
 app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   const { stage_id, commissielid_id, beslissing, motivatie } = req.body;
 
-  const toegestaneBeslissingen = ['goedgekeurd', 'afgekeurd', 'aanpassing_vereist'];
+  const toegestaneBeslissingen = ['goedgekeurd', 'afgekeurd', 'aanpassing_gevraagd'];
   if (!toegestaneBeslissingen.includes(beslissing)) {
     return res.status(400).json({ error: `Ongeldige beslissing. Kies uit: ${toegestaneBeslissingen.join(', ')}` });
   }
@@ -1172,7 +1215,7 @@ app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, 
 
     const nieuweStatus = beslissing === 'goedgekeurd' ? 'goedgekeurd'
       : beslissing === 'afgekeurd' ? 'afgekeurd'
-      : 'aanpassing_vereist';
+      : 'aanpassing_gevraagd';
 
     db.query(`
       UPDATE stage SET status = ? WHERE stage_id = ?
@@ -2103,10 +2146,9 @@ app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, requireRol
 });
 
 // ============================================================
-// SERVER STARTEN
+// EXTRA STAGE- EN CONTRACTROUTES
 // ============================================================
-app.use('/api/stage', require('./routes/stage'));
-app.use('/api/begeleider', require('./routes/begeleider'));
+
 // Contract aanmaken na goedkeuring
 app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
   const { stage_id } = req.params;
@@ -2190,6 +2232,11 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
     });
   });
 });
+// ============================================================
+// ROUTERMODULES
+// ============================================================
+app.use('/api/stage', require('./routes/stage'));
+app.use('/api/begeleider', require('./routes/begeleider'));
 
 // ============================================================
 // LOGBOEK — STUDENT
@@ -2468,8 +2515,14 @@ app.get('/api/docent/logboeken', verifyToken, (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
 app.use('/api/aanvraag', require('./routes/aanvraag'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/students', verifyToken, require('./routes/studentdashboardroute'));
+
+// ============================================================
+// SERVER STARTEN
+// ============================================================
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });

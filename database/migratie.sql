@@ -111,7 +111,87 @@ ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
 
 -- --------------------------------------------
--- MIGRATIE 13: reflectie en leerpunten toevoegen aan logboek_dag
+-- MIGRATIE 13: competentie tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS competentie (
+    competentie_id      INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    omschrijving        TEXT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
+    opleiding_id        INT             NOT NULL,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (competentie_id)
+);
+
+-- --------------------------------------------
+-- MIGRATIE 14: validatie kolommen toevoegen aan logboek
+-- --------------------------------------------
+ALTER TABLE logboek
+  ADD COLUMN gevalideerd_door INT NULL,
+  ADD COLUMN gevalideerd_op TIMESTAMP NULL,
+  ADD CONSTRAINT fk_logboek_mentor
+    FOREIGN KEY (gevalideerd_door) REFERENCES mentor(mentor_id)
+    ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- --------------------------------------------
+-- MIGRATIE 15: mentor score en feedback toevoegen aan evaluatie_criterium
+-- --------------------------------------------
+ALTER TABLE evaluatie_criterium
+  ADD COLUMN mentor_score INT NULL AFTER score,
+  ADD COLUMN mentor_feedback TEXT NULL AFTER mentor_score;
+
+-- --------------------------------------------
+-- MIGRATIE 16: wachtwoord_reset tabel voor "wachtwoord vergeten"
+-- --------------------------------------------
+-- We slaan NOOIT de ruwe reset-token op, enkel een SHA-256 hash ervan.
+-- De ruwe token gaat alleen per e-mail naar de gebruiker. Zo kan een lek
+-- van de database niet leiden tot misbruik van openstaande reset-links.
+CREATE TABLE wachtwoord_reset (
+    reset_id        INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id    INT             NOT NULL,
+    token_hash      CHAR(64)        NOT NULL,          -- SHA-256 hex (64 tekens)
+    verloopt_op     DATETIME        NOT NULL,          -- vervaltijd (bv. +1 uur)
+    gebruikt_op     DATETIME        NULL,              -- gevuld zodra de token gebruikt is (eenmalig)
+    aangemaakt_op   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (reset_id),
+    UNIQUE KEY uq_token_hash (token_hash),
+    KEY idx_reset_gebruiker (gebruiker_id),
+    CONSTRAINT fk_reset_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- --------------------------------------------
+-- MIGRATIE 17: type-kolom op notificatie
+-- --------------------------------------------
+-- Bepaalt de kleur/het icoon van een melding op het studentdashboard
+-- (✓ goed, ⚠ waarschuwing, ✕ fout, 🔔 info). Bestaande rijen worden,
+-- waar mogelijk, op basis van hun tekst ingedeeld; de rest blijft 'info'.
+ALTER TABLE notificatie
+  ADD COLUMN type ENUM('info','goed','waarschuwing','fout') NOT NULL DEFAULT 'info' AFTER bericht;
+
+UPDATE notificatie SET type = 'goed'
+  WHERE bericht REGEXP 'goedgekeurd|bevestigd|ondertekend|akkoord';
+UPDATE notificatie SET type = 'fout'
+  WHERE bericht REGEXP 'afgekeurd|afgewezen|geweigerd';
+UPDATE notificatie SET type = 'waarschuwing'
+  WHERE bericht REGEXP 'aanpassing|wijzig|aandacht|let op';
+
+-- --------------------------------------------
+-- MIGRATIE 18: status 'aanpassing_gevraagd' toevoegen aan stage
+-- --------------------------------------------
+-- De stagecommissie kan een aanvraag terugsturen met de vraag om
+-- aanpassingen (commissie_beslissing.beslissing = 'meer_info'). Daarvoor
+-- heeft de stage een eigen status nodig die los staat van 'afgewezen'.
+ALTER TABLE stage
+  MODIFY COLUMN status
+    ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond','aanpassing_gevraagd')
+    NOT NULL DEFAULT 'ingediend';
+
+-- --------------------------------------------
+-- MIGRATIE 19: reflectie en leerpunten toevoegen aan logboek_dag
 -- --------------------------------------------
 ALTER TABLE logboek_dag
   ADD COLUMN reflectie TEXT AFTER activiteiten,

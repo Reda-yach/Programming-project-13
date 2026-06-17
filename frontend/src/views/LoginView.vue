@@ -1,29 +1,22 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const email = ref('')
 const wachtwoord = ref('')
 const error = ref('')
-
-// Bestemming per rol. De backend bepaalt de rol — de frontend leidt die
-// NIET af uit het e-mailadres (dat is onbetrouwbaar en onveilig).
-const bestemmingPerRol = {
-  student:   '/student',
-  docent:    '/docent',
-  mentor:    '/mentor',
-  admin:     '/admin',
-  commissie: '/commissie',
-}
+const loading = ref(false)
 
 // Al ingelogd? Stuur meteen door naar het juiste dashboard.
 onMounted(() => {
   const token = localStorage.getItem('token')
   const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || 'null')
   if (token && gebruiker) {
-    const bestemming = bestemmingPerRol[gebruiker.rol]
+    const bestemming = authStore.getRoleHomePath(gebruiker.rol)
     if (bestemming) router.push(bestemming)
   }
 })
@@ -36,32 +29,33 @@ async function handleLogin() {
     return
   }
 
+  loading.value = true
+
   try {
-    const res = await fetch('http://localhost:3000/api/login', {
+    const response = await fetch('http://localhost:3000/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, wachtwoord: wachtwoord.value }),
+      body: JSON.stringify({ email: email.value.trim(), wachtwoord: wachtwoord.value }),
     })
-    const data = await res.json()
 
-    if (!res.ok) {
+    const data = await response.json()
+
+    if (!response.ok) {
       error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
       return
     }
 
-    // Token + gebruiker bewaren voor de route guard en de andere pagina's
-    localStorage.setItem('token', data.token)
-    localStorage.setItem('gebruiker', JSON.stringify(data.gebruiker))
+    authStore.saveSession({
+      token: data.token,
+      user: data.gebruiker,
+    })
 
-    const bestemming = bestemmingPerRol[data.gebruiker.rol]
-    if (!bestemming) {
-      error.value = 'Onbekende rol. Neem contact op met de beheerder.'
-      return
-    }
-
-    router.push(bestemming)
-  } catch (e) {
-    error.value = 'Kan geen verbinding maken met de server.'
+    const bestemming = authStore.getRoleHomePath(data.gebruiker?.rol)
+    router.replace(bestemming)
+  } catch (err) {
+    error.value = 'Kan niet verbinden met de backend. Controleer of de server draait.'
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -104,13 +98,13 @@ async function handleLogin() {
           >
         </div>
 
-        <button type="submit" class="btn btn-primary w-full" aria-describedby="login-error">
-          Log in
+        <button type="submit" class="btn btn-primary w-full" aria-describedby="login-error" :disabled="loading">
+          {{ loading ? 'Bezig met inloggen…' : 'Log in' }}
         </button>
         <p id="login-error" role="alert" aria-live="polite">{{ error }}</p>
       </form>
 
-      <router-link to="/wachtwoord-vergeten" class="login-link">Wachtwoord vergeten? →</router-link>
+      <router-link to="/wachtwoord-vergeten" class="login-link">Wachtwoord vergeten?</router-link>
 
     </section>
   </main>
