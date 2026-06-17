@@ -26,14 +26,10 @@ export const useStageStore = defineStore('stage', () => {
   const motivatie = ref(null)
   const meldingen = ref([])
   const fout = ref(null)
- 
-  // Status uit de DATABASE halen voor de ingelogde student.
-  // Overleeft een refresh en toont de commissie-beslissing.
+
   async function laad() {
     fout.value = null
     const token = localStorage.getItem('token')
- 
-    // Geen token → niet ingelogd, geen crash.
     if (!token) {
       status.value = 'geen'
       aanvraag.value = null
@@ -41,15 +37,12 @@ export const useStageStore = defineStore('stage', () => {
       meldingen.value = []
       return
     }
- 
     try {
       const res = await fetch(`${API}/mijn-stage`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Laden mislukt')
- 
-      // Geen aanvraag ingediend.
       if (!data.stage) {
         status.value = 'geen'
         aanvraag.value = null
@@ -57,7 +50,6 @@ export const useStageStore = defineStore('stage', () => {
         meldingen.value = []
         return
       }
- 
       aanvraag.value = data.stage
       status.value = mapStatus(data.stage.status)
       motivatie.value = data.stage.commissie_motivatie || null
@@ -69,26 +61,25 @@ export const useStageStore = defineStore('stage', () => {
     }
   }
 
-  // Weg A (Model 1): uit de invoer worden echt een bedrijf en een mentor
-  // aangemaakt, daarna de stage die eraan koppelt.
   async function dienIn(gegevens) {
     fout.value = null
     try {
       const token = localStorage.getItem('token')
       const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
-
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       }
 
-      // 1) Bedrijf aanmaken
       const bedrijfRes = await fetch(`${API}/bedrijven`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           naam: gegevens.bedrijf.bedrijf,
-          adres: gegevens.bedrijf.adres,
+          straatnaam: gegevens.bedrijf.straatnaam,
+          huisnummer: gegevens.bedrijf.huisnummer,
+          postcode: gegevens.bedrijf.postcode,
+          gemeente: gegevens.bedrijf.gemeente,
           sector: gegevens.bedrijf.sector,
           contact_email: gegevens.mentor.email,
           contact_telefoonnummer: gegevens.mentor.tel,
@@ -98,17 +89,12 @@ export const useStageStore = defineStore('stage', () => {
       if (!bedrijfRes.ok) throw new Error(bedrijfData.error || 'Bedrijf aanmaken mislukt')
       const bedrijf_id = bedrijfData.id
 
-      // 2) Mentor aanmaken (maakt ook een gebruiker met rol 'mentor').
-      // De mentornaam is één veld; we splitsen op de eerste spatie.
-      const [voornaam, ...rest] = gegevens.mentor.naam.trim().split(' ')
-      const naam = rest.join(' ') || voornaam
-
       const mentorRes = await fetch(`${API}/mentors`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          voornaam,
-          naam,
+          voornaam: gegevens.mentor.voornaam,
+          naam: gegevens.mentor.achternaam,
           email: gegevens.mentor.email,
           telefoonnummer: gegevens.mentor.tel,
           functietitel: gegevens.mentor.functie,
@@ -119,8 +105,6 @@ export const useStageStore = defineStore('stage', () => {
       if (!mentorRes.ok) throw new Error(mentorData.error || 'Mentor aanmaken mislukt')
       const mentor_id = mentorData.mentor_id
 
-      // 3) Stage aanmaken, gekoppeld aan het verse bedrijf en de verse mentor.
-      // docent_id blijft NULL — de admin wijst later een docent toe.
       const stageRes = await fetch(`${API}/stages`, {
         method: 'POST',
         headers,
@@ -140,12 +124,86 @@ export const useStageStore = defineStore('stage', () => {
 
       await laad()
       return true
-
     } catch (e) {
       fout.value = e.message || 'Geen verbinding met de server'
       return false
     }
   }
 
-  return { status, aanvraag, motivatie, meldingen, fout, laad, dienIn }
+  // Aanpassing: bestaande bedrijf + mentor + stage updaten.
+  // De status gaat terug naar in_behandeling via de PUT /api/stages/:id (status meegestuurd).
+  async function pasAan(gegevens) {
+    fout.value = null
+    try {
+      const token = localStorage.getItem('token')
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      }
+      const s = aanvraag.value // bevat bedrijf_id, mentor_id, mentor_gebruiker_id, stage_id
+
+      const bedrijfRes = await fetch(`${API}/bedrijven/${s.bedrijf_id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          naam: gegevens.bedrijf.bedrijf,
+          straatnaam: gegevens.bedrijf.straatnaam,
+          huisnummer: gegevens.bedrijf.huisnummer,
+          postcode: gegevens.bedrijf.postcode,
+          gemeente: gegevens.bedrijf.gemeente,
+          sector: gegevens.bedrijf.sector,
+          contact_email: gegevens.mentor.email,
+          contact_telefoonnummer: gegevens.mentor.tel,
+        }),
+      })
+      if (!bedrijfRes.ok) {
+        const d = await bedrijfRes.json()
+        throw new Error(d.error || 'Bedrijf bijwerken mislukt')
+      }
+
+      const mentorRes = await fetch(`${API}/mentors/${s.mentor_id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          voornaam: gegevens.mentor.voornaam,
+          naam: gegevens.mentor.achternaam,
+          email: gegevens.mentor.email,
+          telefoonnummer: gegevens.mentor.tel,
+          functietitel: gegevens.mentor.functie,
+          gebruiker_id: s.mentor_gebruiker_id,
+        }),
+      })
+      if (!mentorRes.ok) {
+        const d = await mentorRes.json()
+        throw new Error(d.error || 'Mentor bijwerken mislukt')
+      }
+
+      const stageRes = await fetch(`${API}/stages/${s.stage_id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          stagetitel: gegevens.bedrijf.opdracht,
+          beschrijving: gegevens.bedrijf.opdracht,
+          startdatum: gegevens.bedrijf.datumVan,
+          einddatum: gegevens.bedrijf.datumTot,
+          bedrijf_id: s.bedrijf_id,
+          mentor_id: s.mentor_id,
+          docent_id: null,
+          status: 'in_behandeling',
+        }),
+      })
+      if (!stageRes.ok) {
+        const d = await stageRes.json()
+        throw new Error(d.error || 'Stage bijwerken mislukt')
+      }
+
+      await laad()
+      return true
+    } catch (e) {
+      fout.value = e.message || 'Geen verbinding met de server'
+      return false
+    }
+  }
+
+  return { status, aanvraag, motivatie, meldingen, fout, laad, dienIn, pasAan }
 })

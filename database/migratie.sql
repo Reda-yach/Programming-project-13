@@ -109,6 +109,7 @@ CREATE TABLE logboek_dag (
 -- --------------------------------------------
 ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
+
 -- --------------------------------------------
 -- MIGRATIE 13: competentie tabel aanmaken
 -- --------------------------------------------
@@ -188,3 +189,10 @@ ALTER TABLE stage
   MODIFY COLUMN status
     ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond','aanpassing_gevraagd')
     NOT NULL DEFAULT 'ingediend';
+
+-- --------------------------------------------
+-- MIGRATIE 19: reflectie en leerpunten toevoegen aan logboek_dag
+-- --------------------------------------------
+ALTER TABLE logboek_dag
+  ADD COLUMN reflectie TEXT AFTER activiteiten,
+  ADD COLUMN leerpunten TEXT AFTER reflectie;

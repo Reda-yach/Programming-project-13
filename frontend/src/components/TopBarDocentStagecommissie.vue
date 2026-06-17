@@ -1,5 +1,5 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 defineProps({
   links: {
@@ -7,6 +7,14 @@ defineProps({
     default: () => [],
   },
 })
+
+const router = useRouter()
+
+function uitloggen() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('gebruiker')
+  router.push('/login')
+}
 </script>
 
 <template>
@@ -27,7 +35,7 @@ defineProps({
       </RouterLink>
     </nav>
     <div class="topbar-right">
-      <RouterLink to="/login" class="uitloggen">Uitloggen</RouterLink>
+      <button class="uitloggen" @click="uitloggen">Uitloggen</button>
     </div>
   </header>
 </template>

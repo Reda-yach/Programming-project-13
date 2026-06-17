@@ -63,7 +63,10 @@ CREATE TABLE docent (
 CREATE TABLE bedrijf (
     bedrijf_id              INT             NOT NULL AUTO_INCREMENT,
     naam                    VARCHAR(150)    NOT NULL,
-    adres                   VARCHAR(255),
+    straatnaam              VARCHAR(150),
+    huisnummer              VARCHAR(10),
+    postcode                VARCHAR(10),
+    gemeente                VARCHAR(100),
     sector                  VARCHAR(100),
     contact_email           VARCHAR(150),
     contact_telefoonnummer  VARCHAR(20),
@@ -311,38 +314,4 @@ CREATE TABLE notificatie (
     CONSTRAINT fk_notificatie_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
-);
--- ------------------------------------------------------------
--- 16. PROBLEEMMELDING
--- ------------------------------------------------------------
-CREATE TABLE probleemmelding (
-    melding_id          INT             NOT NULL AUTO_INCREMENT,
-    mentor_id           INT             NOT NULL,
-    stage_id            INT             NOT NULL,
-    titel               VARCHAR(255)    NOT NULL,
-    beschrijving        TEXT            NOT NULL,
-    status              ENUM('open','in_behandeling','opgelost') NOT NULL DEFAULT 'open',
-    aangemaakt_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (melding_id),
-    CONSTRAINT fk_melding_mentor
-        FOREIGN KEY (mentor_id) REFERENCES mentor(mentor_id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_melding_stage
-        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- ------------------------------------------------------------
--- 17. COMPETENTIE
--- ------------------------------------------------------------
-CREATE TABLE competentie (
-    competentie_id      INT             NOT NULL AUTO_INCREMENT,
-    naam                VARCHAR(255)    NOT NULL,
-    omschrijving        TEXT,
-    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
-    opleiding_id        INT             NOT NULL,
-    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (competentie_id)
 );
