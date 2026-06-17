@@ -109,33 +109,10 @@ CREATE TABLE logboek_dag (
 -- --------------------------------------------
 ALTER TABLE evaluatie
   ADD COLUMN fase ENUM('tussentijds', 'finaal') NOT NULL DEFAULT 'tussentijds' AFTER type;
--- --------------------------------------------
--- MIGRATIE 13: competentie tabel aanmaken
--- --------------------------------------------
-CREATE TABLE IF NOT EXISTS competentie (
-    competentie_id      INT             NOT NULL AUTO_INCREMENT,
-    naam                VARCHAR(255)    NOT NULL,
-    omschrijving        TEXT,
-    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
-    opleiding_id        INT             NOT NULL,
-    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (competentie_id)
-);
 
 -- --------------------------------------------
--- MIGRATIE 14: validatie kolommen toevoegen aan logboek
+-- MIGRATIE 13: reflectie en leerpunten toevoegen aan logboek_dag
 -- --------------------------------------------
-ALTER TABLE logboek
-  ADD COLUMN gevalideerd_door INT NULL,
-  ADD COLUMN gevalideerd_op TIMESTAMP NULL,
-  ADD CONSTRAINT fk_logboek_mentor
-    FOREIGN KEY (gevalideerd_door) REFERENCES mentor(mentor_id)
-    ON DELETE SET NULL ON UPDATE CASCADE;
-
--- --------------------------------------------
--- MIGRATIE 15: mentor score en feedback toevoegen aan evaluatie_criterium
--- --------------------------------------------
-ALTER TABLE evaluatie_criterium
-  ADD COLUMN mentor_score INT NULL AFTER score,
-  ADD COLUMN mentor_feedback TEXT NULL AFTER mentor_score;
+ALTER TABLE logboek_dag
+  ADD COLUMN reflectie TEXT AFTER activiteiten,
+  ADD COLUMN leerpunten TEXT AFTER reflectie;

@@ -1,6 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+
+const API = 'http://localhost:3000/api'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -9,57 +11,31 @@ const navLinks = ref([
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])
 
-const logboeken = ref([])
-const laadFout = ref('')
+const studenten = ref([])
+const laden = ref(false)
+const fout = ref(null)
 
-onMounted(async () => {
-  await laadLogboeken()
-})
-
-async function laadLogboeken() {
-  laadFout.value = ''
+async function laadStudenten() {
+  laden.value = true
+  fout.value = null
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/docenten/mijn-logboeken', {
+    const res = await fetch(`${API}/docent/logboeken`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) throw new Error('Ophalen mislukt')
-    logboeken.value = await res.json()
-  } catch {
-    laadFout.value = 'Logboeken konden niet geladen worden.'
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Laden mislukt')
+    studenten.value = data
+  } catch (e) {
+    fout.value = e.message
+  } finally {
+    laden.value = false
   }
 }
 
-// Groepeer logboeken per student (op stage_id)
-const perStudent = computed(() => {
-  const groepen = {}
-  logboeken.value.forEach((l) => {
-    const key = l.stage_id
-    if (!groepen[key]) {
-      groepen[key] = {
-        stage_id: l.stage_id,
-        naam: `${l.voornaam} ${l.student_naam}`,
-        studentnummer: l.studentnummer,
-        bedrijf: l.bedrijf,
-        entries: [],
-      }
-    }
-    groepen[key].entries.push(l)
-  })
-  return Object.values(groepen)
+onMounted(() => {
+  laadStudenten()
 })
-
-function logboekBadge(status) {
-  if (status === 'goedgekeurd') return 'badge-green'
-  if (status === 'ingediend') return 'badge-yellow'
-  if (status === 'draft') return 'badge-red'
-  return ''
-}
-
-function formatDatum(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })
-}
 </script>
 
 <template>
@@ -69,33 +45,58 @@ function formatDatum(d) {
     <main class="content">
       <h1 class="page-title">Logboeken</h1>
 
-      <p v-if="laadFout" class="text-secondary mt-16" style="color:#dc2626;">{{ laadFout }}</p>
+      <div v-if="laden" class="text-secondary text-sm">Laden…</div>
+      <div v-else-if="fout" style="color:var(--red,#dc2626);font-size:14px;">{{ fout }}</div>
 
-      <div v-if="perStudent.length === 0 && !laadFout" class="card mt-24">
-        <p class="text-secondary">Geen logboeken gevonden.</p>
+      <div v-else-if="!studenten.length" class="text-secondary text-sm" style="margin-top:8px;">
+        Geen studenten gekoppeld aan jou.
       </div>
 
-      <div
-        v-for="student in perStudent"
-        :key="student.stage_id"
-        class="card mt-16"
-      >
-        <div class="flex justify-between items-center">
-          <div>
-            <div class="td-name">{{ student.naam }}</div>
-            <div class="td-sub">{{ student.bedrijf }} · {{ student.studentnummer }}</div>
-            <div class="text-secondary text-xs mt-8">
-              <span class="font-semibold">Meest recente entry:</span>
-              <template v-if="student.entries.length">
-                Week {{ student.entries[0].week_nummer }} ·
-                {{ formatDatum(student.entries[0].ingediend_op) }} ·
-                {{ student.entries.length }} {{ student.entries.length === 1 ? 'entry' : 'entries' }}
-                <span class="badge badge-pill ml-8" :class="logboekBadge(student.entries[0].status)">
-                  {{ student.entries[0].status }}
-                </span>
-              </template>
-              <template v-else>Nog geen entries</template>
+      <div v-else class="table-wrapper">
+        <section
+          v-for="s in studenten"
+          :key="s.stage_id"
+          class="card"
+          style="border:none;border-bottom:1px solid var(--border);border-radius:0;"
+        >
+          <div class="flex justify-between items-center">
+            <div>
+              <div class="td-name">{{ s.student_voornaam }} {{ s.student_naam }}</div>
+              <div class="td-sub">{{ s.opleiding }} · {{ s.bedrijf }}</div>
+
+              <div class="flex items-center gap-8" style="margin-top:8px;flex-wrap:wrap;">
+                <template v-if="s.totaal_weken > 0">
+                  <span class="text-secondary text-xs">
+                    Week {{ s.laatste_week }} bereikt ·
+                  </span>
+                  <span
+                    v-if="s.weken_ingediend > 0"
+                    class="badge badge-yellow badge-pill"
+                    style="font-size:11px;"
+                  >{{ s.weken_ingediend }} wacht op bevestiging</span>
+                  <span
+                    v-if="s.weken_bevestigd > 0"
+                    class="badge badge-green badge-pill"
+                    style="font-size:11px;"
+                  >{{ s.weken_bevestigd }} bevestigd</span>
+                  <span
+                    v-if="Number(s.totaal_weken) - Number(s.weken_ingediend) - Number(s.weken_bevestigd) > 0"
+                    class="badge badge-pill"
+                    style="font-size:11px;background:var(--gray100,#f3f4f6);color:var(--text-secondary);"
+                  >
+                    {{ Number(s.totaal_weken) - Number(s.weken_ingediend) - Number(s.weken_bevestigd) }} concept
+                  </span>
+                </template>
+                <span v-else class="text-secondary text-xs">Nog geen logboekentries</span>
+              </div>
             </div>
+
+            <router-link
+              :to="`/docent-logboek-detail/${s.stage_id}`"
+              class="btn btn-primary btn-sm"
+            >
+              Logboeken inkijken →
+            </router-link>
           </div>
           <router-link
             :to="`/docent-logboek-detail/${student.stage_id}`"

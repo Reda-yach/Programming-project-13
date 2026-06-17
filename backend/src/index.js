@@ -130,7 +130,7 @@ app.get('/api/gebruikers', verifyToken, (req, res) => {
 app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
   const { id } = req.params;
   db.query(
-    'SELECT bedrijf_id, naam, adres, sector, contact_email, contact_telefoonnummer FROM bedrijf WHERE bedrijf_id = ?',
+    'SELECT bedrijf_id, naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer FROM bedrijf WHERE bedrijf_id = ?',
     [id],
     (err, results) => {
       if (err) {
@@ -148,10 +148,10 @@ app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
 
 // Nieuw bedrijf aanmaken
 app.post('/api/bedrijven', verifyToken, (req, res) => {
-  const { naam, adres, sector, contact_email, contact_telefoonnummer } = req.body;
+  const { naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer } = req.body;
   db.query(
-    'INSERT INTO bedrijf (naam, adres, sector, contact_email, contact_telefoonnummer) VALUES (?, ?, ?, ?, ?)',
-    [naam, adres, sector, contact_email, contact_telefoonnummer],
+    'INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer],
     (err, results) => {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -190,35 +190,73 @@ app.get('/api/bedrijven/:id/mentors', verifyToken, (req, res) => {
   });
 });
 
-// Nieuwe mentor aanmaken (maakt eerst een gebruiker met rol 'mentor', dan het mentor-record)
-// Tijdelijk wachtwoord 'mentor123' — vereenvoudiging; mentor wijzigt dit later zelf.
+// Nieuwe mentor aanmaken of bestaande hergebruiken als het e-mailadres al bestaat.
 app.post('/api/mentors', verifyToken, async (req, res) => {
   const { voornaam, naam, email, telefoonnummer, functietitel, bedrijf_id } = req.body;
 
   try {
-    const hash = await bcrypt.hash('mentor123', 10);
-
+    // Kijk of er al een gebruiker met dit e-mailadres bestaat
     db.query(
-      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
-      [voornaam, naam, email, telefoonnummer, hash, 'mentor'],
-      (err, gebruikerResult) => {
-        if (err) {
-          res.status(500).json({ error: err.message });
-          return;
-        }
-        const gebruiker_id = gebruikerResult.insertId;
+      `SELECT g.gebruiker_id, m.mentor_id
+       FROM gebruiker g
+       LEFT JOIN mentor m ON g.gebruiker_id = m.gebruiker_id
+       WHERE g.email = ?`,
+      [email],
+      async (err, bestaande) => {
+        if (err) return res.status(500).json({ error: err.message });
 
-        db.query(
-          'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
-          [gebruiker_id, bedrijf_id, functietitel],
-          (err2, mentorResult) => {
-            if (err2) {
-              res.status(500).json({ error: err2.message });
-              return;
+        if (bestaande.length > 0) {
+          // Gebruiker bestaat al — gegevens bijwerken en mentor_id teruggeven
+          const { gebruiker_id, mentor_id } = bestaande[0];
+
+          db.query(
+            'UPDATE gebruiker SET voornaam=?, naam=?, telefoonnummer=? WHERE gebruiker_id=?',
+            [voornaam, naam, telefoonnummer, gebruiker_id],
+            (err2) => {
+              if (err2) return res.status(500).json({ error: err2.message });
+
+              if (mentor_id) {
+                db.query(
+                  'UPDATE mentor SET bedrijf_id=?, functietitel=? WHERE mentor_id=?',
+                  [bedrijf_id, functietitel, mentor_id],
+                  (err3) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ message: 'Mentor bijgewerkt!', mentor_id });
+                  }
+                );
+              } else {
+                db.query(
+                  'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
+                  [gebruiker_id, bedrijf_id, functietitel],
+                  (err3, result) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ message: 'Mentor aangemaakt!', mentor_id: result.insertId });
+                  }
+                );
+              }
             }
-            res.json({ message: 'Mentor aangemaakt!', mentor_id: mentorResult.insertId });
-          }
-        );
+          );
+        } else {
+          // Nieuwe mentor aanmaken
+          const hash = await bcrypt.hash('mentor123', 10);
+          db.query(
+            'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+            [voornaam, naam, email, telefoonnummer, hash, 'mentor'],
+            (err2, gebruikerResult) => {
+              if (err2) return res.status(500).json({ error: err2.message });
+              const gebruiker_id = gebruikerResult.insertId;
+
+              db.query(
+                'INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)',
+                [gebruiker_id, bedrijf_id, functietitel],
+                (err3, mentorResult) => {
+                  if (err3) return res.status(500).json({ error: err3.message });
+                  res.json({ message: 'Mentor aangemaakt!', mentor_id: mentorResult.insertId });
+                }
+              );
+            }
+          );
+        }
       }
     );
   } catch (e) {
@@ -289,7 +327,10 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
       st.studentnummer,
       st.opleiding,
       b.naam AS bedrijf,
-      b.adres AS bedrijf_adres,
+      b.straatnaam AS bedrijf_straatnaam,
+      b.huisnummer AS bedrijf_huisnummer,
+      b.postcode AS bedrijf_postcode,
+      b.gemeente AS bedrijf_gemeente,
       b.sector AS bedrijf_sector,
       gm.voornaam AS mentor_voornaam,
       gm.naam AS mentor_naam,
@@ -330,24 +371,32 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
 // Nieuwe stage aanmaken (stage-aanvraag indienen)
 app.post('/api/stages', verifyToken, (req, res) => {
   const { student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum } = req.body;
-  db.query(`
-    INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
-  (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+
+  db.query(
+    `SELECT stage_id FROM stage WHERE student_id = ? AND status NOT IN ('afgewezen', 'afgerond')`,
+    [student_id],
+    (err, bestaande) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (bestaande.length > 0) {
+        return res.status(400).json({ error: 'Je hebt al een actieve stage-aanvraag.' });
+      }
+
+      db.query(`
+        INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
+      (err2, results) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ message: 'Stage aangemaakt!', id: results.insertId });
+      });
     }
-    res.json({ message: 'Stage aangemaakt!', id: results.insertId });
-  });
+  );
 });
 
 
 app.get('/api/mijn-stage', verifyToken, (req, res) => {
   const gebruiker_id = req.gebruiker.id;
- 
-  // Eerst het student_id opzoeken bij deze ingelogde gebruiker
+
   db.query(
     'SELECT student_id FROM student WHERE gebruiker_id = ?',
     [gebruiker_id],
@@ -357,13 +406,11 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
         return;
       }
       if (studentRows.length === 0) {
-        // Ingelogde gebruiker is geen student
         res.status(403).json({ error: 'Geen student-account' });
         return;
       }
       const student_id = studentRows[0].student_id;
- 
-      // Meest recente stage van deze student ophalen, met bedrijf + laatste commissie-motivatie
+
       db.query(`
         SELECT
           s.stage_id,
@@ -372,9 +419,20 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           s.startdatum,
           s.einddatum,
           s.status,
+          s.bedrijf_id,
+          s.mentor_id,
           b.naam AS bedrijf,
-          b.adres AS bedrijf_adres,
+          b.straatnaam AS bedrijf_straatnaam,
+          b.huisnummer AS bedrijf_huisnummer,
+          b.postcode AS bedrijf_postcode,
+          b.gemeente AS bedrijf_gemeente,
           b.sector AS bedrijf_sector,
+          gm.voornaam AS mentor_voornaam,
+          gm.naam AS mentor_naam,
+          gm.email AS mentor_email,
+          gm.telefoonnummer AS mentor_telefoon,
+          m.functietitel AS mentor_functie,
+          m.gebruiker_id AS mentor_gebruiker_id,
           (
             SELECT cb.motivatie
             FROM commissie_beslissing cb
@@ -384,6 +442,8 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           ) AS commissie_motivatie
         FROM stage s
         JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+        JOIN mentor m ON s.mentor_id = m.mentor_id
+        JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
         WHERE s.student_id = ?
         ORDER BY s.ingediend_op DESC
         LIMIT 1
@@ -393,14 +453,12 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           return;
         }
         if (stageRows.length === 0) {
-          // Student heeft nog geen stage → geen aanvraag, geen meldingen
           res.json({ stage: null, meldingen: [] });
           return;
         }
- 
+
         const stage = stageRows[0];
- 
-        // Alle commissie-beslissingen van deze stage als meldingen, nieuw → oud
+
         db.query(`
           SELECT
             cb.beslissing_id,
@@ -2000,28 +2058,344 @@ app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
     });
   });
 });
+// Bedrijf updaten (voor aanpassing-flow)
+app.put('/api/bedrijven/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer } = req.body;
+  db.query(
+    `UPDATE bedrijf SET naam=?, straatnaam=?, huisnummer=?, postcode=?, gemeente=?, sector=?, contact_email=?, contact_telefoonnummer=? WHERE bedrijf_id=?`,
+    [naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer, id],
+    (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Bedrijf niet gevonden' });
+      res.json({ message: 'Bedrijf bijgewerkt!' });
+    }
+  );
+});
+
+// Mentor updaten: werkt zowel de gebruiker-rij (naam/email/tel) als het mentor-record (functie) bij.
+app.put('/api/mentors/:id', verifyToken, (req, res) => {
+  const { id } = req.params; // mentor_id
+  const { voornaam, naam, email, telefoonnummer, functietitel, gebruiker_id } = req.body;
+  db.query(
+    `UPDATE gebruiker SET voornaam=?, naam=?, email=?, telefoonnummer=? WHERE gebruiker_id=?`,
+    [voornaam, naam, email, telefoonnummer, gebruiker_id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      db.query(
+        `UPDATE mentor SET functietitel=? WHERE mentor_id=?`,
+        [functietitel, id],
+        (err2, result2) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ message: 'Mentor bijgewerkt!' });
+        }
+      );
+    }
+  );
+});
+
 // Stage volledig bewerken
+// Stage volledig bewerken (incl. status terugzetten bij aanpassing)
 app.put('/api/stages/:id', verifyToken, (req, res) => {
   const { id } = req.params;
-  const { stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id } = req.body;
+  const { stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id, status } = req.body;
 
   db.query('SELECT * FROM stage WHERE stage_id = ?', [id], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     if (results.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
 
+    const nieuweStatus = status || results[0].status;
+
     db.query(`
       UPDATE stage 
       SET stagetitel = ?, beschrijving = ?, startdatum = ?, einddatum = ?, 
-          bedrijf_id = ?, mentor_id = ?, docent_id = ?
+          bedrijf_id = ?, mentor_id = ?, docent_id = ?, status = ?
       WHERE stage_id = ?
-    `, [stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id, id],
+    `, [stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id, nieuweStatus, id],
     (err2, result) => {
       if (err2) return res.status(500).json({ error: err2.message });
-      if (result.affectedRows === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
       res.json({ message: 'Stage bijgewerkt!' });
     });
   });
 });
+
+// ============================================================
+// LOGBOEK — STUDENT
+// ============================================================
+
+// Haal logboek op voor een specifieke week; maakt het aan als het nog niet bestaat.
+app.get('/api/mijn-logboek/week/:week', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+  const week = parseInt(req.params.week);
+  if (isNaN(week) || week < 1) return res.status(400).json({ error: 'Ongeldig weeknummer' });
+
+  db.query('SELECT student_id FROM student WHERE gebruiker_id = ?', [gebruiker_id], (err, sRows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (sRows.length === 0) return res.status(403).json({ error: 'Geen student-account' });
+    const student_id = sRows[0].student_id;
+
+    db.query(
+      `SELECT stage_id FROM stage WHERE student_id = ? AND status IN ('goedgekeurd','bezig') ORDER BY ingediend_op DESC LIMIT 1`,
+      [student_id],
+      (err2, stageRows) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        if (stageRows.length === 0) return res.status(404).json({ error: 'Geen actieve stage' });
+        const stage_id = stageRows[0].stage_id;
+
+        db.query(
+          'SELECT * FROM logboek WHERE student_id = ? AND stage_id = ? AND week_nummer = ?',
+          [student_id, stage_id, week],
+          (err3, logRows) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+
+            const stuurResponse = (logboek) => {
+              db.query(
+                `SELECT * FROM logboek_dag WHERE logboek_id = ?
+                 ORDER BY FIELD(dag,'maandag','dinsdag','woensdag','donderdag','vrijdag')`,
+                [logboek.logboek_id],
+                (err4, dagRows) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  res.json({ logboek, dagen: dagRows });
+                }
+              );
+            };
+
+            if (logRows.length > 0) {
+              stuurResponse(logRows[0]);
+            } else {
+              db.query(
+                `INSERT INTO logboek (student_id, stage_id, week_nummer, status) VALUES (?, ?, ?, 'draft')`,
+                [student_id, stage_id, week],
+                (err4, insertResult) => {
+                  if (err4) return res.status(500).json({ error: err4.message });
+                  db.query('SELECT * FROM logboek WHERE logboek_id = ?', [insertResult.insertId], (err5, newRows) => {
+                    if (err5) return res.status(500).json({ error: err5.message });
+                    stuurResponse(newRows[0]);
+                  });
+                }
+              );
+            }
+          }
+        );
+      }
+    );
+  });
+});
+
+// Sla dagelijkse invoer op (upsert via check-then-insert/update).
+app.put('/api/logboeken/:id/dag', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { dag, activiteiten, reflectie, leerpunten } = req.body;
+  const dagOpties = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag'];
+  if (!dagOpties.includes(dag)) return res.status(400).json({ error: 'Ongeldige dag' });
+
+  db.query('SELECT dag_id FROM logboek_dag WHERE logboek_id = ? AND dag = ?', [id, dag], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length > 0) {
+      db.query(
+        'UPDATE logboek_dag SET activiteiten=?, reflectie=?, leerpunten=? WHERE dag_id=?',
+        [activiteiten, reflectie, leerpunten, rows[0].dag_id],
+        (err2) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ message: 'Dag bijgewerkt!' });
+        }
+      );
+    } else {
+      db.query(
+        'INSERT INTO logboek_dag (logboek_id, dag, activiteiten, reflectie, leerpunten) VALUES (?, ?, ?, ?, ?)',
+        [id, dag, activiteiten, reflectie, leerpunten],
+        (err2) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ message: 'Dag opgeslagen!' });
+        }
+      );
+    }
+  });
+});
+
+// Week indienen bij mentor.
+app.put('/api/logboeken/:id/indienen', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(
+    `UPDATE logboek SET status = 'ingediend', ingediend_op = NOW() WHERE logboek_id = ?`,
+    [id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Logboek ingediend!' });
+    }
+  );
+});
+
+// Haal feedback op voor een logboek.
+app.get('/api/logboeken/:id/feedback', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(
+    `SELECT lf.feedback_id, lf.opmerking, lf.created_at, g.voornaam, g.naam AS auteur
+     FROM logboek_feedback lf
+     JOIN gebruiker g ON lf.gebruiker_id = g.gebruiker_id
+     WHERE lf.logboek_id = ?
+     ORDER BY lf.created_at ASC`,
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
+// ============================================================
+// LOGBOEK — MENTOR
+// ============================================================
+
+// Alle ingediende/goedgekeurde logboeken voor de ingelogde mentor
+app.get('/api/mentor/logboeken', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+  db.query('SELECT mentor_id FROM mentor WHERE gebruiker_id = ?', [gebruiker_id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length === 0) return res.status(403).json({ error: 'Geen mentor-account' });
+    const mentor_id = rows[0].mentor_id;
+
+    db.query(`
+      SELECT
+        l.logboek_id,
+        l.week_nummer,
+        l.status,
+        l.ingediend_op,
+        g.voornaam AS student_voornaam,
+        g.naam AS student_naam,
+        b.naam AS bedrijf,
+        s.stage_id,
+        s.startdatum
+      FROM logboek l
+      JOIN stage s ON l.stage_id = s.stage_id
+      JOIN student st ON s.student_id = st.student_id
+      JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      WHERE s.mentor_id = ? AND l.status IN ('ingediend', 'goedgekeurd')
+      ORDER BY l.status ASC, l.ingediend_op DESC
+    `, [mentor_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
+  });
+});
+
+// Volledig logboek ophalen (logboek + dagen + feedback) — voor mentor en docent
+app.get('/api/logboeken/:id/volledig', verifyToken, (req, res) => {
+  const { id } = req.params;
+
+  db.query(`
+    SELECT
+      l.logboek_id, l.week_nummer, l.status, l.ingediend_op,
+      g.voornaam AS student_voornaam,
+      g.naam AS student_naam,
+      b.naam AS bedrijf,
+      s.stage_id, s.startdatum, s.einddatum
+    FROM logboek l
+    JOIN student st ON l.student_id = st.student_id
+    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+    JOIN stage s ON l.stage_id = s.stage_id
+    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+    WHERE l.logboek_id = ?
+  `, [id], (err, logboekRows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (logboekRows.length === 0) return res.status(404).json({ error: 'Logboek niet gevonden' });
+
+    const logboek = logboekRows[0];
+
+    db.query(
+      `SELECT * FROM logboek_dag WHERE logboek_id = ?
+       ORDER BY FIELD(dag,'maandag','dinsdag','woensdag','donderdag','vrijdag')`,
+      [id],
+      (err2, dagRows) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+
+        db.query(
+          `SELECT lf.feedback_id, lf.opmerking, lf.created_at, g.voornaam, g.naam AS auteur, g.rol
+           FROM logboek_feedback lf
+           JOIN gebruiker g ON lf.gebruiker_id = g.gebruiker_id
+           WHERE lf.logboek_id = ?
+           ORDER BY lf.created_at ASC`,
+          [id],
+          (err3, feedbackRows) => {
+            if (err3) return res.status(500).json({ error: err3.message });
+            res.json({ logboek, dagen: dagRows, feedback: feedbackRows });
+          }
+        );
+      }
+    );
+  });
+});
+
+// Logboek bevestigen door mentor (status → goedgekeurd + optionele feedback)
+app.put('/api/logboeken/:id/bevestigen', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { feedback } = req.body;
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query(
+    `UPDATE logboek SET status = 'goedgekeurd' WHERE logboek_id = ?`,
+    [id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (feedback && feedback.trim()) {
+        db.query(
+          'INSERT INTO logboek_feedback (logboek_id, gebruiker_id, opmerking) VALUES (?, ?, ?)',
+          [id, gebruiker_id, feedback.trim()],
+          (err2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ message: 'Logboek bevestigd en feedback opgeslagen!' });
+          }
+        );
+      } else {
+        res.json({ message: 'Logboek bevestigd!' });
+      }
+    }
+  );
+});
+
+// ============================================================
+// LOGBOEK — DOCENT OVERZICHT
+// ============================================================
+
+// Overzicht van studenten + logboekstatus voor de ingelogde docent
+app.get('/api/docent/logboeken', verifyToken, (req, res) => {
+  const gebruiker_id = req.gebruiker.id;
+
+  db.query('SELECT docent_id FROM docent WHERE gebruiker_id = ?', [gebruiker_id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length === 0) return res.status(403).json({ error: 'Geen docent-account' });
+    const docent_id = rows[0].docent_id;
+
+    db.query(`
+      SELECT
+        s.stage_id,
+        g.voornaam AS student_voornaam,
+        g.naam AS student_naam,
+        st_rec.opleiding,
+        b.naam AS bedrijf,
+        s.startdatum,
+        s.einddatum,
+        COALESCE(COUNT(l.logboek_id), 0) AS totaal_weken,
+        COALESCE(SUM(CASE WHEN l.status = 'ingediend' THEN 1 ELSE 0 END), 0) AS weken_ingediend,
+        COALESCE(SUM(CASE WHEN l.status = 'goedgekeurd' THEN 1 ELSE 0 END), 0) AS weken_bevestigd,
+        MAX(l.week_nummer) AS laatste_week
+      FROM stage s
+      JOIN student st_rec ON s.student_id = st_rec.student_id
+      JOIN gebruiker g ON st_rec.gebruiker_id = g.gebruiker_id
+      JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+      LEFT JOIN logboek l ON l.stage_id = s.stage_id
+      WHERE s.docent_id = ? AND s.status IN ('goedgekeurd', 'bezig', 'afgerond')
+      GROUP BY s.stage_id, g.voornaam, g.naam, st_rec.opleiding, b.naam, s.startdatum, s.einddatum
+      ORDER BY g.naam ASC
+    `, [docent_id], (err2, results) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(results);
+    });
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.use('/api/aanvraag', require('./routes/aanvraag'));
 app.listen(PORT, () => {

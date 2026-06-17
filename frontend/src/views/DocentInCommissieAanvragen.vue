@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+import { ref, computed, onMounted } from 'vue'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -9,343 +10,250 @@ const navLinks = ref([
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])
 
+const token = localStorage.getItem('token')
+
 const aanvragen = ref([])
-const geselecteerde = ref(null)
-const laadFout = ref('')
+const geselecteerdId = ref(null)
+const detail = ref(null)
+const feedback = ref('')
+
+const ladenLijst = ref(false)
+const ladenDetail = ref(false)
 const bezig = ref(false)
+const foutLijst = ref(null)
+const foutDetail = ref(null)
+const foutBeslissing = ref(null)
+const feedbackFout = ref(null)
 
-// Beslissing-formulier
-const beslissing = ref('')
-const motivatie = ref('')
-const formFout = ref('')
-const succesmelding = ref('')
+function formatDatum(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 
-onMounted(async () => {
-  await laadAanvragen()
-})
+function formatDatumKort(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
 
 async function laadAanvragen() {
-  laadFout.value = ''
-  const token = localStorage.getItem('token')
+  ladenLijst.value = true
+  foutLijst.value = null
   try {
     const res = await fetch('http://localhost:3000/api/stages', {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) throw new Error('Ophalen mislukt')
+    if (!res.ok) throw new Error((await res.json()).error ?? 'Fout bij ophalen')
     aanvragen.value = await res.json()
-  } catch {
-    laadFout.value = 'Aanvragen konden niet geladen worden.'
+    if (aanvragen.value.length > 0) selecteer(aanvragen.value[0].stage_id)
+  } catch (e) {
+    foutLijst.value = e.message
+  } finally {
+    ladenLijst.value = false
   }
 }
 
-async function selecteer(aanvraag) {
-  formFout.value = ''
-  succesmelding.value = ''
-  beslissing.value = ''
-  motivatie.value = ''
-  geselecteerde.value = null
+async function selecteer(id) {
+  geselecteerdId.value = id
+  detail.value = null
+  feedback.value = ''
+  foutDetail.value = null
+  foutBeslissing.value = null
+  feedbackFout.value = null
 
-  const token = localStorage.getItem('token')
+  ladenDetail.value = true
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${aanvraag.stage_id}`, {
+    const res = await fetch(`http://localhost:3000/api/stages/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!res.ok) throw new Error('Detail ophalen mislukt')
-    geselecteerde.value = await res.json()
-  } catch {
-    laadFout.value = 'Detail kon niet geladen worden.'
+    if (!res.ok) throw new Error((await res.json()).error ?? 'Fout bij ophalen detail')
+    detail.value = await res.json()
+  } catch (e) {
+    foutDetail.value = e.message
+  } finally {
+    ladenDetail.value = false
   }
 }
 
-function terugNaarLijst() {
-  geselecteerde.value = null
-  beslissing.value = ''
-  motivatie.value = ''
-  formFout.value = ''
-  succesmelding.value = ''
-}
+async function besliss(actie) {
+  feedbackFout.value = null
+  foutBeslissing.value = null
 
-function kiesBeslissing(keuze) {
-  beslissing.value = keuze
-  formFout.value = ''
-}
-
-async function verzendBeslissing() {
-  formFout.value = ''
-
-  if (!beslissing.value) {
-    formFout.value = 'Kies een beslissing.'
-    return
-  }
-  if ((beslissing.value === 'afkeuren' || beslissing.value === 'aanpassing') && !motivatie.value.trim()) {
-    formFout.value = 'Motivatie is verplicht bij afkeuren of aanpassing vragen.'
+  if ((actie === 'afkeuren' || actie === 'aanpassing') && !feedback.value.trim()) {
+    feedbackFout.value = 'Feedback is verplicht bij afkeuren of aanpassing vragen.'
     return
   }
 
   bezig.value = true
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${geselecteerde.value.stage_id}/beslissing`, {
+    const res = await fetch(`http://localhost:3000/api/stages/${geselecteerdId.value}/beslissing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ beslissing: beslissing.value, motivatie: motivatie.value }),
+      body: JSON.stringify({ beslissing: actie, motivatie: feedback.value.trim() }),
     })
-    const data = await res.json()
+
     if (!res.ok) {
-      formFout.value = data.error || 'Beslissing opslaan mislukt.'
+      foutBeslissing.value = (await res.json()).error ?? 'Beslissing kon niet worden opgeslagen.'
       return
     }
-    succesmelding.value = `Beslissing opgeslagen: ${beslissingLabel(beslissing.value)}`
-    await laadAanvragen()
-    setTimeout(() => {
-      terugNaarLijst()
-    }, 1800)
+
+    const index = aanvragen.value.findIndex(a => a.stage_id === geselecteerdId.value)
+    aanvragen.value.splice(index, 1)
+    detail.value = null
+    feedback.value = ''
+
+    if (aanvragen.value.length > 0) {
+      selecteer(aanvragen.value[Math.min(index, aanvragen.value.length - 1)].stage_id)
+    } else {
+      geselecteerdId.value = null
+    }
   } catch {
-    formFout.value = 'Er ging iets mis. Probeer opnieuw.'
+    foutBeslissing.value = 'Kan geen verbinding maken met de server.'
   } finally {
     bezig.value = false
   }
 }
 
-function beslissingLabel(b) {
-  if (b === 'goedkeuren') return 'Goedgekeurd'
-  if (b === 'afkeuren') return 'Afgewezen'
-  if (b === 'aanpassing') return 'Aanpassing gevraagd'
-  return b
-}
-
-function statusBadge(status) {
-  if (status === 'ingediend') return 'badge-yellow'
-  if (status === 'in_behandeling') return 'badge-yellow'
-  if (status === 'goedgekeurd') return 'badge-green'
-  if (status === 'afgewezen') return 'badge-red'
-  return ''
-}
-
-function statusLabel(status) {
-  if (status === 'ingediend') return 'Ingediend'
-  if (status === 'in_behandeling') return 'In behandeling'
-  if (status === 'goedgekeurd') return 'Goedgekeurd'
-  if (status === 'afgewezen') return 'Afgewezen'
-  if (status === 'aanpassing_gevraagd') return 'Aanpassing gevraagd'
-  return status
-}
-
-function formatDatum(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })
-}
+onMounted(laadAanvragen)
 </script>
 
 <template>
   <div class="page">
     <TopBarDocentStagecommissie :links="navLinks" />
 
-    <main class="content">
+    <div class="split-layout">
 
-      <!-- LIJSTWEERGAVE -->
-      <div v-if="!geselecteerde">
-        <h1 class="page-title">Aanvragen</h1>
+      <!-- Sidebar -->
+      <aside class="split-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">Aanvragen in behandeling</span>
+          <span class="badge badge-pill" style="background:#000;color:#fff;border:none;">
+            {{ aanvragen.length }}
+          </span>
+        </div>
 
-        <p v-if="laadFout" class="text-secondary" style="color:#dc2626;">{{ laadFout }}</p>
-
-        <div v-if="aanvragen.length === 0 && !laadFout" class="card mt-24">
-          <p class="text-secondary">Geen openstaande aanvragen.</p>
+        <div v-if="ladenLijst" class="text-secondary text-sm" style="padding:16px;">Laden…</div>
+        <div v-else-if="foutLijst" class="text-sm" style="padding:16px;color:var(--red);">{{ foutLijst }}</div>
+        <div v-else-if="aanvragen.length === 0" class="text-secondary text-sm" style="padding:16px;">
+          Geen openstaande aanvragen.
         </div>
 
         <div
           v-for="aanvraag in aanvragen"
           :key="aanvraag.stage_id"
-          class="card mt-16"
+          class="sidebar-item"
+          :class="{ active: aanvraag.stage_id === geselecteerdId }"
+          @click="selecteer(aanvraag.stage_id)"
         >
-          <div class="flex justify-between items-center">
-            <div>
-              <div class="td-name">{{ aanvraag.voornaam }} {{ aanvraag.student }}</div>
-              <div class="td-sub">{{ aanvraag.bedrijf }}</div>
-              <div class="text-secondary text-xs mt-8">
-                {{ aanvraag.stagetitel }} &nbsp;·&nbsp;
-                Ingediend op {{ formatDatum(aanvraag.ingediend_op) }}
+          <div class="sidebar-item-name">{{ aanvraag.voornaam }} {{ aanvraag.student }}</div>
+          <div class="sidebar-item-sub">{{ aanvraag.bedrijf }}</div>
+          <div class="sidebar-item-meta">
+            <span class="sidebar-item-date">{{ formatDatumKort(aanvraag.ingediend_op) }}</span>
+            <span class="badge badge-yellow" style="border-radius:4px;font-size:11px;">In behandeling</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Hoofdpaneel -->
+      <main class="split-main">
+
+        <div v-if="!geselecteerdId && !ladenLijst" class="text-secondary" style="padding-top:48px;text-align:center;">
+          Selecteer een aanvraag uit de lijst.
+        </div>
+
+        <div v-else-if="ladenDetail" class="text-secondary" style="padding-top:48px;text-align:center;">Laden…</div>
+
+        <div v-else-if="foutDetail" style="color:var(--red);">{{ foutDetail }}</div>
+
+        <template v-else-if="detail">
+          <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">
+            {{ detail.student_voornaam }} {{ detail.student_naam }}
+          </h2>
+          <span class="badge badge-yellow" style="border-radius:4px;margin-bottom:20px;display:inline-block;">
+            In behandeling
+          </span>
+
+          <div class="card" style="margin-bottom:20px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 32px;">
+              <div>
+                <div class="text-secondary text-xs">Studentnummer</div>
+                <div class="font-medium">{{ detail.studentnummer }}</div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Opleiding</div>
+                <div class="font-medium">{{ detail.opleiding }}</div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Bedrijf</div>
+                <div class="font-medium">{{ detail.bedrijf }}</div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Sector</div>
+                <div class="font-medium">{{ detail.bedrijf_sector }}</div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Stageperiode</div>
+                <div class="font-medium">
+                  {{ formatDatumKort(detail.startdatum) }} – {{ formatDatumKort(detail.einddatum) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Ingediend op</div>
+                <div class="font-medium">{{ formatDatum(detail.ingediend_op) }}</div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Stagementor</div>
+                <div class="font-medium">
+                  {{ detail.mentor_voornaam }} {{ detail.mentor_naam }}
+                  <span v-if="detail.mentor_functie" class="text-secondary"> ({{ detail.mentor_functie }})</span>
+                </div>
+              </div>
+              <div>
+                <div class="text-secondary text-xs">Docent EhB</div>
+                <div class="font-medium">{{ detail.docent_voornaam }} {{ detail.docent_naam }}</div>
               </div>
             </div>
-            <div class="flex items-center gap-16">
-              <span class="badge badge-pill" :class="statusBadge(aanvraag.status)">
-                {{ statusLabel(aanvraag.status) }}
-              </span>
-              <button class="btn btn-primary btn-sm" @click="selecteer(aanvraag)">
-                Bekijk →
+          </div>
+
+          <div class="card">
+            <h3 class="card-title" style="margin-bottom:16px;">Beoordeling</h3>
+            <hr class="card-divider" />
+
+            <div class="form-group" style="margin-bottom:20px;">
+              <label for="feedback">
+                Feedback of motivatie
+                <span class="text-secondary text-xs">(verplicht bij afkeuren of aanpassing)</span>
+              </label>
+              <textarea
+                id="feedback"
+                v-model="feedback"
+                rows="4"
+                placeholder="Schrijf hier je feedback of motivatie..."
+                :disabled="bezig"
+              ></textarea>
+              <span v-if="feedbackFout" class="form-error">{{ feedbackFout }}</span>
+            </div>
+
+            <p v-if="foutBeslissing" class="form-error" style="margin-bottom:12px;">{{ foutBeslissing }}</p>
+
+            <div class="flex gap-12">
+              <button class="btn btn-outline-green" :disabled="bezig" @click="besliss('goedkeuren')">
+                ✔ Goedkeuren
+              </button>
+              <button class="btn btn-outline-orange" :disabled="bezig" @click="besliss('aanpassing')">
+                ✎ Aanpassingen vragen
+              </button>
+              <button class="btn btn-outline-red" :disabled="bezig" @click="besliss('afkeuren')">
+                ✖ Afkeuren
               </button>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
 
-      <!-- DETAILWEERGAVE -->
-      <div v-else>
-        <button class="btn btn-secondary mb-16" @click="terugNaarLijst">← Aanvragen</button>
-
-        <!-- Succesmelding -->
-        <div v-if="succesmelding" class="card mt-8 mb-16" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-          <p class="font-semibold" style="color:#15803d;">✓ {{ succesmelding }}</p>
-        </div>
-
-        <h1 class="page-title">{{ geselecteerde.stagetitel }}</h1>
-        <div class="flex items-center gap-12 mt-4 mb-24">
-          <span class="badge badge-pill" :class="statusBadge(geselecteerde.status)">
-            {{ statusLabel(geselecteerde.status) }}
-          </span>
-          <span class="text-secondary text-sm">Ingediend op {{ formatDatum(geselecteerde.ingediend_op) }}</span>
-        </div>
-
-        <!-- Student -->
-        <section class="card mb-16">
-          <h2 class="form-section-title">Gegevens student</h2>
-          <div class="form-grid-2 mt-12">
-            <div>
-              <p class="text-secondary text-xs">Naam</p>
-              <p class="font-semibold">{{ geselecteerde.student_voornaam }} {{ geselecteerde.student_naam }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Studentnummer</p>
-              <p class="font-semibold">{{ geselecteerde.studentnummer }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Opleiding</p>
-              <p class="font-semibold">{{ geselecteerde.opleiding }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">E-mail</p>
-              <p class="font-semibold">{{ geselecteerde.student_email }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Telefoon</p>
-              <p class="font-semibold">{{ geselecteerde.student_telefoon || '—' }}</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Bedrijf -->
-        <section class="card mb-16">
-          <h2 class="form-section-title">Gegevens bedrijf</h2>
-          <div class="form-grid-2 mt-12">
-            <div>
-              <p class="text-secondary text-xs">Bedrijf</p>
-              <p class="font-semibold">{{ geselecteerde.bedrijf }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Sector</p>
-              <p class="font-semibold">{{ geselecteerde.bedrijf_sector }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Adres</p>
-              <p class="font-semibold">{{ geselecteerde.bedrijf_adres }}</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Mentor -->
-        <section class="card mb-16">
-          <h2 class="form-section-title">Stagementor</h2>
-          <div class="form-grid-2 mt-12">
-            <div>
-              <p class="text-secondary text-xs">Naam</p>
-              <p class="font-semibold">{{ geselecteerde.mentor_voornaam }} {{ geselecteerde.mentor_naam }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Functie</p>
-              <p class="font-semibold">{{ geselecteerde.mentor_functie }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">E-mail</p>
-              <p class="font-semibold">{{ geselecteerde.mentor_email }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Telefoon</p>
-              <p class="font-semibold">{{ geselecteerde.mentor_telefoon || '—' }}</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Stageopdracht -->
-        <section class="card mb-16">
-          <h2 class="form-section-title">Stageopdracht</h2>
-          <p class="mt-12" style="white-space:pre-line;line-height:1.6;">{{ geselecteerde.beschrijving }}</p>
-          <div class="form-grid-2 mt-16">
-            <div>
-              <p class="text-secondary text-xs">Startdatum</p>
-              <p class="font-semibold">{{ formatDatum(geselecteerde.startdatum) }}</p>
-            </div>
-            <div>
-              <p class="text-secondary text-xs">Einddatum</p>
-              <p class="font-semibold">{{ formatDatum(geselecteerde.einddatum) }}</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Beslissing -->
-        <section class="card mb-16">
-          <h2 class="form-section-title">Beslissing</h2>
-
-          <div class="flex gap-12 mt-16">
-            <button
-              class="btn"
-              :class="beslissing === 'goedkeuren' ? 'btn-primary' : 'btn-secondary'"
-              @click="kiesBeslissing('goedkeuren')"
-            >
-              Goedkeuren
-            </button>
-            <button
-              class="btn"
-              :class="beslissing === 'aanpassing' ? 'btn-primary' : 'btn-secondary'"
-              @click="kiesBeslissing('aanpassing')"
-            >
-              Aanpassing vragen
-            </button>
-            <button
-              class="btn"
-              :class="beslissing === 'afkeuren' ? 'btn-primary' : 'btn-secondary'"
-              style="border-color:#dc2626;"
-              :style="beslissing === 'afkeuren' ? 'background:#dc2626;' : ''"
-              @click="kiesBeslissing('afkeuren')"
-            >
-              Afkeuren
-            </button>
-          </div>
-
-          <div class="form-group mt-16" v-if="beslissing">
-            <label>
-              Motivatie
-              <span v-if="beslissing !== 'goedkeuren'" style="color:#dc2626;"> *</span>
-              <span v-else class="text-secondary text-xs"> (optioneel)</span>
-            </label>
-            <textarea
-              v-model="motivatie"
-              rows="4"
-              class="form-input"
-              :placeholder="
-                beslissing === 'goedkeuren'
-                  ? 'Eventuele opmerkingen bij goedkeuring...'
-                  : 'Geef een duidelijke reden voor uw beslissing...'
-              "
-            ></textarea>
-          </div>
-
-          <p v-if="formFout" class="text-sm mt-8" style="color:#dc2626;">{{ formFout }}</p>
-
-          <button
-            v-if="beslissing"
-            class="btn btn-primary mt-16"
-            @click="verzendBeslissing"
-            :disabled="bezig"
-          >
-            {{ bezig ? 'Bezig...' : 'Beslissing bevestigen' }}
-          </button>
-        </section>
-
-      </div>
-    </main>
+      </main>
+    </div>
   </div>
 </template>
 

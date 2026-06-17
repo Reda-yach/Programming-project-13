@@ -19,6 +19,16 @@ const router = createRouter({
       component: () => import('../views/StudentAanvraag.vue'),
     },
     {
+      path: '/student/logboek',
+      name: 'student-logboek',
+      component: () => import('../views/StudentLogboek.vue'),
+    },
+    {
+      path: '/student/evaluatie',
+      name: 'student-evaluatie',
+      component: () => import('../views/StudentEvaluatie.vue'),
+    },
+    {
       path: '/docent',
       name: 'docent',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
@@ -39,9 +49,14 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
-      path: '/docent-logboek-detail/:stageId',
+      path: '/docent-logboek-detail/:stage_id',
       name: 'docent-logboek-detail',
       component: () => import('../views/DocentLogboekDetail.vue'),
+    },
+    {
+      path: '/mentor',
+      name: 'mentor',
+      component: () => import('../views/MentorLogboek.vue'),
     },
     {
       path: '/docent-studenten',
