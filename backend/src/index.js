@@ -1060,7 +1060,7 @@ app.put('/api/notificaties/:id/gelezen', verifyToken, (req, res) => {
 app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   const { stage_id, commissielid_id, beslissing, motivatie } = req.body;
 
-  const toegestaneBeslissingen = ['goedgekeurd', 'afgekeurd', 'aanpassing_vereist'];
+  const toegestaneBeslissingen = ['goedgekeurd', 'afgekeurd', 'aanpassing_gevraagd'];
   if (!toegestaneBeslissingen.includes(beslissing)) {
     return res.status(400).json({ error: `Ongeldige beslissing. Kies uit: ${toegestaneBeslissingen.join(', ')}` });
   }
@@ -1076,7 +1076,7 @@ app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, 
 
     const nieuweStatus = beslissing === 'goedgekeurd' ? 'goedgekeurd'
       : beslissing === 'afgekeurd' ? 'afgekeurd'
-      : 'aanpassing_vereist';
+      : 'aanpassing_gevraagd';
 
     db.query(`
       UPDATE stage SET status = ? WHERE stage_id = ?
@@ -1973,10 +1973,9 @@ app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, requireRol
 });
 
 // ============================================================
-// SERVER STARTEN
+// EXTRA STAGE- EN CONTRACTROUTES
 // ============================================================
-app.use('/api/stage', require('./routes/stage'));
-app.use('/api/begeleider', require('./routes/begeleider'));
+
 // Contract aanmaken na goedkeuring
 app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
   const { stage_id } = req.params;
@@ -2022,8 +2021,19 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
     });
   });
 });
-const PORT = process.env.PORT || 3000;
+// ============================================================
+// ROUTERMODULES
+// ============================================================
+app.use('/api/stage', require('./routes/stage'));
+app.use('/api/begeleider', require('./routes/begeleider'));
 app.use('/api/aanvraag', require('./routes/aanvraag'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/students', verifyToken, require('./routes/studentdashboardroute'));
+
+// ============================================================
+// SERVER STARTEN
+// ============================================================
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });

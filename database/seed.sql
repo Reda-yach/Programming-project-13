@@ -53,8 +53,25 @@ INSERT INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend
 -- --------------------------------------------
 -- 8. LOGBOEK
 -- --------------------------------------------
+-- week_nummer wordt dynamisch op de HUIDIGE week gezet met exact dezelfde
+-- formule als de dashboard-route (huidigWeekNummer() in studentdashboardroute.js):
+--   ceil((dagOfYear - 1 + weekdagVanJan1 + 1) / 7)  met zondag = 0.
+-- Zo matcht het weeklogboek altijd de week die het dashboard opvraagt, ongeacht
+-- wanneer je de seed inlaadt, en toont het dag-raster (Ma–Vr) gevuld.
 INSERT INTO logboek (student_id, stage_id, week_nummer, activiteiten, uren, status) VALUES
-  (1, 1, 1, 'Kennismaking met het team en opzetten ontwikkelomgeving', 38.00, 'ingediend');
+  (1, 1,
+   CEIL((DAYOFYEAR(CURDATE()) + DAYOFWEEK(MAKEDATE(YEAR(CURDATE()), 1)) - 1) / 7),
+   'Kennismaking met het team en opzetten ontwikkelomgeving', 38.00, 'ingediend');
+
+-- --------------------------------------------
+-- 8B. LOGBOEK DAG  (dagelijkse invoer van weeklogboek 1)
+-- --------------------------------------------
+INSERT INTO logboek_dag (logboek_id, dag, activiteiten, uren) VALUES
+  (1, 'maandag',   'Kennismaking met het team en rondleiding',          7.60),
+  (1, 'dinsdag',   'Ontwikkelomgeving opzetten (Node, MySQL, Git)',     7.60),
+  (1, 'woensdag',  'Eerste verkenning van de bestaande codebase',       7.60),
+  (1, 'donderdag', 'Meegekeken met code review en stand-up',            7.60),
+  (1, 'vrijdag',   'Kleine bugfix opgepakt onder begeleiding mentor',   7.60);
 
 -- --------------------------------------------
 -- 9. LOGBOEK FEEDBACK
@@ -99,6 +116,6 @@ INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivat
 -- --------------------------------------------
 -- 15. NOTIFICATIE
 -- --------------------------------------------
-INSERT INTO notificatie (gebruiker_id, bericht, gelezen) VALUES
-  (1, 'Je stage is goedgekeurd!', FALSE),
-  (2, 'Nieuwe stage ter opvolging toegewezen', FALSE);
+INSERT INTO notificatie (gebruiker_id, bericht, type, gelezen) VALUES
+  (1, 'Je stage is goedgekeurd!', 'goed', FALSE),
+  (2, 'Nieuwe stage ter opvolging toegewezen', 'info', FALSE);

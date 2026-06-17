@@ -3,12 +3,16 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
+import { useAuthStore } from '../stores/auth'
+import { getStageStatusLabel } from '../utils/stageStatus'
 
 const router = useRouter()
 const stageStore = useStageStore()
+const authStore = useAuthStore()
 
 // true zodra er al een aanvraag loopt of de stage actief is
-const alIngediend = computed(() => stageStore.status !== 'geen')
+const alIngediend = computed(() => stageStore.status === 'in_behandeling' || stageStore.status === 'actief')
+const statusLabel = computed(() => getStageStatusLabel(stageStore.status))
 
 // Navbar-links — Dashboard + Aanvraag
 const navLinks = ref([
@@ -16,15 +20,14 @@ const navLinks = ref([
   { label: 'Aanvraag', to: '/student/aanvraag' },
 ])
 
-const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
-
+// Readonly student data — komt later uit de backend / Pinia store
 const student = ref({
-  naam: opgeslagenGebruiker?.naam || '',
-  voornaam: opgeslagenGebruiker?.voornaam || '',
-  studentnr: opgeslagenGebruiker?.studentnummer || '',
-  opleiding: opgeslagenGebruiker?.opleiding || '',
-  email: opgeslagenGebruiker?.email || '',
-  telefoon: opgeslagenGebruiker?.telefoonnummer || '',
+  naam: 'De Smedt',
+  voornaam: 'Emma',
+  studentnr: 'EHB-2024-0842',
+  opleiding: 'Toegepaste Informatica',
+  email: 'emma.desmedt@student.ehb.be',
+  telefoon: '+32 479 12 34 56',
 })
 
 // Formuliervelden bedrijf
@@ -46,10 +49,12 @@ const fouten = reactive({})
 
 // Modal-zichtbaarheid
 const toonBevestiging = ref(false)
+const isSubmitting = ref(false)
+const submitError = ref('')
 
 // Bij het laden: als er al een aanvraag is, vul de velden ermee in
 // zodat de student ziet wat hij heeft ingediend.
-onMounted(async () => {
+onMounted(() => {
   const a = stageStore.aanvraag
   if (a) {
     bedrijf.value = a.bedrijf.bedrijf
@@ -62,17 +67,6 @@ onMounted(async () => {
     mentorFunctie.value = a.mentor.functie
     mentorEmail.value = a.mentor.email
     mentorTel.value = a.mentor.tel
-  }
-
-  const token = localStorage.getItem('token')
-  if (!token) return
-  const res = await fetch('http://localhost:3000/api/stage', {
-    headers: { 'Authorization': `Bearer ${token}` }
-  })
-  const data = await res.json()
-  if (data.student) {
-    student.value.studentnr = data.student.studentnummer
-    student.value.opleiding = data.student.opleiding
   }
 })
 
@@ -126,11 +120,34 @@ function bouwAanvraag() {
 async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
+
+  isSubmitting.value = true
+  submitError.value = ''
+
   try {
-    await stageStore.dienIn(bouwAanvraag())
+    const response = await fetch('http://localhost:3000/api/aanvraag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`,
+      },
+      body: JSON.stringify(bouwAanvraag()),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      submitError.value = data.error || 'De aanvraag kon niet worden ingediend.'
+      return
+    }
+
+    stageStore.dienIn(bouwAanvraag())
+
     toonBevestiging.value = true
-  } catch (e) {
-    alert(e.message)
+  } catch (error) {
+    submitError.value = 'Kan geen verbinding maken met de backend.'
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -154,7 +171,7 @@ function naarDashboard() {
           v-if="alIngediend"
           class="badge badge-pill badge-yellow"
         >
-          In behandeling
+          {{ statusLabel }}
         </span>
       </div>
 
@@ -262,7 +279,8 @@ function naarDashboard() {
 
         <!-- Indienen-knop alleen tonen als er nog niet is ingediend -->
         <div v-if="!alIngediend" class="mt-24">
-          <button type="submit" class="btn btn-primary">Indienen</button>
+          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">{{ isSubmitting ? 'Indienen…' : 'Indienen' }}</button>
+          <p v-if="submitError" class="form-error" style="margin-top: 12px;">{{ submitError }}</p>
         </div>
 
       </form>
@@ -271,7 +289,7 @@ function naarDashboard() {
     <!-- Bevestigingsscherm (modal overlay) -->
     <div v-if="toonBevestiging" class="modal-page" style="position:fixed;inset:0;z-index:200;">
       <div class="modal-card">
-        <div class="modal-icon">✅</div>
+        <div class="modal-icon" aria-hidden="true">OK</div>
         <h2 class="modal-title">Aanvraag ingediend!</h2>
         <p class="modal-sub">
           Je stage-aanvraag voor <strong>{{ bedrijf || 'het bedrijf' }}</strong> is succesvol ingediend.

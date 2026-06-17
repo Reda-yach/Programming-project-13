@@ -1,11 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/',
+      redirect: '/login',
+    },
+    {
       path: '/login',
       name: 'login',
+      meta: { requiresAuth: false },
       component: () => import('../views/LoginView.vue'),
     },
     {
@@ -52,6 +58,11 @@ const router = createRouter({
       path: '/docent/studenten',
       name: 'docent-studenten-overzicht',
       component: () => import('../views/DocentStudenten.vue'),
+    },
+    {
+      path: '/aanvragen',
+      name: 'commissie-aanvragen',
+      component: () => import('@/views/CommissieAanvragenView.vue'),
     },
     {
       path: '/docent/studenten/:id',
@@ -138,13 +149,25 @@ const router = createRouter({
       name: 'admin-competenties',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
+    {
+      path: '/wachtwoord-vergeten',
+      name: 'wachtwoord-vergeten',
+      meta: { requiresAuth: false },
+      component: () => import('../views/WachtwoordVergetenView.vue'),
+    },
+    {
+      path: '/wachtwoord-reset',
+      name: 'wachtwoord-reset',
+      meta: { requiresAuth: false },
+      component: () => import('../views/WachtwoordResetView.vue'),
+    },
   ],
 })
 
 router.beforeEach((to, _from, next) => {
-  const openRoutes = ['login']
+  // Routes met meta.requiresAuth === false zijn publiek (login, wachtwoord-reset).
   const token = localStorage.getItem('token')
-  if (!openRoutes.includes(to.name) && !token) {
+  if (to.meta.requiresAuth !== false && !token) {
     next({ name: 'login' })
   } else {
     next()
