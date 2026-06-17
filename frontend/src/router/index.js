@@ -130,16 +130,6 @@ const router = createRouter({
       component: () => import('../views/StudentContract.vue'),
     },
     {
-      path: '/student/logboek',
-      name: 'student-logboek',
-      component: () => import('../views/StudentLogboek.vue'),
-    },
-    {
-      path: '/student/evaluatie',
-      name: 'student-evaluatie',
-      component: () => import('../views/StudentEvaluatie.vue'),
-    },
-    {
       path: '/student/evaluatie/:fase',
       name: 'student-evaluatie-invullen',
       component: () => import('../views/StudentEvaluatieInvullen.vue'),
@@ -163,6 +153,21 @@ const router = createRouter({
       path: '/admin/studenten/nieuw',
       name: 'admin-student-nieuw',
       component: () => import('../views/AdminStudentNieuw.vue'),
+    },
+    {
+      path: '/admin/competenties',
+      name: 'admin-competenties',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
+    },
+    {
+      path: '/admin/competentiesets',
+      name: 'admin-competentiesets',
+      component: () => import('../views/Admincompetentiesets.vue'),
+    },
+    {
+      path: '/admin/competentiebeheer',
+      name: 'admin-competentiebeheer',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {
       path: '/wachtwoord-vergeten',
