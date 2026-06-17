@@ -16,7 +16,7 @@ onMounted(() => {
   const token = localStorage.getItem('token')
   const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || 'null')
   if (token && gebruiker) {
-    const bestemming = bestemmingPerRol[gebruiker.rol]
+    const bestemming = authStore.getRoleHomePath(gebruiker.rol)
     if (bestemming) router.push(bestemming)
   }
 })

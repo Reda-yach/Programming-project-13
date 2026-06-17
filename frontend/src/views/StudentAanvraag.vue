@@ -193,10 +193,6 @@ async function handleIndienen() {
   }
 }
 
-function sluitModal() {
-  toonBevestiging.value = false
-}
-
 function naarDashboard() {
   router.push('/student')
 }
@@ -367,7 +363,6 @@ function naarDashboard() {
           Je begeleider krijgt een melding en neemt de aanvraag in behandeling.
         </p>
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="sluitModal">Terug naar formulier</button>
           <button class="btn btn-primary" @click="naarDashboard">Naar dashboard</button>
         </div>
       </div>
