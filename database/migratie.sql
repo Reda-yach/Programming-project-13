@@ -118,6 +118,7 @@ CREATE TABLE competentie (
     omschrijving        TEXT,
     gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
     opleiding_id        INT             NOT NULL,
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (competentie_id)

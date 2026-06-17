@@ -1267,14 +1267,14 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
     });
   });
 });
+// ============================================================
+// COMPETENTIESETS
+// ============================================================
 const PORT = process.env.PORT || 3000;
 app.use('/api/aanvraag', require('./routes/aanvraag'));
 app.listen(PORT, () => {
   console.log(`Server draait op poort ${PORT}`);
 });
-// ============================================================
-// COMPETENTIESETS
-// ============================================================
 
 // Alle actieve competentiesets ophalen
 app.get('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
