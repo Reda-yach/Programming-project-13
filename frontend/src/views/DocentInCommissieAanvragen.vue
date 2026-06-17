@@ -1,7 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 import { ref, computed, onMounted } from 'vue'
+import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -209,10 +208,6 @@ onMounted(laadAanvragen)
                   {{ detail.mentor_voornaam }} {{ detail.mentor_naam }}
                   <span v-if="detail.mentor_functie" class="text-secondary"> ({{ detail.mentor_functie }})</span>
                 </div>
-              </div>
-              <div>
-                <div class="text-secondary text-xs">Docent EhB</div>
-                <div class="font-medium">{{ detail.docent_voornaam }} {{ detail.docent_naam }}</div>
               </div>
             </div>
           </div>
