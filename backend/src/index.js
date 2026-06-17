@@ -828,7 +828,8 @@ app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
       e.fase,
       e.totaalscore,
       e.opmerking,
-      e.ingevuld_op
+      e.ingevuld_op,
+      e.ingediend
     FROM evaluatie e
     JOIN gebruiker g ON e.beoordelaar_id = g.gebruiker_id
     WHERE e.evaluatie_id = ?
@@ -887,11 +888,18 @@ app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
 });
 
 // Evaluatie starten voor een stage: maakt evaluatie + criteria aan op basis van competenties
-app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, requireRol('docent', 'mentor', 'admin'), (req, res) => {
+app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, (req, res) => {
   const { id } = req.params;
   const { fase, type } = req.body;
   const beoordelaar_id = req.gebruiker.id;
+  const rol = req.gebruiker.rol;
 
+  if (!['docent', 'mentor', 'admin', 'student'].includes(rol)) {
+    return res.status(403).json({ error: 'Geen toegang.' });
+  }
+  if (rol === 'student' && type !== 'student') {
+    return res.status(403).json({ error: 'Studenten kunnen enkel een zelfevaluatie aanmaken.' });
+  }
   if (!['tussentijds', 'finaal'].includes(fase)) {
     return res.status(400).json({ error: 'fase moet tussentijds of finaal zijn' });
   }
@@ -921,21 +929,49 @@ app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, requireRol('docent',
 
             // Haal competenties op (opleiding_id=1 als standaard)
             db.query(
-              'SELECT naam, omschrijving, gewicht FROM competentie ORDER BY naam ASC',
+              'SELECT competentie_id, naam, omschrijving, gewicht FROM competentie ORDER BY naam ASC',
               (err4, competenties) => {
                 if (err4 || competenties.length === 0) {
-                  // Geen competenties in DB: geef evaluatie terug zonder criteria
                   return res.json({ message: 'Evaluatie aangemaakt (geen competenties gevonden)', evaluatie_id });
                 }
 
                 // Maak criteria aan per competentie
-                const values = competenties.map((c, i) => [evaluatie_id, c.naam, c.naam, null, c.gewicht || 1, i + 1]);
+                const values = competenties.map((c, i) => [evaluatie_id, c.naam, c.naam, c.omschrijving || null, null, c.gewicht || 1, i + 1]);
                 db.query(
                   'INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, gewicht, volgorde) VALUES ?',
                   [values],
-                  (err5) => {
+                  (err5, insertResult) => {
                     if (err5) return res.status(500).json({ error: err5.message });
-                    res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
+
+                    const firstCriteriumId = insertResult.insertId;
+                    const competentieIds = competenties.map(c => c.competentie_id);
+                    db.query(
+                      'SELECT competentie_id, punt, beschrijving FROM competentie_rubriek WHERE competentie_id IN (?)',
+                      [competentieIds],
+                      (err6, compRubrieken) => {
+                        if (err6 || compRubrieken.length === 0) {
+                          return res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
+                        }
+                        const rubriekValues = [];
+                        compRubrieken.forEach(r => {
+                          const idx = competenties.findIndex(c => c.competentie_id === r.competentie_id);
+                          if (idx !== -1) {
+                            rubriekValues.push([firstCriteriumId + idx, r.punt, r.beschrijving]);
+                          }
+                        });
+                        if (rubriekValues.length === 0) {
+                          return res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
+                        }
+                        db.query(
+                          'INSERT INTO rubriek (criterium_id, punt, beschrijving) VALUES ?',
+                          [rubriekValues],
+                          (err7) => {
+                            if (err7) return res.status(500).json({ error: err7.message });
+                            res.json({ message: 'Evaluatie aangemaakt met criteria en rubrieken!', evaluatie_id });
+                          }
+                        );
+                      }
+                    );
                   }
                 );
               }
@@ -1257,18 +1293,27 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 // COMPETENTIES
 // ============================================================
  
-// Alle competenties per opleiding ophalen
+// Alle competenties per opleiding ophalen (inclusief rubrieken per score-niveau)
 app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (req, res) => {
   const { opleiding_id } = req.params;
   db.query(
-    'SELECT * FROM competentie WHERE opleiding_id = ? ORDER BY naam ASC',
+    'SELECT competentie_id AS id, naam, omschrijving, gewicht FROM competentie WHERE opleiding_id = ? ORDER BY naam ASC',
     [opleiding_id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json(results);
+    (err, competenties) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (competenties.length === 0) return res.json([]);
+      const ids = competenties.map(c => c.id);
+      db.query(
+        'SELECT competentie_id, punt, beschrijving FROM competentie_rubriek WHERE competentie_id IN (?) ORDER BY punt DESC',
+        [ids],
+        (err2, rubrieken) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json(competenties.map(c => ({
+            ...c,
+            rubrieken: rubrieken.filter(r => r.competentie_id === c.id)
+          })));
+        }
+      );
     }
   );
 });
@@ -1337,6 +1382,27 @@ app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res)
     }
   );
 });
+
+// Rubrieken (score-beschrijvingen) voor een competentie opslaan (vervangt bestaande)
+app.put('/api/competenties/:id/rubrieken', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { rubrieken } = req.body;
+  db.query('DELETE FROM competentie_rubriek WHERE competentie_id = ?', [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const inserts = (rubrieken || []).filter(r => r.beschrijving && r.beschrijving.trim());
+    if (inserts.length === 0) return res.json({ ok: true });
+    const values = inserts.map(r => [id, r.punt, r.beschrijving.trim()]);
+    db.query(
+      'INSERT INTO competentie_rubriek (competentie_id, punt, beschrijving) VALUES ?',
+      [values],
+      (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ ok: true });
+      }
+    );
+  });
+});
+
 // ============================================================
 // DOCENTEN
 // ============================================================
@@ -1712,7 +1778,11 @@ app.post('/api/evaluaties/tussentijds', verifyToken, requireRol('mentor', 'docen
 // ============================================================
 
 // Finale beoordeling definitief indienen en vergrendelen
-app.put('/api/evaluaties/:id/indienen', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
+app.put('/api/evaluaties/:id/indienen', verifyToken, (req, res) => {
+  const rol = req.gebruiker.rol;
+  if (!['mentor', 'docent', 'admin', 'student'].includes(rol)) {
+    return res.status(403).json({ error: 'Geen toegang.' });
+  }
   const { id } = req.params;
 
   // Controleer of al ingediend

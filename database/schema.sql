@@ -264,7 +264,23 @@ CREATE TABLE rubriek (
 );
 
 -- ------------------------------------------------------------
--- 14. COMMISSIE BESLISSING
+-- 14. COMPETENTIE RUBRIEK (per score-niveau beschrijving, ingesteld door admin)
+-- ------------------------------------------------------------
+CREATE TABLE competentie_rubriek (
+    rubriek_id          INT             NOT NULL AUTO_INCREMENT,
+    competentie_id      INT             NOT NULL,
+    punt                INT             NOT NULL,
+    beschrijving        TEXT,
+
+    PRIMARY KEY (rubriek_id),
+    UNIQUE KEY uq_comp_punt (competentie_id, punt),
+    CONSTRAINT fk_comprubriek_competentie
+        FOREIGN KEY (competentie_id) REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 15. COMMISSIE BESLISSING
 -- ------------------------------------------------------------
 CREATE TABLE commissie_beslissing (
     beslissing_id       INT             NOT NULL AUTO_INCREMENT,

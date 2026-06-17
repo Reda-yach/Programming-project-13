@@ -134,6 +134,11 @@ const router = createRouter({
       component: () => import('../views/StudentEvaluatie.vue'),
     },
     {
+      path: '/student/evaluatie/:fase',
+      name: 'student-evaluatie-invullen',
+      component: () => import('../views/StudentEvaluatieInvullen.vue'),
+    },
+    {
       path: '/student/eindoverzicht',
       name: 'student-eindoverzicht',
       component: () => import('../views/StudentEindoverzicht.vue'),
@@ -142,16 +147,6 @@ const router = createRouter({
       path: '/commissie',
       name: 'commissie',
       component: () => import('../views/CommissieDashboard.vue'),
-    },
-    {
-      path: '/admin',
-      name: 'admin',
-      component: () => import('../views/AdminDashboard.vue'),
-    },
-    {
-      path: '/admin/competenties',
-      name: 'admin-competenties',
-      component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
   ],
 })
