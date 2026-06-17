@@ -1,36 +1,40 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competenties' },
+  { label: 'Competenties', to: '/admin/competentiesets' },
   { label: 'Stages',       to: '/admin/stages' },
   { label: 'Accounts',     to: '/admin/accounts' },
   { label: 'Aanvragen',    to: '/admin/aanvragen' },
 ])
 
-// ─── Opleidingen ─────────────────────────────────────────────────────────────
-const opleidingen = ref([
-  { id: 1, naam: 'Toegepaste Informatica' },
-  { id: 2, naam: 'Elektromechanica' },
-])
-const geselecteerdeOpleiding = ref(opleidingen.value[0])
+const route  = useRoute()
+const router = useRouter()
 
-// ─── Competenties ────────────────────────────────────────────────────────────
-const competenties = ref([])
-const bezig        = ref(false)
-const bericht      = ref('')
-const berichtType  = ref('') // 'success' | 'error'
+// ─── Alle sets (voor tabs) + actieve set ──────────────────────────────────────
+const sets        = ref([])
+const activeSetId = ref(null)
+const huidigSet   = computed(() => sets.value.find(s => s.set_id === activeSetId.value) || null)
 
-// Modal: nieuw toevoegen
-const toonModal   = ref(false)
-const nieuweComp  = ref({ naam: '', omschrijving: '', gewicht: 0 })
-const modalFout   = ref('')
+// ─── Competenties (van de actieve set) ────────────────────────────────────────
+const competenties   = ref([])
+const bezig           = ref(false)
+const bericht         = ref('')
+const berichtType     = ref('')
 
-// Inline bewerken
-const bewerkId    = ref(null)
-const bewerkData  = ref({})
+// ─── Modal: toevoegen / bewerken ─────────────────────────────────────────────
+const toonFormModal  = ref(false)
+const isBewerken     = ref(false)
+const modalComp      = ref({ id: null, naam: '', omschrijving: '', gewicht: 10 })
+const modalFout      = ref('')
+const duplicaatFout  = ref(false)
+
+// ─── Modal: verwijderen ───────────────────────────────────────────────────────
+const toonDeleteModal = ref(false)
+const teVerwijderen   = ref(null)
 
 // ─── Computed ────────────────────────────────────────────────────────────────
 const totaalGewicht = computed(() =>
@@ -39,134 +43,202 @@ const totaalGewicht = computed(() =>
 
 const totaalOk = computed(() => totaalGewicht.value === 100)
 
+const totaalStatus = computed(() => {
+  if (totaalGewicht.value === 100) return 'ok'
+  if (totaalGewicht.value < 100)  return 'warn'
+  return 'error'
+})
+
+const progressBreedte = computed(() =>
+  Math.min(totaalGewicht.value, 100) + '%'
+)
+
+// Gewicht-impact preview in modal
+const gewichtNaOpslaan = computed(() => {
+  const basis = competenties.value
+    .filter(c => c.id !== modalComp.value.id)
+    .reduce((s, c) => s + Number(c.gewicht), 0)
+  return basis + Number(modalComp.value.gewicht)
+})
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
-onMounted(() => laadCompetenties())
+onMounted(() => laadSets({ initial: true }))
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 function token() {
   return localStorage.getItem('token')
 }
 
-async function laadCompetenties() {
+// Haalt alle competentiesets (incl. hun competenties) op.
+// Bij `initial` wordt de actieve tab bepaald op basis van ?id= in de URL,
+// anders blijft de huidige tabselectie behouden (bv. na toevoegen/bewerken).
+async function laadSets({ initial = false } = {}) {
   bezig.value = true
   try {
-    const res = await fetch(
-      `http://localhost:3000/api/competenties/${geselecteerdeOpleiding.value.id}`,
-      { headers: { Authorization: `Bearer ${token()}` } }
-    )
-    competenties.value = await res.json()
+    const res  = await fetch('http://localhost:3000/api/competentiesets', {
+      headers: { Authorization: `Bearer ${token()}` },
+    })
+    sets.value = await res.json()
+
+    if (sets.value.length === 0) {
+      activeSetId.value = null
+    } else if (initial) {
+      const queryId       = Number(route.query.id)
+      const bestaatInLijst = sets.value.some(s => s.set_id === queryId)
+      activeSetId.value   = bestaatInLijst ? queryId : sets.value[0].set_id
+    } else if (!sets.value.some(s => s.set_id === activeSetId.value)) {
+      // De vorige actieve set bestaat niet meer (bv. verwijderd) -> val terug op de eerste
+      activeSetId.value = sets.value[0].set_id
+    }
+
+    syncCompetenties()
   } catch {
-    toonBericht('Competenties konden niet geladen worden.', 'error')
+    toonBericht('Competentiesets konden niet geladen worden.', 'error')
   } finally {
     bezig.value = false
   }
 }
 
-function wisselOpleiding(opleiding) {
-  geselecteerdeOpleiding.value = opleiding
-  bewerkId.value = null
-  laadCompetenties()
+function syncCompetenties() {
+  competenties.value = (huidigSet.value?.competenties || []).map(c => ({ ...c }))
+}
+
+function wisselTab(id) {
+  if (id === activeSetId.value) return
+  activeSetId.value = id
+  syncCompetenties()
+  router.replace({ path: '/admin/competentiebeheer', query: { id } })
+}
+
+// ─── Duplicate check ─────────────────────────────────────────────────────────
+function isDuplicaat(naam, excludeId) {
+  return competenties.value.some(
+    c => c.id !== excludeId &&
+         c.naam.trim().toLowerCase() === naam.trim().toLowerCase()
+  )
+}
+
+function onNaamInput() {
+  duplicaatFout.value = isDuplicaat(modalComp.value.naam, modalComp.value.id)
 }
 
 // ─── Toevoegen ───────────────────────────────────────────────────────────────
-function openModal() {
-  nieuweComp.value = { naam: '', omschrijving: '', gewicht: 0 }
-  modalFout.value  = ''
-  toonModal.value  = true
+function openToevoegen() {
+  isBewerken.value    = false
+  modalComp.value     = { id: null, naam: '', omschrijving: '', gewicht: 10 }
+  modalFout.value     = ''
+  duplicaatFout.value = false
+  toonFormModal.value = true
 }
 
-function sluitModal() {
-  toonModal.value = false
+// ─── Bewerken ────────────────────────────────────────────────────────────────
+function openBewerken(comp) {
+  isBewerken.value    = true
+  modalComp.value     = { ...comp }
+  modalFout.value     = ''
+  duplicaatFout.value = false
+  toonFormModal.value = true
 }
 
-async function voegToe() {
-  if (!nieuweComp.value.naam.trim()) {
+function sluitFormModal() {
+  toonFormModal.value = false
+}
+
+async function slaModalOp() {
+  const naam = modalComp.value.naam.trim()
+  if (!naam) {
     modalFout.value = 'Naam is verplicht.'
     return
   }
-  if (Number(nieuweComp.value.gewicht) <= 0) {
-    modalFout.value = 'Gewicht moet groter zijn dan 0.'
+  if (isDuplicaat(naam, modalComp.value.id)) {
+    duplicaatFout.value = true
+    return
+  }
+  if (!activeSetId.value) {
+    modalFout.value = 'Geen competentieset geselecteerd.'
     return
   }
 
   try {
-    const res = await fetch('http://localhost:3000/api/competenties', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token()}`,
-      },
-      body: JSON.stringify({
-        ...nieuweComp.value,
-        opleiding_id: geselecteerdeOpleiding.value.id,
-      }),
-    })
+    let res
+    if (isBewerken.value) {
+      res = await fetch(`http://localhost:3000/api/competenties/${modalComp.value.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token()}`,
+        },
+        body: JSON.stringify({
+          naam:         modalComp.value.naam,
+          omschrijving: modalComp.value.omschrijving,
+          gewicht:      modalComp.value.gewicht,
+        }),
+      })
+    } else {
+      res = await fetch('http://localhost:3000/api/competenties', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token()}`,
+        },
+        body: JSON.stringify({
+          naam:         modalComp.value.naam,
+          omschrijving: modalComp.value.omschrijving,
+          gewicht:      modalComp.value.gewicht,
+          opleiding_id: activeSetId.value,
+        }),
+      })
+    }
+
     const data = await res.json()
     if (res.ok) {
-      sluitModal()
-      await laadCompetenties()
-      toonBericht('Competentie toegevoegd.', 'success')
+      sluitFormModal()
+      await laadSets()
+      toonBericht(
+        isBewerken.value ? 'Wijzigingen opgeslagen.' : 'Competentie toegevoegd.',
+        'success'
+      )
     } else {
-      modalFout.value = data.error || 'Toevoegen mislukt.'
+      modalFout.value = data.error || 'Opslaan mislukt.'
     }
   } catch {
     modalFout.value = 'Verbindingsfout.'
   }
 }
 
-// ─── Inline bewerken ─────────────────────────────────────────────────────────
-function startBewerk(competentie) {
-  bewerkId.value   = competentie.id
-  bewerkData.value = { ...competentie }
-}
-
-function annuleerBewerk() {
-  bewerkId.value = null
-}
-
-async function slaBewerkenOp() {
-  try {
-    const res = await fetch(
-      `http://localhost:3000/api/competenties/${bewerkId.value}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token()}`,
-        },
-        body: JSON.stringify(bewerkData.value),
-      }
-    )
-    if (res.ok) {
-      bewerkId.value = null
-      await laadCompetenties()
-      toonBericht('Wijzigingen opgeslagen.', 'success')
-    } else {
-      const data = await res.json()
-      toonBericht(data.error || 'Opslaan mislukt.', 'error')
-    }
-  } catch {
-    toonBericht('Verbindingsfout.', 'error')
-  }
-}
-
 // ─── Verwijderen ─────────────────────────────────────────────────────────────
-async function verwijder(id) {
-  if (!confirm('Competentie verwijderen?')) return
+function openDelete(comp) {
+  teVerwijderen.value   = comp
+  toonDeleteModal.value = true
+}
+
+function sluitDeleteModal() {
+  toonDeleteModal.value = false
+  teVerwijderen.value   = null
+}
+
+async function bevestigDelete() {
+  if (!teVerwijderen.value) return
   try {
     const res = await fetch(
-      `http://localhost:3000/api/competenties/${id}`,
+      `http://localhost:3000/api/competenties/${teVerwijderen.value.id}`,
       {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token()}` },
       }
     )
     if (res.ok) {
-      await laadCompetenties()
+      sluitDeleteModal()
+      await laadSets()
       toonBericht('Competentie verwijderd.', 'success')
+    } else {
+      const data = await res.json()
+      toonBericht(data.error || 'Verwijderen mislukt.', 'error')
+      sluitDeleteModal()
     }
   } catch {
-    toonBericht('Verwijderen mislukt.', 'error')
+    toonBericht('Verbindingsfout.', 'error')
+    sluitDeleteModal()
   }
 }
 
@@ -184,22 +256,13 @@ function toonBericht(tekst, type) {
 
     <main class="content">
 
+      <!-- Terug link -->
+      <button class="terug-link" @click="router.push('/admin/competentiesets')">← Terug naar overzicht</button>
+
       <!-- Paginatitel -->
       <div>
         <h1 class="page-title">Competentiebeheer</h1>
-      </div>
-
-      <!-- Opleiding-tabs -->
-      <div class="opleiding-tabs">
-        <button
-          v-for="opl in opleidingen"
-          :key="opl.id"
-          class="opleiding-tab"
-          :class="{ active: geselecteerdeOpleiding.id === opl.id }"
-          @click="wisselOpleiding(opl)"
-        >
-          {{ opl.naam }}
-        </button>
+        <p class="page-subtitle">Beheer de competenties per opleiding. Het totaal gewicht moet exact 100% zijn.</p>
       </div>
 
       <!-- Feedbackbericht -->
@@ -211,177 +274,238 @@ function toonBericht(tekst, type) {
         {{ bericht }}
       </div>
 
-      <!-- Competentietabel -->
-      <div class="table-wrapper">
+      <!-- Laden (eerste keer, nog geen sets bekend) -->
+      <p v-if="bezig && sets.length === 0" class="text-secondary" style="font-size:13px">Laden…</p>
 
-        <!-- Tabelheader -->
-        <div class="tabel-header">
-          <div class="col-competentie">
-            <span>Competentie</span>
-          </div>
-          <div class="col-omschrijving">
-            <span>Omschrijving</span>
-          </div>
-          <div class="col-gewicht">
-            <span>Gewicht</span>
-          </div>
-          <div class="col-acties">
-            <!-- leeg -->
-          </div>
-        </div>
+      <!-- Geen competentiesets aanwezig -->
+      <div v-else-if="sets.length === 0" class="lege-staat">
+        <p class="text-secondary" style="font-size:13px">
+          Er bestaan nog geen competentiesets. Maak er eerst één aan via het overzicht.
+        </p>
+        <button class="btn btn-sm btn-secondary" @click="router.push('/admin/competentiesets')">
+          Naar competentiesets
+        </button>
+      </div>
 
-        <div class="tabel-divider"></div>
+      <template v-else>
 
-        <!-- Laadindicator -->
-        <div v-if="bezig" class="tabel-rij">
-          <p class="text-secondary text-sm">Laden…</p>
-        </div>
-
-        <!-- Lege staat -->
-        <div v-else-if="competenties.length === 0" class="tabel-rij">
-          <p class="text-secondary text-sm">
-            Geen competenties gevonden voor deze opleiding.
-          </p>
-        </div>
-
-        <!-- Rijen -->
-        <template v-else>
-          <div
-            v-for="(comp, index) in competenties"
-            :key="comp.id"
+        <!-- Tabs: wissel tussen competentiesets -->
+        <div class="cb-tabs">
+          <button
+            v-for="s in sets"
+            :key="s.set_id"
+            class="cb-tab"
+            :class="{ 'cb-tab-active': s.set_id === activeSetId }"
+            @click="wisselTab(s.set_id)"
           >
-            <!-- Normale weergave -->
-            <div v-if="bewerkId !== comp.id" class="tabel-rij tabel-rij-hover">
-              <div class="col-competentie">
-                <span class="font-semibold">{{ comp.naam }}</span>
-              </div>
-              <div class="col-omschrijving">
-                <span class="text-secondary text-sm">{{ comp.omschrijving }}</span>
-              </div>
-              <div class="col-gewicht">
-                <span class="gewicht-badge">{{ comp.gewicht }}%</span>
-              </div>
-              <div class="col-acties">
-                <button class="btn btn-sm btn-secondary" @click="startBewerk(comp)">
-                  Bewerken
-                </button>
-                <button class="btn btn-sm btn-danger" @click="verwijder(comp.id)">
-                  Verwijderen
-                </button>
-              </div>
-            </div>
-
-            <!-- Inline bewerkrij -->
-            <div v-else class="tabel-rij bewerk-rij">
-              <div class="col-competentie">
-                <input
-                  v-model="bewerkData.naam"
-                  class="form-input"
-                  placeholder="Naam"
-                />
-              </div>
-              <div class="col-omschrijving">
-                <input
-                  v-model="bewerkData.omschrijving"
-                  class="form-input"
-                  placeholder="Omschrijving"
-                />
-              </div>
-              <div class="col-gewicht">
-                <input
-                  v-model.number="bewerkData.gewicht"
-                  type="number"
-                  min="0"
-                  max="100"
-                  class="form-input gewicht-input"
-                />
-              </div>
-              <div class="col-acties">
-                <button class="btn btn-sm btn-primary" @click="slaBewerkenOp">
-                  Opslaan
-                </button>
-                <button class="btn btn-sm btn-secondary" @click="annuleerBewerk">
-                  Annuleren
-                </button>
-              </div>
-            </div>
-
-            <div v-if="index < competenties.length - 1" class="tabel-divider"></div>
-          </div>
-        </template>
-
-        <div class="tabel-divider"></div>
-
-        <!-- Footer: totaal + toevoegen-knop -->
-        <div class="tabel-footer">
-          <div class="flex items-center gap-8">
-            <span class="text-secondary text-sm">Totaal gewicht:</span>
-            <span
-              class="totaal-badge"
-              :class="totaalOk ? 'totaal-ok' : 'totaal-nok'"
-            >
-              {{ totaalGewicht }}% {{ totaalOk ? '✓' : '✗' }}
-            </span>
-          </div>
-          <button class="btn btn-sm btn-secondary" @click="openModal">
-            + Competentie toevoegen
+            {{ s.naam }}
           </button>
         </div>
-      </div>
+
+        <!-- Set badge -->
+        <div v-if="huidigSet" class="opleiding-badge">{{ huidigSet.opleiding }} · {{ huidigSet.jaar }}</div>
+
+        <!-- Waarschuwingsbanner als totaal ≠ 100 -->
+        <div v-if="!bezig && competenties.length > 0 && !totaalOk" class="waarschuwing" :class="'waarschuwing-' + totaalStatus">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          <span v-if="totaalStatus === 'warn'">
+            Het totale gewicht is {{ totaalGewicht }}%. Er ontbreekt nog {{ 100 - totaalGewicht }}%.
+            Aanvragen kunnen pas worden goedgekeurd als het totaal exact 100% is.
+          </span>
+          <span v-else>
+            Het totale gewicht is {{ totaalGewicht }}%, dat is {{ totaalGewicht - 100 }}% te veel.
+            Pas de gewichten aan zodat het totaal exact 100% is.
+          </span>
+        </div>
+
+        <!-- Voortgangsbalk -->
+        <div v-if="!bezig && competenties.length > 0" class="progress-sectie">
+          <div class="progress-meta">
+            <span class="text-secondary" style="font-size:13px">Totaal gewicht</span>
+            <span style="font-size:13px; font-weight:600">{{ totaalGewicht }}%</span>
+          </div>
+          <div class="progress-track">
+            <div
+              class="progress-fill"
+              :style="{ width: progressBreedte }"
+              :class="'progress-' + totaalStatus"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Competentietabel -->
+        <div class="table-wrapper">
+
+          <!-- Tabelheader -->
+          <div class="tabel-header">
+            <div class="col-competentie"><span>Competentie</span></div>
+            <div class="col-omschrijving"><span>Omschrijving</span></div>
+            <div class="col-gewicht"><span>Gewicht</span></div>
+            <div class="col-acties"><span>Acties</span></div>
+          </div>
+
+          <div class="tabel-divider"></div>
+
+          <!-- Laadindicator -->
+          <div v-if="bezig" class="tabel-rij">
+            <p class="text-secondary" style="font-size:13px">Laden…</p>
+          </div>
+
+          <!-- Lege staat -->
+          <div v-else-if="competenties.length === 0" class="tabel-rij">
+            <p class="text-secondary" style="font-size:13px">
+              Geen competenties gevonden voor deze opleiding.
+            </p>
+          </div>
+
+          <!-- Rijen -->
+          <template v-else>
+            <div v-for="(comp, index) in competenties" :key="comp.id">
+              <div class="tabel-rij tabel-rij-hover">
+                <div class="col-competentie">
+                  <span class="font-semibold">{{ comp.naam }}</span>
+                </div>
+                <div class="col-omschrijving">
+                  <span class="text-secondary" style="font-size:13px">{{ comp.omschrijving }}</span>
+                </div>
+                <div class="col-gewicht">
+                  <span class="gewicht-badge">{{ comp.gewicht }}%</span>
+                </div>
+                <div class="col-acties">
+                  <button class="btn-icon" title="Bewerken" @click="openBewerken(comp)">
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button class="btn-icon btn-icon-danger" title="Verwijderen" @click="openDelete(comp)">
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div v-if="index < competenties.length - 1" class="tabel-divider"></div>
+            </div>
+          </template>
+
+          <div class="tabel-divider"></div>
+
+          <!-- Footer -->
+          <div class="tabel-footer">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="text-secondary" style="font-size:13px">Totaal gewicht:</span>
+              <span class="totaal-badge" :class="'totaal-' + totaalStatus">
+                {{ totaalGewicht }}%
+                <span v-if="totaalStatus === 'ok'">✓</span>
+                <span v-else-if="totaalStatus === 'warn'">— {{ 100 - totaalGewicht }}% tekort</span>
+                <span v-else>— {{ totaalGewicht - 100 }}% te veel</span>
+              </span>
+            </div>
+            <button class="btn btn-sm btn-secondary" @click="openToevoegen">
+              + Competentie toevoegen
+            </button>
+          </div>
+        </div>
+
+      </template>
 
     </main>
 
-    <!-- Modal: nieuw toevoegen -->
-    <div v-if="toonModal" class="modal-overlay" @click.self="sluitModal">
+    <!-- ── MODAL: Toevoegen / Bewerken ─────────────────────────────────────── -->
+    <div v-if="toonFormModal" class="modal-overlay" @click.self="sluitFormModal">
       <div class="modal-card">
-        <h2 class="modal-title">Competentie toevoegen</h2>
-        <p class="text-secondary text-sm" style="margin-bottom: 20px;">
-          Voeg een nieuwe competentie toe voor
-          <strong>{{ geselecteerdeOpleiding.naam }}</strong>.
-        </p>
+        <h2 class="modal-title">
+          {{ isBewerken ? 'Competentie bewerken' : 'Competentie toevoegen' }}
+        </h2>
 
+        <!-- Naam -->
         <div class="form-group">
-          <label>Naam</label>
+          <label>Naam <span style="color:var(--red)">*</span></label>
           <input
-            v-model="nieuweComp.naam"
+            v-model="modalComp.naam"
             class="form-input"
+            :class="{ 'input-error': duplicaatFout }"
             placeholder="bijv. Technische vaardigheden"
+            @input="onNaamInput"
           />
+          <div v-if="duplicaatFout" class="fout-melding">
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+            Een competentie met deze naam bestaat al.
+          </div>
         </div>
 
-        <div class="form-group" style="margin-top: 14px;">
+        <!-- Omschrijving -->
+        <div class="form-group" style="margin-top:14px">
           <label>Omschrijving</label>
           <textarea
-            v-model="nieuweComp.omschrijving"
+            v-model="modalComp.omschrijving"
             class="form-input"
             rows="3"
             placeholder="Korte omschrijving van de competentie…"
           ></textarea>
         </div>
 
-        <div class="form-group" style="margin-top: 14px;">
-          <label>Gewicht (%)</label>
-          <input
-            v-model.number="nieuweComp.gewicht"
-            type="number"
-            min="0"
-            max="100"
-            class="form-input"
-            placeholder="bijv. 25"
-          />
+        <!-- Gewicht slider -->
+        <div class="form-group" style="margin-top:14px">
+          <label>Gewicht</label>
+          <div class="slider-rij">
+            <input
+              v-model.number="modalComp.gewicht"
+              type="range"
+              min="1"
+              max="100"
+              step="1"
+              class="gewicht-slider"
+            />
+            <span class="slider-waarde">{{ modalComp.gewicht }}%</span>
+          </div>
+          <!-- Impact preview -->
+          <div
+            class="impact-preview"
+            :class="{
+              'impact-ok':    gewichtNaOpslaan === 100,
+              'impact-warn':  gewichtNaOpslaan < 100,
+              'impact-error': gewichtNaOpslaan > 100,
+            }"
+          >
+            Na opslaan: totaal wordt <strong>{{ gewichtNaOpslaan }}%</strong>
+          </div>
         </div>
 
-        <p v-if="modalFout" class="form-error" style="margin-top: 8px;">
-          {{ modalFout }}
+        <!-- Algemene foutmelding -->
+        <p v-if="modalFout" class="form-error" style="margin-top:8px">{{ modalFout }}</p>
+
+        <div style="display:flex; gap:8px; margin-top:24px; justify-content:flex-end;">
+          <button class="btn btn-secondary" @click="sluitFormModal">Annuleren</button>
+          <button
+            class="btn btn-primary"
+            :disabled="duplicaatFout || !modalComp.naam.trim()"
+            @click="slaModalOp"
+          >
+            {{ isBewerken ? 'Wijzigingen opslaan' : 'Toevoegen' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MODAL: Verwijderen ──────────────────────────────────────────────── -->
+    <div v-if="toonDeleteModal" class="modal-overlay" @click.self="sluitDeleteModal">
+      <div class="modal-card modal-card-delete">
+        <h2 class="modal-title modal-title-delete">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="vertical-align:-4px; margin-right:6px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Competentie verwijderen
+        </h2>
+
+        <div class="delete-info" v-if="teVerwijderen">
+          Wil je <strong>{{ teVerwijderen.naam }}</strong> verwijderen?<br />
+          Het gewicht van <strong>{{ teVerwijderen.gewicht }}%</strong> wordt vrijgegeven.
+          Het totaal zakt naar <strong>{{ totaalGewicht - teVerwijderen.gewicht }}%</strong>.
+        </div>
+
+        <p style="font-size:13px; color:var(--text-secondary); margin-top:12px; line-height:1.5;">
+          De competentie wordt <em>gedeactiveerd</em> en niet definitief gewist (soft delete).
+          Ze is nadien niet meer zichtbaar voor studenten.
         </p>
 
-        <div class="flex gap-8" style="margin-top: 24px; justify-content: flex-end;">
-          <button class="btn btn-secondary" @click="sluitModal">
-            Annuleren
-          </button>
-          <button class="btn btn-primary" @click="voegToe">
-            Toevoegen
-          </button>
+        <div style="display:flex; gap:8px; margin-top:24px; justify-content:flex-end;">
+          <button class="btn btn-secondary" @click="sluitDeleteModal">Annuleren</button>
+          <button class="btn btn-delete" @click="bevestigDelete">Ja, verwijderen</button>
         </div>
       </div>
     </div>
@@ -390,35 +514,111 @@ function toonBericht(tekst, type) {
 </template>
 
 <style scoped>
-/* ── Opleiding-tabs ─────────────────────────────────────────────────────────── */
-.opleiding-tabs {
+/* ── Terug link ──────────────────────────────────────────────────────────── */
+.terug-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+.terug-link:hover { color: var(--text-primary); text-decoration: underline; }
+
+/* ── Lege staat (geen sets) ──────────────────────────────────────────────── */
+.lege-staat {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--gray50);
+  border-radius: 8px;
 }
 
-.opleiding-tab {
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.cb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+.cb-tab {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-right: none;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.cb-tab:first-child { border-radius: 6px 0 0 6px; }
+.cb-tab:last-child   { border-right: 1px solid var(--border); border-radius: 0 6px 6px 0; }
+.cb-tab:hover        { background: var(--gray50); color: var(--text-primary); }
+.cb-tab-active, .cb-tab-active:hover {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+  font-weight: 600;
+}
+
+/* ── Opleiding badge ─────────────────────────────────────────────────────── */
+.opleiding-badge {
+  display: inline-block;
   padding: 8px 16px;
+  background: #000;
+  color: #fff;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background 0.15s, color 0.15s;
 }
 
-.opleiding-tab:hover {
-  background: var(--gray50);
-  color: var(--text-primary);
+/* ── Waarschuwingsbanner ──────────────────────────────────────────────────── */
+.waarschuwing {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.waarschuwing-warn  { background: var(--yellow-bg); color: var(--yellow); }
+.waarschuwing-error { background: var(--red-bg);    color: var(--red); }
+
+/* ── Voortgangsbalk ──────────────────────────────────────────────────────── */
+.progress-sectie { display: flex; flex-direction: column; gap: 8px; }
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.opleiding-tab.active {
-  background: #000;
-  color: #fff;
+.progress-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
 }
 
-/* ── Tabel ──────────────────────────────────────────────────────────────────── */
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.35s ease, background-color 0.35s ease;
+}
+
+.progress-ok    { background: var(--green); }
+.progress-warn  { background: var(--yellow); }
+.progress-error { background: var(--red); }
+
+/* ── Tabel ───────────────────────────────────────────────────────────────── */
 .tabel-header {
   display: flex;
   align-items: center;
@@ -427,28 +627,20 @@ function toonBericht(tekst, type) {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.tabel-divider {
-  height: 1px;
-  background: var(--border);
-}
+.tabel-divider { height: 1px; background: var(--border); }
 
 .tabel-rij {
   display: flex;
   align-items: center;
   padding: 18px 24px;
   background: #fff;
-  gap: 0;
 }
 
-.tabel-rij-hover:hover {
-  background: #fafafa;
-}
-
-.bewerk-rij {
-  background: #fafffe;
-}
+.tabel-rij-hover:hover { background: #fafafa; }
 
 .tabel-footer {
   display: flex;
@@ -458,89 +650,70 @@ function toonBericht(tekst, type) {
   background: var(--gray50);
 }
 
-/* ── Kolommen ──────────────────────────────────────────────────────────────── */
-.col-competentie {
-  width: 280px;
-  flex-shrink: 0;
-  font-size: 14px;
-}
-
-.col-omschrijving {
-  flex: 1;
-  font-size: 13px;
-  padding-right: 16px;
-}
-
-.col-gewicht {
-  width: 90px;
-  flex-shrink: 0;
-}
-
+/* ── Kolommen ────────────────────────────────────────────────────────────── */
+.col-competentie { width: 280px; flex-shrink: 0; font-size: 14px; font-weight: 600; }
+.col-omschrijving { flex: 1; font-size: 13px; padding-right: 16px; }
+.col-gewicht { width: 90px; flex-shrink: 0; }
 .col-acties {
-  width: 200px;
+  width: 80px;
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
-/* ── Gewicht-badge ─────────────────────────────────────────────────────────── */
+/* ── Gewicht badge ───────────────────────────────────────────────────────── */
 .gewicht-badge {
-  display: inline-flex;
+  display: inline-block;
   padding: 4px 10px;
   background: var(--gray50);
   border-radius: 9999px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
+  border: 1px solid var(--border);
 }
 
-.gewicht-input {
-  width: 70px;
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
-/* ── Totaal-badge ──────────────────────────────────────────────────────────── */
+/* ── Totaal badge ────────────────────────────────────────────────────────── */
 .totaal-badge {
   display: inline-flex;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 9999px;
   font-size: 12px;
   font-weight: 600;
 }
+.totaal-ok    { background: #dcf5e5; color: var(--green); }
+.totaal-warn  { background: var(--yellow-bg); color: var(--yellow); }
+.totaal-error { background: var(--red-bg); color: var(--red); }
 
-.totaal-ok {
-  background: #dcf5e5;
-  color: #16a34a;
+/* ── Icon-knoppen ────────────────────────────────────────────────────────── */
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
+.btn-icon:hover { background: var(--gray50); color: var(--text-primary); }
+.btn-icon-danger:hover { background: var(--red-bg); color: var(--red); border-color: #fca5a5; }
 
-.totaal-nok {
-  background: var(--red-bg);
-  color: var(--red);
-}
-
-/* ── Feedbackbericht ───────────────────────────────────────────────────────── */
+/* ── Feedbackbericht ─────────────────────────────────────────────────────── */
 .bericht {
   padding: 10px 16px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
 }
+.bericht-success { background: #f0fdf4; color: var(--green); border: 1px solid #dcfce7; }
+.bericht-error   { background: var(--red-bg); color: var(--red); border: 1px solid #fca5a5; }
 
-.bericht-success {
-  background: #f0fdf4;
-  color: #16a34a;
-  border: 1px solid #dcfce7;
-}
-
-.bericht-error {
-  background: var(--red-bg);
-  color: var(--red);
-  border: 1px solid #fca5a5;
-}
-
-/* ── Modal ─────────────────────────────────────────────────────────────────── */
+/* ── Modal overlay ───────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -556,19 +729,118 @@ function toonBericht(tekst, type) {
   border-radius: 10px;
   padding: 32px 36px;
   width: 480px;
+  max-width: calc(100vw - 40px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
+
+.modal-card-delete { width: 420px; }
 
 .modal-title {
   font-size: 18px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 20px;
   color: var(--text-primary);
 }
 
-/* ── Buttons aanpassen voor kleinere tabelknoppen ──────────────────────────── */
-.col-acties .btn-sm {
+.modal-title-delete { color: var(--red); }
+
+/* ── Duplicate foutmelding ───────────────────────────────────────────────── */
+.input-error {
+  border-color: var(--red) !important;
+  background: #fff5f5;
+}
+
+.fout-melding {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  background: var(--red-bg);
+  border-radius: 6px;
   font-size: 12px;
-  padding: 5px 12px;
+  font-weight: 500;
+  color: var(--red);
+}
+
+/* ── Gewicht slider ──────────────────────────────────────────────────────── */
+.slider-rij {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.gewicht-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.gewicht-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #000;
+  cursor: pointer;
+}
+
+.slider-waarde {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+  color: var(--text-primary);
+}
+
+/* ── Impact preview ──────────────────────────────────────────────────────── */
+.impact-preview {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.impact-ok    { background: #dcf5e5; color: var(--green); }
+.impact-warn  { background: var(--yellow-bg); color: var(--yellow); }
+.impact-error { background: var(--red-bg); color: var(--red); }
+
+/* ── Delete info box ─────────────────────────────────────────────────────── */
+.delete-info {
+  background: var(--gray50);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.delete-info strong { color: var(--text-primary); }
+
+/* ── Delete confirm button ───────────────────────────────────────────────── */
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--red);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+.btn-delete:hover { opacity: 0.88; }
+
+/* ── Disabled primary button ─────────────────────────────────────────────── */
+.btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

@@ -38,12 +38,12 @@ async function handleLogin() {
       body: JSON.stringify({ email: email.value.trim(), wachtwoord: wachtwoord.value }),
     })
 
-    const data = await response.json()
+const data = await response.json()
 
-    if (!response.ok) {
-      error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
-      return
-    }
+if (!response.ok) {
+  error.value = data.error || 'Aanmelden mislukt. Controleer je gegevens.'
+  return
+}
 
     authStore.saveSession({
       token: data.token,

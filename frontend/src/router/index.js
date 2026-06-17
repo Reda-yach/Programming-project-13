@@ -1,12 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
+<<<<<<< HEAD
 import { useAuthStore } from '../stores/auth'
 
+=======
+>>>>>>> feature/admin-commissie-schermen
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
+<<<<<<< HEAD
       redirect: '/login',
+=======
+      redirect: '/login'
+>>>>>>> feature/admin-commissie-schermen
     },
     {
       path: '/login',
@@ -70,6 +77,7 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
+<<<<<<< HEAD
       path: '/docent/studenten',
       name: 'docent-studenten-overzicht',
       component: () => import('../views/DocentStudenten.vue'),
@@ -162,6 +170,19 @@ const router = createRouter({
     {
       path: '/admin/competenties',
       name: 'admin-competenties',
+=======
+      path: '/admin',
+      redirect: '/admin/competentiesets',
+    },
+    {
+      path: '/admin/competentiesets',
+      name: 'admin-competentiesets',
+      component: () => import('../views/Admincompetentiesets.vue'),
+    },
+    {
+      path: '/admin/competentiebeheer',
+      name: 'admin-competentiebeheer',
+>>>>>>> feature/admin-commissie-schermen
       component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {
