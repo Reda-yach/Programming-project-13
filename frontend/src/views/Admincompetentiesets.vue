@@ -5,7 +5,7 @@ import TopBar from '../components/TopBar.vue'
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competenties' },
+  { label: 'Competenties', to: '/admin/competentiesets' },
   { label: 'Stages',       to: '/admin/stages' },
   { label: 'Accounts',     to: '/admin/accounts' },
   { label: 'Aanvragen',    to: '/admin/aanvragen' },
@@ -46,6 +46,15 @@ const gefilterdesets = computed(() =>
 
 const uniekOpleidingen = computed(() => [...new Set(sets.value.map(s => s.opleiding))])
 const uniekJaren       = computed(() => [...new Set(sets.value.map(s => s.jaar))])
+
+const academiejaarOpties = computed(() => {
+  const huidigJaar = new Date().getFullYear()
+  const opties = []
+  for (let j = huidigJaar - 2; j <= huidigJaar + 3; j++) {
+    opties.push(`${j}-${j + 1}`)
+  }
+  return opties
+})
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 function totaalGewicht(set) {
@@ -138,7 +147,7 @@ async function bevestigDelete() {
   if (!teVerwijderen.value) return
   try {
     const res = await fetch(
-      `http://localhost:3000/api/competentiesets/${teVerwijderen.value.id}`,
+      `http://localhost:3000/api/competentiesets/${teVerwijderen.value.set_id}`,
       { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } }
     )
     if (res.ok) {
@@ -165,7 +174,7 @@ function toonBericht(tekst, type) {
 
 // ─── Navigeer naar beheer ─────────────────────────────────────────────────────
 function naarBeheer(set) {
-  router.push({ path: '/admin/competentiebeheer', query: { id: set.id } })
+  router.push({ path: '/admin/competentiebeheer', query: { id: set.set_id } })
 }
 </script>
 
@@ -220,7 +229,8 @@ function naarBeheer(set) {
           <div class="col-toggle"></div>
           <div class="col-naam"><span>Competentieset</span></div>
           <div class="col-opleiding"><span>Opleiding</span></div>
-          <div class="col-status"><span>Academiejaar</span></div>
+          <div class="col-jaar"><span>Academiejaar</span></div>
+          <div class="col-status"><span>Gewicht</span></div>
           <div class="col-acties"><span>Acties</span></div>
         </div>
 
@@ -238,14 +248,14 @@ function naarBeheer(set) {
 
         <!-- Rijen -->
         <template v-else>
-          <div v-for="(set, index) in gefilterdesets" :key="set.id">
+          <div v-for="(set, index) in gefilterdesets" :key="set.set_id">
 
             <!-- Hoofdrij -->
-            <div class="tabel-rij tabel-rij-hover" @click="toggleUitklap(set.id)">
+            <div class="tabel-rij tabel-rij-hover" @click="toggleUitklap(set.set_id)">
               <div class="col-toggle">
                 <button
                   class="toggle-btn"
-                  :class="{ 'toggle-open': uitgeklapt.has(set.id) }"
+                  :class="{ 'toggle-open': uitgeklapt.has(set.set_id) }"
                 >
                   <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                     <polyline points="9 18 15 12 9 6" />
@@ -261,19 +271,35 @@ function naarBeheer(set) {
               <div class="col-opleiding">
                 <span class="text-secondary" style="font-size:13px">{{ set.opleiding }}</span>
               </div>
+              <div class="col-jaar">
+                <span class="text-secondary" style="font-size:13px">{{ set.jaar || '—' }}</span>
+              </div>
               <div class="col-status">
-                <span
-                  class="status-badge"
-                  :class="{
-                    'status-compleet':   setStatus(set) === 'compleet',
-                    'status-onvolledig': setStatus(set) === 'onvolledig',
-                    'status-leeg':       setStatus(set) === 'leeg',
-                  }"
-                >
-                  <template v-if="setStatus(set) === 'compleet'">✓ Compleet</template>
-                  <template v-else-if="setStatus(set) === 'onvolledig'">⚠ {{ totaalGewicht(set) }}%</template>
-                  <template v-else>— Leeg</template>
-                </span>
+                <div class="gewicht-cel">
+                  <div class="mini-progress-track">
+                    <div
+                      class="mini-progress-fill"
+                      :style="{ width: Math.min(totaalGewicht(set), 100) + '%' }"
+                      :class="{
+                        'progress-compleet':   setStatus(set) === 'compleet',
+                        'progress-onvolledig': setStatus(set) === 'onvolledig',
+                        'progress-leeg':       setStatus(set) === 'leeg',
+                      }"
+                    ></div>
+                  </div>
+                  <span
+                    class="status-badge"
+                    :class="{
+                      'status-compleet':   setStatus(set) === 'compleet',
+                      'status-onvolledig': setStatus(set) === 'onvolledig',
+                      'status-leeg':       setStatus(set) === 'leeg',
+                    }"
+                  >
+                    <template v-if="setStatus(set) === 'compleet'">✓ Compleet</template>
+                    <template v-else-if="setStatus(set) === 'onvolledig'">⚠ {{ totaalGewicht(set) }}%</template>
+                    <template v-else>— Leeg</template>
+                  </span>
+                </div>
               </div>
               <div class="col-acties" @click.stop>
                 <button class="btn-icon" title="Competentiebeheer" @click="naarBeheer(set)">
@@ -294,7 +320,7 @@ function naarBeheer(set) {
             </div>
 
             <!-- Uitgeklapte competenties -->
-            <div v-if="uitgeklapt.has(set.id)" class="uitklap-sectie">
+            <div v-if="uitgeklapt.has(set.set_id)" class="uitklap-sectie">
               <div v-if="(set.competenties || []).length === 0" class="uitklap-leeg">
                 Geen competenties in deze set.
               </div>
@@ -335,7 +361,10 @@ function naarBeheer(set) {
 
         <div class="form-group" style="margin-top:14px">
           <label>Academiejaar <span style="color:var(--red)">*</span></label>
-          <input v-model="modalSet.jaar" class="form-input" placeholder="bijv. 2025-2026" />
+          <select v-model="modalSet.jaar" class="form-input">
+            <option value="" disabled>Kies een academiejaar</option>
+            <option v-for="jaar in academiejaarOpties" :key="jaar" :value="jaar">{{ jaar }}</option>
+          </select>
         </div>
 
         <p v-if="modalFout" class="form-error" style="margin-top:8px">{{ modalFout }}</p>
@@ -440,7 +469,8 @@ function naarBeheer(set) {
 .col-toggle    { width: 36px; flex-shrink: 0; }
 .col-naam      { flex: 2; min-width: 0; font-size: 14px; font-weight: 600; }
 .col-opleiding { flex: 2; min-width: 0; }
-.col-status    { width: 160px; flex-shrink: 0; }
+.col-jaar      { width: 120px; flex-shrink: 0; }
+.col-status    { width: 180px; flex-shrink: 0; }
 .col-acties {
   width: 96px;
   flex-shrink: 0;
@@ -449,6 +479,31 @@ function naarBeheer(set) {
   gap: 6px;
   justify-content: flex-end;
 }
+
+/* ── Gewicht cel ─────────────────────────────────────────────────────────── */
+.gewicht-cel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mini-progress-track {
+  height: 5px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.progress-compleet   { background: #065F46; }
+.progress-onvolledig { background: #92400E; }
+.progress-leeg       { background: #D1D5DB; }
 
 /* ── Toggle knop ─────────────────────────────────────────────────────────── */
 .toggle-btn {

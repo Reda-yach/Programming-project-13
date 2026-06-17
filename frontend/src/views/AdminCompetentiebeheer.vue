@@ -1,20 +1,29 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competenties' },
+  { label: 'Competenties', to: '/admin/competentiesets' },
   { label: 'Stages',       to: '/admin/stages' },
   { label: 'Accounts',     to: '/admin/accounts' },
   { label: 'Aanvragen',    to: '/admin/aanvragen' },
 ])
 
-// ─── Competenties ────────────────────────────────────────────────────────────
+const route  = useRoute()
+const router = useRouter()
+
+// ─── Alle sets (voor tabs) + actieve set ──────────────────────────────────────
+const sets        = ref([])
+const activeSetId = ref(null)
+const huidigSet   = computed(() => sets.value.find(s => s.set_id === activeSetId.value) || null)
+
+// ─── Competenties (van de actieve set) ────────────────────────────────────────
 const competenties   = ref([])
-const bezig          = ref(false)
-const bericht        = ref('')
-const berichtType    = ref('')
+const bezig           = ref(false)
+const bericht         = ref('')
+const berichtType     = ref('')
 
 // ─── Modal: toevoegen / bewerken ─────────────────────────────────────────────
 const toonFormModal  = ref(false)
@@ -53,28 +62,52 @@ const gewichtNaOpslaan = computed(() => {
 })
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
-onMounted(() => laadCompetenties())
+onMounted(() => laadSets({ initial: true }))
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 function token() {
   return localStorage.getItem('token')
 }
 
-async function laadCompetenties() {
+// Haalt alle competentiesets (incl. hun competenties) op.
+// Bij `initial` wordt de actieve tab bepaald op basis van ?id= in de URL,
+// anders blijft de huidige tabselectie behouden (bv. na toevoegen/bewerken).
+async function laadSets({ initial = false } = {}) {
   bezig.value = true
   try {
-    const res = await fetch(
-      'http://localhost:3000/api/competenties/1',
-      { headers: { Authorization: `Bearer ${token()}` } }
-    )
-    const data = await res.json()
-    // Zet competentie_id om naar id zodat de rest van de logica klopt
-    competenties.value = data.map(c => ({ ...c, id: c.competentie_id }))
+    const res  = await fetch('http://localhost:3000/api/competentiesets', {
+      headers: { Authorization: `Bearer ${token()}` },
+    })
+    sets.value = await res.json()
+
+    if (sets.value.length === 0) {
+      activeSetId.value = null
+    } else if (initial) {
+      const queryId       = Number(route.query.id)
+      const bestaatInLijst = sets.value.some(s => s.set_id === queryId)
+      activeSetId.value   = bestaatInLijst ? queryId : sets.value[0].set_id
+    } else if (!sets.value.some(s => s.set_id === activeSetId.value)) {
+      // De vorige actieve set bestaat niet meer (bv. verwijderd) -> val terug op de eerste
+      activeSetId.value = sets.value[0].set_id
+    }
+
+    syncCompetenties()
   } catch {
-    toonBericht('Competenties konden niet geladen worden.', 'error')
+    toonBericht('Competentiesets konden niet geladen worden.', 'error')
   } finally {
     bezig.value = false
   }
+}
+
+function syncCompetenties() {
+  competenties.value = (huidigSet.value?.competenties || []).map(c => ({ ...c }))
+}
+
+function wisselTab(id) {
+  if (id === activeSetId.value) return
+  activeSetId.value = id
+  syncCompetenties()
+  router.replace({ path: '/admin/competentiebeheer', query: { id } })
 }
 
 // ─── Duplicate check ─────────────────────────────────────────────────────────
@@ -121,6 +154,10 @@ async function slaModalOp() {
     duplicaatFout.value = true
     return
   }
+  if (!activeSetId.value) {
+    modalFout.value = 'Geen competentieset geselecteerd.'
+    return
+  }
 
   try {
     let res
@@ -148,7 +185,7 @@ async function slaModalOp() {
           naam:         modalComp.value.naam,
           omschrijving: modalComp.value.omschrijving,
           gewicht:      modalComp.value.gewicht,
-          opleiding_id: 1,
+          opleiding_id: activeSetId.value,
         }),
       })
     }
@@ -156,7 +193,7 @@ async function slaModalOp() {
     const data = await res.json()
     if (res.ok) {
       sluitFormModal()
-      await laadCompetenties()
+      await laadSets()
       toonBericht(
         isBewerken.value ? 'Wijzigingen opgeslagen.' : 'Competentie toegevoegd.',
         'success'
@@ -192,7 +229,7 @@ async function bevestigDelete() {
     )
     if (res.ok) {
       sluitDeleteModal()
-      await laadCompetenties()
+      await laadSets()
       toonBericht('Competentie verwijderd.', 'success')
     } else {
       const data = await res.json()
@@ -219,14 +256,14 @@ function toonBericht(tekst, type) {
 
     <main class="content">
 
+      <!-- Terug link -->
+      <button class="terug-link" @click="router.push('/admin/competentiesets')">← Terug naar overzicht</button>
+
       <!-- Paginatitel -->
       <div>
         <h1 class="page-title">Competentiebeheer</h1>
         <p class="page-subtitle">Beheer de competenties per opleiding. Het totaal gewicht moet exact 100% zijn.</p>
       </div>
-
-      <!-- Toegepaste Informatica badge -->
-      <div class="opleiding-badge">Toegepaste Informatica</div>
 
       <!-- Feedbackbericht -->
       <div
@@ -237,103 +274,136 @@ function toonBericht(tekst, type) {
         {{ bericht }}
       </div>
 
-      <!-- Waarschuwingsbanner als totaal ≠ 100 -->
-      <div v-if="!bezig && competenties.length > 0 && !totaalOk" class="waarschuwing" :class="'waarschuwing-' + totaalStatus">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-        <span v-if="totaalStatus === 'warn'">
-          Het totale gewicht is {{ totaalGewicht }}%. Er ontbreekt nog {{ 100 - totaalGewicht }}%.
-          Aanvragen kunnen pas worden goedgekeurd als het totaal exact 100% is.
-        </span>
-        <span v-else>
-          Het totale gewicht is {{ totaalGewicht }}%, dat is {{ totaalGewicht - 100 }}% te veel.
-          Pas de gewichten aan zodat het totaal exact 100% is.
-        </span>
+      <!-- Laden (eerste keer, nog geen sets bekend) -->
+      <p v-if="bezig && sets.length === 0" class="text-secondary" style="font-size:13px">Laden…</p>
+
+      <!-- Geen competentiesets aanwezig -->
+      <div v-else-if="sets.length === 0" class="lege-staat">
+        <p class="text-secondary" style="font-size:13px">
+          Er bestaan nog geen competentiesets. Maak er eerst één aan via het overzicht.
+        </p>
+        <button class="btn btn-sm btn-secondary" @click="router.push('/admin/competentiesets')">
+          Naar competentiesets
+        </button>
       </div>
 
-      <!-- Voortgangsbalk -->
-      <div v-if="!bezig && competenties.length > 0" class="progress-sectie">
-        <div class="progress-meta">
-          <span class="text-secondary" style="font-size:13px">Totaal gewicht</span>
-          <span style="font-size:13px; font-weight:600">{{ totaalGewicht }}%</span>
-        </div>
-        <div class="progress-track">
-          <div
-            class="progress-fill"
-            :style="{ width: progressBreedte }"
-            :class="'progress-' + totaalStatus"
-          ></div>
-        </div>
-      </div>
+      <template v-else>
 
-      <!-- Competentietabel -->
-      <div class="table-wrapper">
-
-        <!-- Tabelheader -->
-        <div class="tabel-header">
-          <div class="col-competentie"><span>Competentie</span></div>
-          <div class="col-omschrijving"><span>Omschrijving</span></div>
-          <div class="col-gewicht"><span>Gewicht</span></div>
-          <div class="col-acties"><span>Acties</span></div>
-        </div>
-
-        <div class="tabel-divider"></div>
-
-        <!-- Laadindicator -->
-        <div v-if="bezig" class="tabel-rij">
-          <p class="text-secondary" style="font-size:13px">Laden…</p>
-        </div>
-
-        <!-- Lege staat -->
-        <div v-else-if="competenties.length === 0" class="tabel-rij">
-          <p class="text-secondary" style="font-size:13px">
-            Geen competenties gevonden voor deze opleiding.
-          </p>
-        </div>
-
-        <!-- Rijen -->
-        <template v-else>
-          <div v-for="(comp, index) in competenties" :key="comp.id">
-            <div class="tabel-rij tabel-rij-hover">
-              <div class="col-competentie">
-                <span class="font-semibold">{{ comp.naam }}</span>
-              </div>
-              <div class="col-omschrijving">
-                <span class="text-secondary" style="font-size:13px">{{ comp.omschrijving }}</span>
-              </div>
-              <div class="col-gewicht">
-                <span class="gewicht-badge">{{ comp.gewicht }}%</span>
-              </div>
-              <div class="col-acties">
-                <button class="btn-icon" title="Bewerken" @click="openBewerken(comp)">
-                  <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <button class="btn-icon btn-icon-danger" title="Verwijderen" @click="openDelete(comp)">
-                  <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                </button>
-              </div>
-            </div>
-            <div v-if="index < competenties.length - 1" class="tabel-divider"></div>
-          </div>
-        </template>
-
-        <div class="tabel-divider"></div>
-
-        <!-- Footer -->
-        <div class="tabel-footer">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span class="text-secondary" style="font-size:13px">Totaal gewicht:</span>
-            <span class="totaal-badge" :class="'totaal-' + totaalStatus">
-              {{ totaalGewicht }}%
-              <span v-if="totaalStatus === 'ok'">✓</span>
-              <span v-else-if="totaalStatus === 'warn'">— {{ 100 - totaalGewicht }}% tekort</span>
-              <span v-else>— {{ totaalGewicht - 100 }}% te veel</span>
-            </span>
-          </div>
-          <button class="btn btn-sm btn-secondary" @click="openToevoegen">
-            + Competentie toevoegen
+        <!-- Tabs: wissel tussen competentiesets -->
+        <div class="cb-tabs">
+          <button
+            v-for="s in sets"
+            :key="s.set_id"
+            class="cb-tab"
+            :class="{ 'cb-tab-active': s.set_id === activeSetId }"
+            @click="wisselTab(s.set_id)"
+          >
+            {{ s.naam }}
           </button>
         </div>
-      </div>
+
+        <!-- Set badge -->
+        <div v-if="huidigSet" class="opleiding-badge">{{ huidigSet.opleiding }} · {{ huidigSet.jaar }}</div>
+
+        <!-- Waarschuwingsbanner als totaal ≠ 100 -->
+        <div v-if="!bezig && competenties.length > 0 && !totaalOk" class="waarschuwing" :class="'waarschuwing-' + totaalStatus">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          <span v-if="totaalStatus === 'warn'">
+            Het totale gewicht is {{ totaalGewicht }}%. Er ontbreekt nog {{ 100 - totaalGewicht }}%.
+            Aanvragen kunnen pas worden goedgekeurd als het totaal exact 100% is.
+          </span>
+          <span v-else>
+            Het totale gewicht is {{ totaalGewicht }}%, dat is {{ totaalGewicht - 100 }}% te veel.
+            Pas de gewichten aan zodat het totaal exact 100% is.
+          </span>
+        </div>
+
+        <!-- Voortgangsbalk -->
+        <div v-if="!bezig && competenties.length > 0" class="progress-sectie">
+          <div class="progress-meta">
+            <span class="text-secondary" style="font-size:13px">Totaal gewicht</span>
+            <span style="font-size:13px; font-weight:600">{{ totaalGewicht }}%</span>
+          </div>
+          <div class="progress-track">
+            <div
+              class="progress-fill"
+              :style="{ width: progressBreedte }"
+              :class="'progress-' + totaalStatus"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Competentietabel -->
+        <div class="table-wrapper">
+
+          <!-- Tabelheader -->
+          <div class="tabel-header">
+            <div class="col-competentie"><span>Competentie</span></div>
+            <div class="col-omschrijving"><span>Omschrijving</span></div>
+            <div class="col-gewicht"><span>Gewicht</span></div>
+            <div class="col-acties"><span>Acties</span></div>
+          </div>
+
+          <div class="tabel-divider"></div>
+
+          <!-- Laadindicator -->
+          <div v-if="bezig" class="tabel-rij">
+            <p class="text-secondary" style="font-size:13px">Laden…</p>
+          </div>
+
+          <!-- Lege staat -->
+          <div v-else-if="competenties.length === 0" class="tabel-rij">
+            <p class="text-secondary" style="font-size:13px">
+              Geen competenties gevonden voor deze opleiding.
+            </p>
+          </div>
+
+          <!-- Rijen -->
+          <template v-else>
+            <div v-for="(comp, index) in competenties" :key="comp.id">
+              <div class="tabel-rij tabel-rij-hover">
+                <div class="col-competentie">
+                  <span class="font-semibold">{{ comp.naam }}</span>
+                </div>
+                <div class="col-omschrijving">
+                  <span class="text-secondary" style="font-size:13px">{{ comp.omschrijving }}</span>
+                </div>
+                <div class="col-gewicht">
+                  <span class="gewicht-badge">{{ comp.gewicht }}%</span>
+                </div>
+                <div class="col-acties">
+                  <button class="btn-icon" title="Bewerken" @click="openBewerken(comp)">
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button class="btn-icon btn-icon-danger" title="Verwijderen" @click="openDelete(comp)">
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div v-if="index < competenties.length - 1" class="tabel-divider"></div>
+            </div>
+          </template>
+
+          <div class="tabel-divider"></div>
+
+          <!-- Footer -->
+          <div class="tabel-footer">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="text-secondary" style="font-size:13px">Totaal gewicht:</span>
+              <span class="totaal-badge" :class="'totaal-' + totaalStatus">
+                {{ totaalGewicht }}%
+                <span v-if="totaalStatus === 'ok'">✓</span>
+                <span v-else-if="totaalStatus === 'warn'">— {{ 100 - totaalGewicht }}% tekort</span>
+                <span v-else>— {{ totaalGewicht - 100 }}% te veel</span>
+              </span>
+            </div>
+            <button class="btn btn-sm btn-secondary" @click="openToevoegen">
+              + Competentie toevoegen
+            </button>
+          </div>
+        </div>
+
+      </template>
 
     </main>
 
@@ -444,6 +514,59 @@ function toonBericht(tekst, type) {
 </template>
 
 <style scoped>
+/* ── Terug link ──────────────────────────────────────────────────────────── */
+.terug-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+.terug-link:hover { color: var(--text-primary); text-decoration: underline; }
+
+/* ── Lege staat (geen sets) ──────────────────────────────────────────────── */
+.lege-staat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--gray50);
+  border-radius: 8px;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.cb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+.cb-tab {
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-right: none;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.cb-tab:first-child { border-radius: 6px 0 0 6px; }
+.cb-tab:last-child   { border-right: 1px solid var(--border); border-radius: 0 6px 6px 0; }
+.cb-tab:hover        { background: var(--gray50); color: var(--text-primary); }
+.cb-tab-active, .cb-tab-active:hover {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+  font-weight: 600;
+}
+
 /* ── Opleiding badge ─────────────────────────────────────────────────────── */
 .opleiding-badge {
   display: inline-block;

@@ -53,12 +53,16 @@ const router = createRouter({
     },
     {
       path: '/admin',
-      name: 'admin-dashboard',
-      component: () => import('../views/AdminCompetentiebeheer.vue'),
+      redirect: '/admin/competentiesets',
     },
     {
-      path: '/admin/competenties',
-      name: 'admin-competenties',
+      path: '/admin/competentiesets',
+      name: 'admin-competentiesets',
+      component: () => import('../views/Admincompetentiesets.vue'),
+    },
+    {
+      path: '/admin/competentiebeheer',
+      name: 'admin-competentiebeheer',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
   ],
