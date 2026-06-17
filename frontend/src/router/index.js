@@ -1,19 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
-<<<<<<< HEAD
 import { useAuthStore } from '../stores/auth'
 
-=======
->>>>>>> feature/admin-commissie-schermen
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-<<<<<<< HEAD
       redirect: '/login',
-=======
-      redirect: '/login'
->>>>>>> feature/admin-commissie-schermen
     },
     {
       path: '/login',
@@ -77,7 +70,6 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
-<<<<<<< HEAD
       path: '/docent/studenten',
       name: 'docent-studenten-overzicht',
       component: () => import('../views/DocentStudenten.vue'),
@@ -143,16 +135,6 @@ const router = createRouter({
       component: () => import('../views/StudentContract.vue'),
     },
     {
-      path: '/student/logboek',
-      name: 'student-logboek',
-      component: () => import('../views/StudentLogboek.vue'),
-    },
-    {
-      path: '/student/evaluatie',
-      name: 'student-evaluatie',
-      component: () => import('../views/StudentEvaluatie.vue'),
-    },
-    {
       path: '/student/eindoverzicht',
       name: 'student-eindoverzicht',
       component: () => import('../views/StudentEindoverzicht.vue'),
@@ -175,9 +157,7 @@ const router = createRouter({
     {
       path: '/admin/competenties',
       name: 'admin-competenties',
-=======
-      path: '/admin',
-      redirect: '/admin/competentiesets',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {
       path: '/admin/competentiesets',
@@ -187,7 +167,6 @@ const router = createRouter({
     {
       path: '/admin/competentiebeheer',
       name: 'admin-competentiebeheer',
->>>>>>> feature/admin-commissie-schermen
       component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {
