@@ -281,6 +281,8 @@ app.get('/api/stages', verifyToken, (req, res) => {
   if (status) {
     where += ' AND s.status = ?';
     params.push(status);
+  } else {
+    where += " AND s.status IN ('in_behandeling', 'ingediend', 'aanpassing_gevraagd')";
   }
 
   if (zoek) {
