@@ -378,3 +378,24 @@ CREATE TABLE evaluatie_score (
         FOREIGN KEY (competentie_id) REFERENCES competentie(competentie_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+-- ------------------------------------------------------------
+-- 19. EINDBEOORDELING (finale score door de docent na de eindevaluatie)
+-- ------------------------------------------------------------
+CREATE TABLE eindbeoordeling (
+    eindbeoordeling_id  INT             NOT NULL AUTO_INCREMENT,
+    stage_id            INT             NOT NULL,
+    beoordelaar_id      INT             NOT NULL,
+    score               DECIMAL(5,2)    NOT NULL,
+    motivatie           TEXT,
+    beoordeeld_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (eindbeoordeling_id),
+    UNIQUE KEY uq_eindbeoordeling_stage (stage_id),
+    CONSTRAINT fk_eindbeoordeling_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_eindbeoordeling_beoordelaar
+        FOREIGN KEY (beoordelaar_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
