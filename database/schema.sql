@@ -10,6 +10,17 @@ CREATE DATABASE IF NOT EXISTS stageverloop
 USE stageverloop;
 
 -- ------------------------------------------------------------
+-- 0. OPLEIDING
+-- ------------------------------------------------------------
+CREATE TABLE opleiding (
+    opleiding_id        INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(150)    NOT NULL,
+
+    PRIMARY KEY (opleiding_id),
+    UNIQUE KEY uq_opleiding_naam (naam)
+);
+
+-- ------------------------------------------------------------
 -- 1. GEBRUIKER
 -- ------------------------------------------------------------
 CREATE TABLE gebruiker (
@@ -33,12 +44,16 @@ CREATE TABLE student (
     gebruiker_id        INT             NOT NULL UNIQUE,
     studentnummer       VARCHAR(20)     NOT NULL UNIQUE,
     opleiding           VARCHAR(100)    NOT NULL,
+    opleiding_id        INT             NULL,
     academiejaar        VARCHAR(20)     NOT NULL,
 
     PRIMARY KEY (student_id),
     CONSTRAINT fk_student_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_student_opleiding
+        FOREIGN KEY (opleiding_id) REFERENCES opleiding(opleiding_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- ------------------------------------------------------------
@@ -353,7 +368,10 @@ CREATE TABLE competentie (
     is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    PRIMARY KEY (competentie_id)
+    PRIMARY KEY (competentie_id),
+    CONSTRAINT fk_competentie_opleiding
+        FOREIGN KEY (opleiding_id) REFERENCES opleiding(opleiding_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 -- ------------------------------------------------------------
 -- 17. COMPETENTIESET

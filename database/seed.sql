@@ -5,6 +5,12 @@
 USE stageverloop;
 
 -- --------------------------------------------
+-- 0. OPLEIDING
+-- --------------------------------------------
+INSERT INTO opleiding (opleiding_id, naam) VALUES
+  (1, 'Toegepaste Informatica');
+
+-- --------------------------------------------
 -- 1. GEBRUIKERS
 -- --------------------------------------------
 INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES
@@ -17,8 +23,8 @@ INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, r
 -- --------------------------------------------
 -- 2. STUDENT
 -- --------------------------------------------
-INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES
-  (1, 'EHB-2024-0842', 'Toegepaste Informatica', '2024-2025');
+INSERT INTO student (gebruiker_id, studentnummer, opleiding, opleiding_id, academiejaar) VALUES
+  (1, 'EHB-2024-0842', 'Toegepaste Informatica', 1, '2024-2025');
 
 -- --------------------------------------------
 -- 3. DOCENT
