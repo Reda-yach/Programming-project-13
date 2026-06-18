@@ -1003,6 +1003,138 @@ app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, (req, res) => {
   });
 });
 
+// Score + toelichting voor één competentie binnen een evaluatie opslaan (upsert).
+// Eén route voor student, mentor en docent: elke rol schrijft naar zijn eigen
+// evaluatie. Bestaat de rij al (zelfde evaluatie + competentie), dan wordt ze
+// bijgewerkt; anders aangemaakt.
+app.put('/api/evaluaties/:id/competentie/:competentie_id', verifyToken, (req, res) => {
+  const { id, competentie_id } = req.params;
+  const { score, toelichting } = req.body;
+  db.query(
+    `INSERT INTO evaluatie_score (evaluatie_id, competentie_id, score, toelichting)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE score = VALUES(score), toelichting = VALUES(toelichting)`,
+    [id, competentie_id, score ?? null, toelichting ?? null],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Score opgeslagen!' });
+    }
+  );
+});
+
+// Vergelijkingsoverzicht voor een stage + fase: per competentie de score en
+// toelichting van student, mentor en docent naast elkaar. Voedt o.a. het
+// twee-koloms mentor-scherm (zelfevaluatie student links, mentor-score rechts).
+app.get('/api/stages/:id/evaluatie/vergelijking', verifyToken, (req, res) => {
+  const { id } = req.params;
+  const { fase } = req.query;
+  if (!['tussentijds', 'finaal'].includes(fase)) {
+    return res.status(400).json({ error: 'fase moet tussentijds of finaal zijn' });
+  }
+
+  // 1. Student + opleiding van deze stage.
+  db.query(
+    'SELECT student_id FROM stage WHERE stage_id = ?',
+    [id],
+    (err, stageRows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (stageRows.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
+      const student_id = stageRows[0].student_id;
+
+      db.query(
+        'SELECT opleiding_id FROM student WHERE student_id = ?',
+        [student_id],
+        (errOpl, oplRows) => {
+          if (errOpl) return res.status(500).json({ error: errOpl.message });
+          const opleiding_id = oplRows.length ? oplRows[0].opleiding_id : null;
+
+          // 2. Evaluaties van deze stage + fase, per type.
+          db.query(
+            `SELECT e.evaluatie_id, e.type, e.opmerking, e.totaalscore, e.ingediend, e.ingevuld_op
+               FROM student_evaluatie se
+               JOIN evaluatie e ON se.evaluatie_id = e.evaluatie_id
+              WHERE se.stage_id = ? AND e.fase = ?`,
+            [id, fase],
+            (errEv, evRows) => {
+              if (errEv) return res.status(500).json({ error: errEv.message });
+
+              const evaluaties = { student: null, mentor: null, docent: null };
+              evRows.forEach((e) => { evaluaties[e.type] = e; });
+              const evaluatieIds = evRows.map((e) => e.evaluatie_id);
+
+              // 3. Competenties van de opleiding + rubrieken.
+              db.query(
+                `SELECT competentie_id, naam, omschrijving, gewicht
+                   FROM competentie
+                  WHERE opleiding_id = ? AND is_actief = TRUE
+                  ORDER BY naam ASC`,
+                [opleiding_id],
+                (errC, competenties) => {
+                  if (errC) return res.status(500).json({ error: errC.message });
+                  if (competenties.length === 0) {
+                    return res.json({ stage_id: Number(id), fase, evaluaties, competenties: [] });
+                  }
+                  const competentieIds = competenties.map((c) => c.competentie_id);
+
+                  db.query(
+                    `SELECT competentie_id, punt, beschrijving
+                       FROM competentie_rubriek
+                      WHERE competentie_id IN (?)
+                      ORDER BY punt DESC`,
+                    [competentieIds],
+                    (errR, rubrieken) => {
+                      if (errR) return res.status(500).json({ error: errR.message });
+
+                      // 4. Alle scores van de betrokken evaluaties.
+                      const scoresKlaar = (scores) => {
+                        // Map: evaluatie_id -> competentie_id -> {score, toelichting}
+                        const perEval = {};
+                        scores.forEach((s) => {
+                          (perEval[s.evaluatie_id] ||= {})[s.competentie_id] = {
+                            score: s.score,
+                            toelichting: s.toelichting,
+                          };
+                        });
+                        const scoreVoor = (type, competentieId) => {
+                          const ev = evaluaties[type];
+                          if (!ev) return null;
+                          return perEval[ev.evaluatie_id]?.[competentieId] ?? null;
+                        };
+
+                        const resultaat = competenties.map((c) => ({
+                          ...c,
+                          rubrieken: rubrieken.filter((r) => r.competentie_id === c.competentie_id),
+                          student: scoreVoor('student', c.competentie_id),
+                          mentor: scoreVoor('mentor', c.competentie_id),
+                          docent: scoreVoor('docent', c.competentie_id),
+                        }));
+
+                        res.json({ stage_id: Number(id), fase, evaluaties, competenties: resultaat });
+                      };
+
+                      if (evaluatieIds.length === 0) return scoresKlaar([]);
+                      db.query(
+                        `SELECT evaluatie_id, competentie_id, score, toelichting
+                           FROM evaluatie_score
+                          WHERE evaluatie_id IN (?)`,
+                        [evaluatieIds],
+                        (errS, scores) => {
+                          if (errS) return res.status(500).json({ error: errS.message });
+                          scoresKlaar(scores);
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
 // Alle evaluaties voor een stage ophalen (overzicht per fase/type)
 app.get('/api/stages/:id/evaluatie-overzicht', verifyToken, (req, res) => {
   const { id } = req.params;
