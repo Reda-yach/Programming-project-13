@@ -37,8 +37,8 @@ const router = createRouter({
     {
       path: '/docent',
       name: 'docent',
-      // /docent is enkel het landingspunt na login → toon de studentenlijst.
-      redirect: '/docent/studenten',
+      // /docent is enkel het landingspunt na login → toon de studentenlijst (kaarten-view).
+      redirect: '/docent-studenten',
     },
     {
       path: '/docent-logboek-overzicht',
@@ -66,24 +66,15 @@ const router = createRouter({
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     {
+      // Oude tabel-UI is verwijderd; bestaande links naar /docent/studenten
+      // (AppTopbar, evaluatie-terugknoppen) leiden nu naar de kaarten-view.
       path: '/docent/studenten',
-      name: 'docent-studenten-overzicht',
-      component: () => import('../views/DocentStudenten.vue'),
+      redirect: '/docent-studenten',
     },
     {
       path: '/aanvragen',
       name: 'commissie-aanvragen',
       component: () => import('@/views/CommissieAanvragenView.vue'),
-    },
-    {
-      path: '/docent/studenten/:id',
-      name: 'docent-student-detail',
-      component: () => import('../views/DocentStudentDetail.vue'),
-    },
-    {
-      path: '/docent/logboek/:studentId',
-      name: 'docent-logboek-detail-nieuw',
-      component: () => import('../views/DocentLogboekDetail.vue'),
     },
     {
       path: '/docent/aanvragen',
