@@ -47,6 +47,15 @@ const maxScore = computed(() => {
   return huidigEval.value.competenties.length * 5
 })
 
+// Aantal competenties zonder score; indienen kan pas als dit 0 is.
+const aantalOpen = computed(() => {
+  if (!huidigEval.value?.competenties) return 0
+  return huidigEval.value.competenties.filter(c => c.score == null).length
+})
+const allesIngevuld = computed(() =>
+  !!huidigEval.value?.competenties?.length && aantalOpen.value === 0
+)
+
 function getRubriekBeschrijving(competentie, punt) {
   return competentie.rubrieken?.find(r => r.punt === punt)?.beschrijving || ''
 }
@@ -229,15 +238,18 @@ onMounted(async () => {
             <strong style="font-size:22px;">{{ totaalScore }}</strong>
             <span class="text-secondary">/{{ maxScore }}</span>
           </div>
-          <button
-            v-if="!isIngediend"
-            class="btn btn-primary"
-            style="margin-left:auto;"
-            :disabled="bezig"
-            @click="indienen"
-          >
-            {{ bezig ? 'Bezig…' : 'Evaluatie indienen →' }}
-          </button>
+          <div v-if="!isIngediend" style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+            <span v-if="!allesIngevuld" class="text-secondary text-sm">
+              Nog {{ aantalOpen }} competentie{{ aantalOpen === 1 ? '' : 's' }} in te vullen
+            </span>
+            <button
+              class="btn btn-primary"
+              :disabled="bezig || !allesIngevuld"
+              @click="indienen"
+            >
+              {{ bezig ? 'Bezig…' : 'Evaluatie indienen →' }}
+            </button>
+          </div>
         </div>
         <p v-if="fout" style="color:var(--red,#dc2626);margin-top:8px;font-size:14px;">{{ fout }}</p>
       </template>
