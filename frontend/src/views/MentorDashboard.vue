@@ -92,13 +92,22 @@ async function tekenContract(stageId) {
           <p class="text-secondary text-xs font-semibold mb-8">Stagecontract</p>
           <div class="flex gap-16" style="flex-wrap:wrap;">
             <span class="text-sm">
-              Student: {{ contracten[stagiair.stage_id].getekend_student ? '✅' : '⏳' }}
+              Student:
+              <span class="badge" :class="contracten[stagiair.stage_id].getekend_student ? 'badge-green' : 'badge-gray'">
+                {{ contracten[stagiair.stage_id].getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
             </span>
             <span class="text-sm">
-              Mentor: {{ contracten[stagiair.stage_id].getekend_mentor ? '✅' : '⏳' }}
+              Mentor:
+              <span class="badge" :class="contracten[stagiair.stage_id].getekend_mentor ? 'badge-green' : 'badge-gray'">
+                {{ contracten[stagiair.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
             </span>
             <span class="text-sm">
-              Docent: {{ contracten[stagiair.stage_id].getekend_docent ? '✅' : '⏳' }}
+              Docent:
+              <span class="badge" :class="contracten[stagiair.stage_id].getekend_docent ? 'badge-green' : 'badge-gray'">
+                {{ contracten[stagiair.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
             </span>
           </div>
           <div v-if="berichtContract[stagiair.stage_id]" class="text-sm mt-8" style="color:#16a34a;">

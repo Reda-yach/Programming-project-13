@@ -71,16 +71,16 @@ function formatTijd(ts) {
   return isNaN(d) ? '' : d.toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 function meldingPresentatie(b) {
-  if (b === 'aanpassing_gevraagd') return { icon: '✏️', titel: 'Aanpassing gevraagd' }
-  if (b === 'afgewezen') return { icon: '❌', titel: 'Aanvraag afgewezen' }
-  if (b === 'goedgekeurd') return { icon: '✅', titel: 'Aanvraag goedgekeurd' }
-  return { icon: '📋', titel: 'Beslissing commissie' }
+  if (b === 'aanpassing_gevraagd') return { titel: 'Aanpassing gevraagd' }
+  if (b === 'afgewezen') return { titel: 'Aanvraag afgewezen' }
+  if (b === 'goedgekeurd') return { titel: 'Aanvraag goedgekeurd' }
+  return { titel: 'Beslissing commissie' }
 }
 
 const meldingen = computed(() =>
   (stageStore.meldingen || []).map((m) => {
     const p = meldingPresentatie(m.beslissing)
-    return { icon: p.icon, titel: p.titel, tijd: formatTijd(m.beslist_op), sub: m.motivatie || 'Geen motivatie opgegeven.' }
+    return { titel: p.titel, tijd: formatTijd(m.beslist_op), sub: m.motivatie || 'Geen motivatie opgegeven.' }
   })
 )
 
@@ -153,7 +153,7 @@ const evaluaties = computed(() => {
           <!-- Goedgekeurd / lopend -->
           <template v-if="stageStatus === 'goedgekeurd'">
             <div class="flex items-center gap-12" style="margin-bottom: 16px;">
-              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏢</div>
+              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--text-secondary);flex-shrink:0;">{{ stage?.bedrijf?.charAt(0) || '' }}</div>
               <div>
                 <div class="font-semibold" style="font-size:16px;">{{ stage?.bedrijf }}</div>
                 <div class="text-secondary text-xs">
@@ -288,7 +288,7 @@ const evaluaties = computed(() => {
             Nu invullen →
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
 
@@ -317,7 +317,7 @@ const evaluaties = computed(() => {
             Nu invullen →
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
       </section>
@@ -336,7 +336,6 @@ const evaluaties = computed(() => {
             class="notification-item"
             :style="i === meldingen.length - 1 ? 'border-bottom:none;' : ''"
           >
-            <div class="notification-icon">{{ melding.icon }}</div>
             <div class="notification-body">
               <div class="flex justify-between">
                 <span class="notification-title">{{ melding.titel }}</span>

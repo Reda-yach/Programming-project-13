@@ -1944,7 +1944,7 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
         g.naam,
         st.studentnummer,
         b.naam AS bedrijf,
-        b.adres AS bedrijf_adres,
+        CONCAT_WS(' ', b.straatnaam, b.huisnummer, b.postcode, b.gemeente) AS bedrijf_adres,
         gm.voornaam AS mentor_voornaam,
         gm.naam AS mentor_naam,
         gm.email AS mentor_email,

@@ -132,9 +132,21 @@ function formatDatum(d) {
         <div class="card mt-16">
           <h2 class="form-section-title">Stagecontract</h2>
           <div v-if="contract" class="flex gap-24 mt-12" style="flex-wrap:wrap;">
-            <span>Student: {{ contract.getekend_student ? '✅' : '⏳' }}</span>
-            <span>Mentor: {{ contract.getekend_mentor ? '✅' : '⏳' }}</span>
-            <span>Docent: {{ contract.getekend_docent ? '✅' : '⏳' }}</span>
+            <span>Student:
+              <span class="badge" :class="contract.getekend_student ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span>Mentor:
+              <span class="badge" :class="contract.getekend_mentor ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span>Docent:
+              <span class="badge" :class="contract.getekend_docent ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
           </div>
           <p v-if="contractVolledig" class="text-sm mt-8" style="color:#16a34a;">
             Volledig ondertekend op {{ formatDatum(contract.getekend_op) }}

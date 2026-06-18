@@ -119,21 +119,18 @@ function formatDatum(d) {
 
           <div class="flex gap-24" style="flex-wrap:wrap;">
             <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_student ? '✅' : '⏳' }}</span>
               <div>
                 <p class="font-semibold text-sm">Student</p>
                 <p class="text-secondary text-xs">{{ contract.getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}</p>
               </div>
             </div>
             <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_mentor ? '✅' : '⏳' }}</span>
               <div>
                 <p class="font-semibold text-sm">Stagementor</p>
                 <p class="text-secondary text-xs">{{ contract.getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}</p>
               </div>
             </div>
             <div class="flex items-center gap-8">
-              <span style="font-size:20px;">{{ contract.getekend_docent ? '✅' : '⏳' }}</span>
               <div>
                 <p class="font-semibold text-sm">EhB-docent</p>
                 <p class="text-secondary text-xs">{{ contract.getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}</p>

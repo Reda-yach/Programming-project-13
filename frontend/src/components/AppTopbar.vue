@@ -16,11 +16,12 @@ function uitloggen() {
   router.push('/login')
 }
 
+// ponytail: overzichtsroutes bestaan enkel met streepjes; /docent/logboek en /docent/evaluaties hadden geen route → lege tabs
 const navLinks = [
-  { label: 'Studenten',  to: '/docent/studenten', key: 'studenten' },
-  { label: 'Logboek',    to: '/docent/logboek',   key: 'logboek'   },
-  { label: 'Evaluaties', to: '/docent/evaluaties', key: 'evaluaties'},
-  { label: 'Aanvragen',  to: '/docent/aanvragen',  key: 'aanvragen' },
+  { label: 'Studenten',  to: '/docent/studenten',        key: 'studenten' },
+  { label: 'Logboek',    to: '/docent-logboek-overzicht', key: 'logboek'   },
+  { label: 'Evaluaties', to: '/docent-evaluaties',        key: 'evaluaties'},
+  { label: 'Aanvragen',  to: '/docent-aanvragen',         key: 'aanvragen' },
 ]
 </script>
 

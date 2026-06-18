@@ -37,7 +37,8 @@ const router = createRouter({
     {
       path: '/docent',
       name: 'docent',
-      component: () => import('../views/DocentInCommissieStudenten.vue'),
+      // /docent is enkel het landingspunt na login → toon de studentenlijst.
+      redirect: '/docent/studenten',
     },
     {
       path: '/docent-logboek-overzicht',

@@ -176,9 +176,21 @@ function formatDatum(d) {
           class="mt-12" style="border-top:1px solid var(--border);padding-top:12px;">
           <p class="text-secondary text-xs font-semibold mb-8">Stagecontract</p>
           <div class="flex gap-16 items-center" style="flex-wrap:wrap;">
-            <span class="text-sm">Student: {{ contracten[student.stage_id].getekend_student ? '✅' : '⏳' }}</span>
-            <span class="text-sm">Mentor: {{ contracten[student.stage_id].getekend_mentor ? '✅' : '⏳' }}</span>
-            <span class="text-sm">Docent: {{ contracten[student.stage_id].getekend_docent ? '✅' : '⏳' }}</span>
+            <span class="text-sm">Student:
+              <span class="badge" :class="contracten[student.stage_id].getekend_student ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span class="text-sm">Mentor:
+              <span class="badge" :class="contracten[student.stage_id].getekend_mentor ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span class="text-sm">Docent:
+              <span class="badge" :class="contracten[student.stage_id].getekend_docent ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
             <span v-if="berichtContract[student.stage_id]" class="text-sm" style="color:#16a34a;">
               {{ berichtContract[student.stage_id] }}
             </span>
