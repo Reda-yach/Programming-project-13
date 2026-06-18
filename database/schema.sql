@@ -387,3 +387,27 @@ CREATE TABLE competentieset (
     PRIMARY KEY (set_id)
 
 );
+
+-- ------------------------------------------------------------
+-- 18. EVALUATIE SCORE (score per competentie per evaluatie)
+-- ------------------------------------------------------------
+-- Vervangt evaluatie_criterium + rubriek: in plaats van competentie- en
+-- rubriektekst per evaluatie te kopieren, verwijst elke score rechtstreeks
+-- naar competentie_id. De vergelijking student/mentor/docent wordt zo een
+-- simpele JOIN en de rubriektekst staat enkel in competentie_rubriek.
+CREATE TABLE evaluatie_score (
+    score_id            INT             NOT NULL AUTO_INCREMENT,
+    evaluatie_id        INT             NOT NULL,
+    competentie_id      INT             NOT NULL,
+    score               INT             NULL,
+    toelichting         TEXT            NULL,
+
+    PRIMARY KEY (score_id),
+    UNIQUE KEY uq_eval_competentie (evaluatie_id, competentie_id),
+    CONSTRAINT fk_evalscore_evaluatie
+        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_evalscore_competentie
+        FOREIGN KEY (competentie_id) REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
