@@ -597,27 +597,72 @@ app.post('/api/stages/:id/beslissing', verifyToken, (req, res) => {
             return;
           }
 
-          // Bij goedkeuring automatisch een contract aanmaken (als dat nog niet bestaat)
-          if (waarde === 'goedgekeurd') {
-            db.query(
-              `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
-               VALUES (?, FALSE, FALSE, FALSE)`,
-              [id],
-              () => {
-                res.json({
-                  message: 'Beslissing opgeslagen, status bijgewerkt en contract aangemaakt!',
-                  beslissing_id: insertResult.insertId,
-                  nieuwe_status: waarde,
-                });
+          // Gebruiker_id van de student ophalen voor notificaties
+          db.query(
+            `SELECT g.gebruiker_id FROM stage s
+             JOIN student st ON s.student_id = st.student_id
+             JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
+             WHERE s.stage_id = ?`,
+            [id],
+            (errG, gebruikerRows) => {
+              const studentGebruikerId = gebruikerRows?.[0]?.gebruiker_id;
+
+              const stuurNotificatie = (bericht, type, callback) => {
+                if (!studentGebruikerId) return callback();
+                db.query(
+                  `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, ?)`,
+                  [studentGebruikerId, bericht, type],
+                  callback
+                );
+              };
+
+              // Bij goedkeuring: contract aanmaken + 2 notificaties
+              if (waarde === 'goedgekeurd') {
+                db.query(
+                  `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+                   VALUES (?, FALSE, FALSE, FALSE)`,
+                  [id],
+                  () => {
+                    stuurNotificatie(
+                      'Je stage-aanvraag is goedgekeurd door de commissie!',
+                      'goed',
+                      () => stuurNotificatie(
+                        'Je stagecontract staat klaar om te ondertekenen. Ga naar je dashboard om het te tekenen.',
+                        'info',
+                        () => res.json({
+                          message: 'Beslissing opgeslagen, status bijgewerkt en contract aangemaakt!',
+                          beslissing_id: insertResult.insertId,
+                          nieuwe_status: waarde,
+                        })
+                      )
+                    );
+                  }
+                );
+              } else if (waarde === 'afgewezen') {
+                const reden = motivatie ? ` Reden: ${motivatie}` : '';
+                stuurNotificatie(
+                  `Je stage-aanvraag is afgewezen door de commissie.${reden}`,
+                  'fout',
+                  () => res.json({
+                    message: 'Beslissing opgeslagen en status bijgewerkt!',
+                    beslissing_id: insertResult.insertId,
+                    nieuwe_status: waarde,
+                  })
+                );
+              } else {
+                const reden = motivatie ? ` Reden: ${motivatie}` : '';
+                stuurNotificatie(
+                  `De commissie vraagt aanpassingen aan je stage-aanvraag.${reden}`,
+                  'waarschuwing',
+                  () => res.json({
+                    message: 'Beslissing opgeslagen en status bijgewerkt!',
+                    beslissing_id: insertResult.insertId,
+                    nieuwe_status: waarde,
+                  })
+                );
               }
-            );
-          } else {
-            res.json({
-              message: 'Beslissing opgeslagen en status bijgewerkt!',
-              beslissing_id: insertResult.insertId,
-              nieuwe_status: waarde,
-            });
-          }
+            }
+          );
         }
       );
     }
