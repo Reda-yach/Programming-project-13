@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const db = require('./db');
 const { verifyToken, requireRol } = require('./middleware/auth');
+const { mailBijNotificatie } = require('./services/mail');
 
 const app = express();
 
@@ -618,6 +619,7 @@ app.post('/api/stages/:id/beslissing', verifyToken, (req, res) => {
 
               const stuurNotificatie = (bericht, type, callback) => {
                 if (!studentGebruikerId) return callback();
+                mailBijNotificatie(studentGebruikerId, bericht);
                 db.query(
                   `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, ?)`,
                   [studentGebruikerId, bericht, type],
@@ -1292,6 +1294,7 @@ app.post('/api/commissie', verifyToken, requireRol('commissie', 'admin'), (req, 
           ? `Je stage-aanvraag is afgekeurd. Reden: ${motivatie}`
           : `Je stage-aanvraag vereist aanpassingen: ${motivatie}`;
 
+        mailBijNotificatie(rows[0].gebruiker_id, bericht);
         db.query(`
           INSERT INTO notificatie (gebruiker_id, bericht)
           VALUES (?, ?)
@@ -1846,9 +1849,11 @@ app.put('/api/logboeken/:id/aftekenen', verifyToken, requireRol('mentor', 'docen
         if (err2 || rows.length === 0) {
           return res.json({ message: 'Logboek afgetekend!' });
         }
+        const logboekBericht = `Mentor heeft logboek week ${rows[0].week_nummer} bevestigd`;
+        mailBijNotificatie(rows[0].gebruiker_id, logboekBericht);
         db.query(
           `INSERT INTO notificatie (gebruiker_id, bericht) VALUES (?, ?)`,
-          [rows[0].gebruiker_id, `Mentor heeft logboek week ${rows[0].week_nummer} bevestigd`],
+          [rows[0].gebruiker_id, logboekBericht],
           () => res.json({ message: 'Logboek afgetekend en student verwittigd!' })
         );
       });
@@ -1951,10 +1956,12 @@ app.post('/api/evaluaties/tussentijds', verifyToken, requireRol('mentor', 'docen
           return res.json({ message: 'Tussentijdse evaluatie aangemaakt!', id: evaluatie_id });
         }
 
+        const tussentijdsBericht = 'Je mentor heeft een tussentijdse evaluatie ingevuld. Bekijk je evaluaties.';
+        mailBijNotificatie(rows[0].gebruiker_id, tussentijdsBericht);
         db.query(`
           INSERT INTO notificatie (gebruiker_id, bericht)
           VALUES (?, ?)
-        `, [rows[0].gebruiker_id, 'Je mentor heeft een tussentijdse evaluatie ingevuld. Bekijk je evaluaties.'], () => {
+        `, [rows[0].gebruiker_id, tussentijdsBericht], () => {
           res.json({ message: 'Tussentijdse evaluatie aangemaakt en student verwittigd!', id: evaluatie_id });
         });
       });
@@ -2016,6 +2023,7 @@ app.put('/api/evaluaties/:id/indienen', verifyToken, (req, res) => {
 
         let teller = 0;
         notificaties.forEach(([gebruiker_id, bericht]) => {
+          mailBijNotificatie(gebruiker_id, bericht);
           db.query(`
             INSERT INTO notificatie (gebruiker_id, bericht)
             VALUES (?, ?)
@@ -2072,6 +2080,7 @@ app.post('/api/probleemmeldingen', verifyToken, requireRol('mentor', 'admin'), (
 
         const bericht = `Nieuwe probleemmelding van mentor ${rows[0].mentor_voornaam} ${rows[0].mentor_naam}: "${titel}"`;
 
+        mailBijNotificatie(rows[0].docent_gebruiker_id, bericht);
         db.query(`
           INSERT INTO notificatie (gebruiker_id, bericht)
           VALUES (?, ?)

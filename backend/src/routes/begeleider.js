@@ -5,6 +5,7 @@ const db = require('../db');
 // verifyToken lokale kopie (zelfde als in stage.js)
 
 const { verifyToken } = require('../middleware/auth');
+const { mailBijNotificatie } = require('../services/mail');
 
 // Alle openstaande aanvragen ophalen
 router.get('/openstaand', verifyToken, (req, res) => {
@@ -161,6 +162,7 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
 
     // 3. Student op de hoogte brengen.
     const melding = bouwMelding(beslissing, motivatie?.trim());
+    mailBijNotificatie(studentGebruikerId, melding.bericht);
     await conn.execute(
       `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, ?)`,
       [studentGebruikerId, melding.bericht, melding.type],
