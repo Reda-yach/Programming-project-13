@@ -268,41 +268,8 @@ CREATE TABLE student_evaluatie (
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- ------------------------------------------------------------
--- 12. EVALUATIECRITERIUM
--- ------------------------------------------------------------
-CREATE TABLE evaluatie_criterium (
-    criterium_id        INT             NOT NULL AUTO_INCREMENT,
-    evaluatie_id        INT             NOT NULL,
-    opleiding           VARCHAR(100)    NOT NULL,
-    competentie         VARCHAR(150)    NOT NULL,
-    naam                VARCHAR(150)    NOT NULL,
-    score               INT,
-    mentor_score        INT,
-    mentor_feedback     TEXT,
-    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 1.00,
-    volgorde            INT             NOT NULL DEFAULT 0,
-
-    PRIMARY KEY (criterium_id),
-    CONSTRAINT fk_criterium_evaluatie
-        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- ------------------------------------------------------------
--- 13. RUBRIEK
--- ------------------------------------------------------------
-CREATE TABLE rubriek (
-    rubriek_id          INT             NOT NULL AUTO_INCREMENT,
-    criterium_id        INT             NOT NULL,
-    punt                INT             NOT NULL,
-    beschrijving        TEXT            NOT NULL,
-
-    PRIMARY KEY (rubriek_id),
-    CONSTRAINT fk_rubriek_criterium
-        FOREIGN KEY (criterium_id) REFERENCES evaluatie_criterium(criterium_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
+-- (12/13: evaluatie_criterium + rubriek verwijderd — vervangen door
+--  evaluatie_score, gedefinieerd na de competentie-tabel verderop.)
 
 -- ------------------------------------------------------------
 -- 14. COMPETENTIE RUBRIEK (per score-niveau beschrijving, ingesteld door admin)
