@@ -859,7 +859,9 @@ app.get('/api/stages/:id/evaluaties', verifyToken, (req, res) => {
   });
 });
 
-// Één evaluatie ophalen met criteria en rubrieken
+// Één evaluatie ophalen met competenties (uit het template) + scores van deze evaluatie.
+// De competentielijst komt uit competentie/competentie_rubriek voor de opleiding van
+// de student; de scores komen uit evaluatie_score (leeg zolang nog niet ingevuld).
 app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
   const { id } = req.params;
   db.query(`
@@ -888,43 +890,65 @@ app.get('/api/evaluaties/:id', verifyToken, (req, res) => {
 
     const evaluatie = results[0];
 
-    // Haal criteria op
+    // Bepaal de opleiding van de student die bij deze evaluatie hoort.
     db.query(`
-      SELECT criterium_id, competentie, naam, score, gewicht, volgorde
-      FROM evaluatie_criterium
-      WHERE evaluatie_id = ?
-      ORDER BY volgorde ASC
-    `, [id], (err2, criteria) => {
-      if (err2) {
-        res.status(500).json({ error: err2.message });
+      SELECT st.opleiding_id
+      FROM student_evaluatie se
+      JOIN student st ON se.student_id = st.student_id
+      WHERE se.evaluatie_id = ?
+      LIMIT 1
+    `, [id], (errOpl, oplRows) => {
+      if (errOpl) {
+        res.status(500).json({ error: errOpl.message });
         return;
       }
+      const opleiding_id = oplRows.length ? oplRows[0].opleiding_id : null;
 
-      // Haal rubrieken op per criterium
-      const criteriaIds = criteria.map(c => c.criterium_id);
-      if (criteriaIds.length === 0) {
-        evaluatie.criteria = [];
-        return res.json(evaluatie);
-      }
-
+      // Competenties van die opleiding + (eventuele) score van deze evaluatie.
       db.query(`
-        SELECT rubriek_id, criterium_id, punt, beschrijving
-        FROM rubriek
-        WHERE criterium_id IN (?)
-        ORDER BY punt ASC
-      `, [criteriaIds], (err3, rubrieken) => {
-        if (err3) {
-          res.status(500).json({ error: err3.message });
+        SELECT
+          c.competentie_id,
+          c.naam,
+          c.omschrijving,
+          c.gewicht,
+          es.score,
+          es.toelichting
+        FROM competentie c
+        LEFT JOIN evaluatie_score es
+          ON es.competentie_id = c.competentie_id AND es.evaluatie_id = ?
+        WHERE c.opleiding_id = ? AND c.is_actief = TRUE
+        ORDER BY c.naam ASC
+      `, [id, opleiding_id], (err2, competenties) => {
+        if (err2) {
+          res.status(500).json({ error: err2.message });
           return;
         }
 
-        // Rubrieken koppelen aan hun criterium
-        evaluatie.criteria = criteria.map(c => ({
-          ...c,
-          rubrieken: rubrieken.filter(r => r.criterium_id === c.criterium_id)
-        }));
+        const competentieIds = competenties.map(c => c.competentie_id);
+        if (competentieIds.length === 0) {
+          evaluatie.competenties = [];
+          return res.json(evaluatie);
+        }
 
-        res.json(evaluatie);
+        // Rubriekbeschrijvingen per score-niveau ophalen.
+        db.query(`
+          SELECT competentie_id, punt, beschrijving
+          FROM competentie_rubriek
+          WHERE competentie_id IN (?)
+          ORDER BY punt DESC
+        `, [competentieIds], (err3, rubrieken) => {
+          if (err3) {
+            res.status(500).json({ error: err3.message });
+            return;
+          }
+
+          evaluatie.competenties = competenties.map(c => ({
+            ...c,
+            rubrieken: rubrieken.filter(r => r.competentie_id === c.competentie_id)
+          }));
+
+          res.json(evaluatie);
+        });
       });
     });
   });
@@ -955,7 +979,9 @@ app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, (req, res) => {
     if (err || stageRows.length === 0) return res.status(404).json({ error: 'Stage niet gevonden' });
     const student_id = stageRows[0].student_id;
 
-    // Maak de evaluatie aan
+    // Maak de evaluatie aan. De competentielijst wordt niet meer gekopieerd:
+    // die komt bij het ophalen rechtstreeks uit het competentie-template van de
+    // opleiding, en scores worden los opgeslagen in evaluatie_score.
     db.query(
       'INSERT INTO evaluatie (beoordelaar_id, type, fase) VALUES (?, ?, ?)',
       [beoordelaar_id, type, fase],
@@ -969,56 +995,7 @@ app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, (req, res) => {
           [student_id, evaluatie_id, id],
           (err3) => {
             if (err3) return res.status(500).json({ error: err3.message });
-
-            // Haal competenties op (opleiding_id=1 als standaard)
-            db.query(
-              'SELECT competentie_id, naam, omschrijving, gewicht FROM competentie ORDER BY naam ASC',
-              (err4, competenties) => {
-                if (err4 || competenties.length === 0) {
-                  return res.json({ message: 'Evaluatie aangemaakt (geen competenties gevonden)', evaluatie_id });
-                }
-
-                // Maak criteria aan per competentie
-                const values = competenties.map((c, i) => [evaluatie_id, c.naam, c.naam, c.omschrijving || null, null, c.gewicht || 1, i + 1]);
-                db.query(
-                  'INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, gewicht, volgorde) VALUES ?',
-                  [values],
-                  (err5, insertResult) => {
-                    if (err5) return res.status(500).json({ error: err5.message });
-
-                    const firstCriteriumId = insertResult.insertId;
-                    const competentieIds = competenties.map(c => c.competentie_id);
-                    db.query(
-                      'SELECT competentie_id, punt, beschrijving FROM competentie_rubriek WHERE competentie_id IN (?)',
-                      [competentieIds],
-                      (err6, compRubrieken) => {
-                        if (err6 || compRubrieken.length === 0) {
-                          return res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
-                        }
-                        const rubriekValues = [];
-                        compRubrieken.forEach(r => {
-                          const idx = competenties.findIndex(c => c.competentie_id === r.competentie_id);
-                          if (idx !== -1) {
-                            rubriekValues.push([firstCriteriumId + idx, r.punt, r.beschrijving]);
-                          }
-                        });
-                        if (rubriekValues.length === 0) {
-                          return res.json({ message: 'Evaluatie aangemaakt met criteria!', evaluatie_id });
-                        }
-                        db.query(
-                          'INSERT INTO rubriek (criterium_id, punt, beschrijving) VALUES ?',
-                          [rubriekValues],
-                          (err7) => {
-                            if (err7) return res.status(500).json({ error: err7.message });
-                            res.json({ message: 'Evaluatie aangemaakt met criteria en rubrieken!', evaluatie_id });
-                          }
-                        );
-                      }
-                    );
-                  }
-                );
-              }
-            );
+            res.json({ message: 'Evaluatie aangemaakt!', evaluatie_id });
           }
         );
       }
