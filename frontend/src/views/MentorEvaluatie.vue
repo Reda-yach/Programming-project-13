@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+
+const route = useRoute()
 
 const navLinks = ref([
   { label: 'Studenten', to: '/mentor' },
@@ -19,7 +22,36 @@ const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 
 onMounted(async () => {
   await laadEvaluaties()
+  // Kwam je via een tussentijds/eind-knop op de studentenpagina? Open dan
+  // meteen de juiste evaluatie voor die student + fase.
+  const { stage, fase } = route.query
+  if (stage && fase) await openVoorFase(stage, fase)
 })
+
+// Opent de mentor-evaluatie voor een specifieke stage + fase.
+// Bestaat ze nog niet, dan wordt ze eerst aangemaakt.
+async function openVoorFase(stageId, fase) {
+  let match = evaluaties.value.find(
+    (e) => String(e.stage_id) === String(stageId) && e.fase === fase,
+  )
+  if (!match) {
+    const token = localStorage.getItem('token')
+    try {
+      await fetch(`http://localhost:3000/api/stages/${stageId}/evaluatie/aanmaken`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fase, type: 'mentor' }),
+      })
+      await laadEvaluaties()
+      match = evaluaties.value.find(
+        (e) => String(e.stage_id) === String(stageId) && e.fase === fase,
+      )
+    } catch {
+      laadFout.value = 'Evaluatie kon niet geopend worden.'
+    }
+  }
+  if (match) await selecteer(match)
+}
 
 async function laadEvaluaties() {
   laadFout.value = ''
@@ -97,10 +129,10 @@ function totaalScore() {
   return criteria.value.reduce((sum, c) => sum + (c.score || 0), 0)
 }
 
-function typeLabel(type) {
-  if (type === 'tussentijds') return 'Tussentijdse evaluatie'
-  if (type === 'eind') return 'Eindevaluatie'
-  return type
+function faseLabel(fase) {
+  if (fase === 'tussentijds') return 'Tussentijdse evaluatie'
+  if (fase === 'finaal') return 'Eindevaluatie'
+  return 'Evaluatie'
 }
 </script>
 
@@ -128,7 +160,7 @@ function typeLabel(type) {
             <h2 class="form-section-title">
               {{ evaluatie.voornaam }} {{ evaluatie.student_naam }}
             </h2>
-            <span class="badge badge-yellow">{{ typeLabel(evaluatie.type) }}</span>
+            <span class="badge badge-yellow">{{ faseLabel(evaluatie.fase) }}</span>
           </div>
           <p class="text-secondary text-sm mt-4">{{ evaluatie.bedrijf }}</p>
           <p class="text-secondary text-sm">
@@ -147,7 +179,7 @@ function typeLabel(type) {
         </button>
 
         <h1 class="page-title">
-          {{ typeLabel(geselecteerde.type) }}
+          {{ faseLabel(geselecteerde.fase) }}
         </h1>
         <p class="text-secondary text-sm mt-4 mb-8">
           {{ geselecteerde.voornaam }} {{ geselecteerde.student_naam }} — {{ geselecteerde.bedrijf }}

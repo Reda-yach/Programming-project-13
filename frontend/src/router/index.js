@@ -61,11 +61,6 @@ const router = createRouter({
       component: () => import('../views/DocentLogboekDetail.vue'),
     },
     {
-      path: '/mentor',
-      name: 'mentor',
-      component: () => import('../views/MentorLogboek.vue'),
-    },
-    {
       path: '/docent-studenten',
       name: 'docent-studenten',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
@@ -112,8 +107,8 @@ const router = createRouter({
     },
     {
       path: '/mentor',
-      name: 'mentor-dashboard',
-      component: () => import('../views/MentorDashboard.vue'),
+      name: 'mentor-studenten',
+      component: () => import('../views/MentorStudenten.vue'),
     },
     {
       path: '/mentor/logboeken',
@@ -136,14 +131,9 @@ const router = createRouter({
       component: () => import('../views/StudentContract.vue'),
     },
     {
-      path: '/student/logboek',
-      name: 'student-logboek',
-      component: () => import('../views/StudentLogboek.vue'),
-    },
-    {
-      path: '/student/evaluatie',
-      name: 'student-evaluatie',
-      component: () => import('../views/StudentEvaluatie.vue'),
+      path: '/student/evaluatie/:fase',
+      name: 'student-evaluatie-invullen',
+      component: () => import('../views/StudentEvaluatieInvullen.vue'),
     },
     {
       path: '/student/eindoverzicht',
@@ -168,6 +158,16 @@ const router = createRouter({
     {
       path: '/admin/competenties',
       name: 'admin-competenties',
+      component: () => import('../views/AdminCompetentiebeheer.vue'),
+    },
+    {
+      path: '/admin/competentiesets',
+      name: 'admin-competentiesets',
+      component: () => import('../views/Admincompetentiesets.vue'),
+    },
+    {
+      path: '/admin/competentiebeheer',
+      name: 'admin-competentiebeheer',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
     },
     {

@@ -133,6 +133,14 @@ CREATE TABLE stagecontract (
     getekend_student    BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_mentor     BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_docent     BOOLEAN         NOT NULL DEFAULT FALSE,
+    -- Muis-handtekeningen, opgeslagen als base64 PNG data-URL uit het canvas.
+    -- 'docent' = de docent in de stagecommissie (zelfde persoon die goedkeurt).
+    handtekening_student LONGTEXT       NULL,
+    handtekening_mentor  LONGTEXT       NULL,
+    handtekening_docent  LONGTEXT       NULL,
+    getekend_student_op  TIMESTAMP      NULL,
+    getekend_mentor_op   TIMESTAMP      NULL,
+    getekend_docent_op   TIMESTAMP      NULL,
     getekend_op         TIMESTAMP       NULL,
 
     PRIMARY KEY (contract_id),
@@ -282,7 +290,23 @@ CREATE TABLE rubriek (
 );
 
 -- ------------------------------------------------------------
--- 14. COMMISSIE BESLISSING
+-- 14. COMPETENTIE RUBRIEK (per score-niveau beschrijving, ingesteld door admin)
+-- ------------------------------------------------------------
+CREATE TABLE competentie_rubriek (
+    rubriek_id          INT             NOT NULL AUTO_INCREMENT,
+    competentie_id      INT             NOT NULL,
+    punt                INT             NOT NULL,
+    beschrijving        TEXT,
+
+    PRIMARY KEY (rubriek_id),
+    UNIQUE KEY uq_comp_punt (competentie_id, punt),
+    CONSTRAINT fk_comprubriek_competentie
+        FOREIGN KEY (competentie_id) REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 15. COMMISSIE BESLISSING
 -- ------------------------------------------------------------
 CREATE TABLE commissie_beslissing (
     beslissing_id       INT             NOT NULL AUTO_INCREMENT,
@@ -316,4 +340,32 @@ CREATE TABLE notificatie (
     CONSTRAINT fk_notificatie_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
+);
+-- ------------------------------------------------------------
+-- 16. COMPETENTIE
+-- ------------------------------------------------------------
+CREATE TABLE competentie (
+    competentie_id      INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    omschrijving        TEXT,
+    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
+    opleiding_id        INT             NOT NULL,
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (competentie_id)
+);
+-- ------------------------------------------------------------
+-- 17. COMPETENTIESET
+-- ------------------------------------------------------------
+CREATE TABLE competentieset (
+    set_id              INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(255)    NOT NULL,
+    opleiding           VARCHAR(255)    NOT NULL,
+    jaar                VARCHAR(20)     NOT NULL,
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (set_id)
+
 );

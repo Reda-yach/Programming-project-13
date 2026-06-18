@@ -119,10 +119,12 @@ CREATE TABLE IF NOT EXISTS competentie (
     omschrijving        TEXT,
     gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 0,
     opleiding_id        INT             NOT NULL,
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (competentie_id)
 );
+<<<<<<< HEAD
 
 -- --------------------------------------------
 -- MIGRATIE 14: validatie kolommen toevoegen aan logboek
@@ -196,3 +198,22 @@ ALTER TABLE stage
 ALTER TABLE logboek_dag
   ADD COLUMN reflectie TEXT AFTER activiteiten,
   ADD COLUMN leerpunten TEXT AFTER reflectie;
+=======
+-- ────────────────────────────────────────────────────────────────────────────
+-- MIGRATIE 14: is_actief kolom toevoegen aan competentie (soft delete)
+-- ────────────────────────────────────────────────────────────────────────────
+ALTER TABLE competentie
+  ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
+  -- ────────────────────────────────────────────────────────────────────────────
+-- MIGRATIE 15: Competentieset tabel aanmaken om sets van competenties te beheren
+-- ────────────────────────────────────────────────────────────────────────────
+  CREATE TABLE competentieset (
+    set_id       INT          NOT NULL AUTO_INCREMENT,
+    naam         VARCHAR(255) NOT NULL,
+    opleiding    VARCHAR(255) NOT NULL,
+    jaar         VARCHAR(20)  NOT NULL,
+    is_actief    BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (set_id)
+);
+>>>>>>> feature/admin-commissie-schermen
