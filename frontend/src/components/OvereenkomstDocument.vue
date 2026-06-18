@@ -43,7 +43,7 @@ const partijen = [
         <p class="font-semibold">{{ contract.bedrijf }}</p>
         <p class="text-secondary text-xs mt-4">
           {{ contract.bedrijf_straatnaam }} {{ contract.bedrijf_huisnummer }},
-          {{ contract.bedrijf_postcode }} {{ contract.bedrijf_gemeente }}
+          {{ contract.bedrijf_postcode }} {{ contract.bedrijf_gemeente }}<template v-if="contract.bedrijf_provincie"> ({{ contract.bedrijf_provincie }})</template>
         </p>
       </div>
       <div>

@@ -50,7 +50,14 @@ const straatnaam = ref('')
 const huisnummer = ref('')
 const postcode = ref('')
 const gemeente = ref('')
+const provincie = ref('')
 const opdracht = ref('')
+
+// Belgische provincies voor de dropdown
+const provincies = [
+  'Antwerpen', 'Limburg', 'Oost-Vlaanderen', 'Vlaams-Brabant', 'West-Vlaanderen',
+  'Henegouwen', 'Luik', 'Luxemburg', 'Namen', 'Waals-Brabant',
+]
 const datumVan = ref('')
 const datumTot = ref('')
 
@@ -78,6 +85,7 @@ onMounted(async () => {
     huisnummer.value = a.bedrijf_huisnummer || ''
     postcode.value = a.bedrijf_postcode || ''
     gemeente.value = a.bedrijf_gemeente || ''
+    provincie.value = a.bedrijf_provincie || ''
     opdracht.value = a.beschrijving || ''
     datumVan.value = (a.startdatum || '').slice(0, 10)
     datumTot.value = (a.einddatum || '').slice(0, 10)
@@ -115,6 +123,7 @@ function valideer() {
   }
 
   if (!gemeente.value.trim()) fouten.gemeente = 'Gemeente is verplicht'
+  if (!provincie.value) fouten.provincie = 'Provincie is verplicht'
 
   if (!opdracht.value.trim()) {
     fouten.opdracht = 'Omschrijving is verplicht'
@@ -164,6 +173,7 @@ function bouwAanvraag() {
       huisnummer: huisnummer.value,
       postcode: postcode.value,
       gemeente: gemeente.value,
+      provincie: provincie.value,
       opdracht: opdracht.value,
       datumVan: datumVan.value,
       datumTot: datumTot.value,
@@ -292,6 +302,14 @@ function naarDashboard() {
               <label for="gemeente">Gemeente</label>
               <input type="text" id="gemeente" v-model="gemeente" placeholder="bv. Anderlecht" :readonly="alIngediend">
               <span v-if="fouten.gemeente" class="form-error">{{ fouten.gemeente }}</span>
+            </div>
+            <div class="form-group">
+              <label for="provincie">Provincie</label>
+              <select id="provincie" v-model="provincie" :disabled="alIngediend">
+                <option value="" disabled>Kies een provincie</option>
+                <option v-for="p in provincies" :key="p" :value="p">{{ p }}</option>
+              </select>
+              <span v-if="fouten.provincie" class="form-error">{{ fouten.provincie }}</span>
             </div>
             <div class="form-group form-group-full">
               <label for="opdracht">Omschrijving opdracht</label>

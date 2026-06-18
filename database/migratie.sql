@@ -207,3 +207,9 @@ CREATE TABLE IF NOT EXISTS competentieset (
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id)
 );
+
+-- --------------------------------------------
+-- MIGRATIE 22: provincie toevoegen aan bedrijf
+-- --------------------------------------------
+ALTER TABLE bedrijf
+  ADD COLUMN provincie VARCHAR(50) AFTER gemeente;

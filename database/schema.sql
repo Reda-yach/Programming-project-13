@@ -67,6 +67,7 @@ CREATE TABLE bedrijf (
     huisnummer              VARCHAR(10),
     postcode                VARCHAR(10),
     gemeente                VARCHAR(100),
+    provincie               VARCHAR(50),
     sector                  VARCHAR(100),
     contact_email           VARCHAR(150),
     contact_telefoonnummer  VARCHAR(20),

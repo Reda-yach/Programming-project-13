@@ -131,7 +131,7 @@ app.get('/api/gebruikers', verifyToken, (req, res) => {
 app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
   const { id } = req.params;
   db.query(
-    'SELECT bedrijf_id, naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer FROM bedrijf WHERE bedrijf_id = ?',
+    'SELECT bedrijf_id, naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer FROM bedrijf WHERE bedrijf_id = ?',
     [id],
     (err, results) => {
       if (err) {
@@ -149,10 +149,10 @@ app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
 
 // Nieuw bedrijf aanmaken
 app.post('/api/bedrijven', verifyToken, (req, res) => {
-  const { naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer } = req.body;
+  const { naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer } = req.body;
   db.query(
-    'INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer],
+    'INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer],
     (err, results) => {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -377,6 +377,7 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
       b.huisnummer AS bedrijf_huisnummer,
       b.postcode AS bedrijf_postcode,
       b.gemeente AS bedrijf_gemeente,
+      b.provincie AS bedrijf_provincie,
       b.sector AS bedrijf_sector,
       gm.voornaam AS mentor_voornaam,
       gm.naam AS mentor_naam,
@@ -472,6 +473,7 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           b.huisnummer AS bedrijf_huisnummer,
           b.postcode AS bedrijf_postcode,
           b.gemeente AS bedrijf_gemeente,
+          b.provincie AS bedrijf_provincie,
           b.sector AS bedrijf_sector,
           gm.voornaam AS mentor_voornaam,
           gm.naam AS mentor_naam,
@@ -1331,6 +1333,7 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
       b.huisnummer AS bedrijf_huisnummer,
       b.postcode AS bedrijf_postcode,
       b.gemeente AS bedrijf_gemeente,
+      b.provincie AS bedrijf_provincie,
       b.sector AS bedrijf_sector,
       gm.voornaam AS mentor_voornaam,
       gm.naam AS mentor_naam,
@@ -2330,10 +2333,10 @@ app.post('/api/contracten/:stage_id', verifyToken, (req, res) => {
 // Bedrijf updaten (voor aanpassing-flow)
 app.put('/api/bedrijven/:id', verifyToken, (req, res) => {
   const { id } = req.params;
-  const { naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer } = req.body;
+  const { naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer } = req.body;
   db.query(
-    `UPDATE bedrijf SET naam=?, straatnaam=?, huisnummer=?, postcode=?, gemeente=?, sector=?, contact_email=?, contact_telefoonnummer=? WHERE bedrijf_id=?`,
-    [naam, straatnaam, huisnummer, postcode, gemeente, sector, contact_email, contact_telefoonnummer, id],
+    `UPDATE bedrijf SET naam=?, straatnaam=?, huisnummer=?, postcode=?, gemeente=?, provincie=?, sector=?, contact_email=?, contact_telefoonnummer=? WHERE bedrijf_id=?`,
+    [naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer, id],
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       if (result.affectedRows === 0) return res.status(404).json({ error: 'Bedrijf niet gevonden' });
