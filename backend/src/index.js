@@ -1146,6 +1146,7 @@ app.get('/api/stages/:id/evaluatie-overzicht', verifyToken, (req, res) => {
       e.totaalscore,
       e.opmerking,
       e.ingevuld_op,
+      e.ingediend,
       g.voornaam AS beoordelaar_voornaam,
       g.naam AS beoordelaar_naam,
       (SELECT COUNT(*) FROM evaluatie_score es WHERE es.evaluatie_id = e.evaluatie_id AND es.score IS NOT NULL) AS ingevulde_criteria,
@@ -2010,14 +2011,30 @@ app.put('/api/evaluaties/:id/indienen', verifyToken, (req, res) => {
     if (results.length === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
     if (results[0].ingediend) return res.status(400).json({ error: 'Evaluatie is al ingediend en kan niet meer aangepast worden' });
 
-    // Vergrendelen
+    // Controleer dat alle competenties van de opleiding een score hebben.
     db.query(`
-      UPDATE evaluatie
-      SET ingediend = 1,
-          ingediend_op = NOW()
-      WHERE evaluatie_id = ?
-    `, [id], (err2) => {
-      if (err2) return res.status(500).json({ error: err2.message });
+      SELECT
+        (SELECT COUNT(*) FROM competentie c
+           JOIN student_evaluatie se ON se.evaluatie_id = ?
+           JOIN student st ON se.student_id = st.student_id
+          WHERE c.opleiding_id = st.opleiding_id AND c.is_actief = TRUE) AS totaal,
+        (SELECT COUNT(*) FROM evaluatie_score es
+          WHERE es.evaluatie_id = ? AND es.score IS NOT NULL) AS ingevuld
+    `, [id, id], (errCheck, telRows) => {
+      if (errCheck) return res.status(500).json({ error: errCheck.message });
+      const { totaal, ingevuld } = telRows[0];
+      if (totaal === 0 || ingevuld < totaal) {
+        return res.status(400).json({ error: 'Vul eerst alle competenties in voor je de evaluatie indient.' });
+      }
+
+      // Vergrendelen
+      db.query(`
+        UPDATE evaluatie
+        SET ingediend = 1,
+            ingediend_op = NOW()
+        WHERE evaluatie_id = ?
+      `, [id], (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
 
       // Notificatie naar student en docent
       db.query(`
@@ -2054,6 +2071,7 @@ app.put('/api/evaluaties/:id/indienen', verifyToken, (req, res) => {
             }
           });
         });
+      });
       });
     });
   });
