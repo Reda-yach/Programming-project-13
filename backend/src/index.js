@@ -2242,28 +2242,8 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
 // (Oude /criteria/:criterium_id/docent route verwijderd — docentscores lopen nu
 //  via PUT /api/evaluaties/:id/competentie/:competentie_id.)
 
-// Evaluatie totaalscore berekenen en opslaan (som van score × gewicht).
-app.put('/api/evaluaties/:id/totaalscore', verifyToken, requireRol('docent', 'admin'), (req, res) => {
-  const { id } = req.params;
-
-  db.query(`
-    SELECT SUM(es.score * c.gewicht) as totaal, SUM(c.gewicht) as max_gewicht
-    FROM evaluatie_score es
-    JOIN competentie c ON es.competentie_id = c.competentie_id
-    WHERE es.evaluatie_id = ?
-  `, [id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-
-    const totaal = results[0].totaal || 0;
-
-    db.query(`
-      UPDATE evaluatie SET totaalscore = ? WHERE evaluatie_id = ?
-    `, [totaal, id], (err2) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      res.json({ message: 'Totaalscore bijgewerkt!', totaalscore: totaal });
-    });
-  });
-});
+// (Oude docent-only /:id/totaalscore route verwijderd — werd niet meer gebruikt;
+//  de mentor slaat zijn totaalscore rechtstreeks op via PUT /api/evaluaties/:id.)
 
 // ============================================================
 // MENTOR EVALUATIES

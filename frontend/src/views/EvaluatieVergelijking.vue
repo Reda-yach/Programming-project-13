@@ -20,8 +20,10 @@ const titel = fase === 'tussentijds' ? 'Tussentijdse evaluatie' : 'Eindevaluatie
 const isDocent = !!route.params.stageId
 const navLinks = isDocent
   ? [
-      { label: 'Dashboard', to: '/docent' },
-      { label: 'Studenten', to: '/docent/studenten' },
+      { label: 'Studenten', to: '/docent-studenten' },
+      { label: 'Logboek', to: '/docent-logboek-overzicht' },
+      { label: 'Evaluaties', to: '/docent-evaluaties' },
+      { label: 'Aanvragen', to: '/docent-aanvragen' },
     ]
   : [
       { label: 'Dashboard', to: '/student' },
