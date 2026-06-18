@@ -35,20 +35,20 @@ const fout = ref(null)
 const stageId = computed(() => stageStore.aanvraag?.stage_id)
 const isIngediend = computed(() => !!huidigEval.value?.ingediend)
 const heeftRubrieken = computed(() =>
-  huidigEval.value?.criteria?.some(c => c.rubrieken?.length > 0)
+  huidigEval.value?.competenties?.some(c => c.rubrieken?.length > 0)
 )
 
 const totaalScore = computed(() => {
-  if (!huidigEval.value?.criteria) return 0
-  return huidigEval.value.criteria.reduce((sum, c) => sum + (c.score ?? 0), 0)
+  if (!huidigEval.value?.competenties) return 0
+  return huidigEval.value.competenties.reduce((sum, c) => sum + (c.score ?? 0), 0)
 })
 const maxScore = computed(() => {
-  if (!huidigEval.value?.criteria) return 0
-  return huidigEval.value.criteria.length * 5
+  if (!huidigEval.value?.competenties) return 0
+  return huidigEval.value.competenties.length * 5
 })
 
-function getRubriekBeschrijving(criterium, punt) {
-  return criterium.rubrieken?.find(r => r.punt === punt)?.beschrijving || ''
+function getRubriekBeschrijving(competentie, punt) {
+  return competentie.rubrieken?.find(r => r.punt === punt)?.beschrijving || ''
 }
 
 async function laadOfMaakAan() {
@@ -90,16 +90,22 @@ async function laadDetail(evaluatieId) {
   huidigEval.value = data
 }
 
-async function setScore(criteriumId, score) {
+async function setScore(competentieId, score) {
   if (isIngediend.value) return
-  const criterium = huidigEval.value.criteria.find(c => c.criterium_id === criteriumId)
-  if (!criterium) return
+  const competentie = huidigEval.value.competenties.find(c => c.competentie_id === competentieId)
+  if (!competentie) return
   // Toggle: klik op reeds geselecteerde score = deselecteer
-  criterium.score = criterium.score === score ? null : score
-  await fetch(`${API}/evaluaties/criteria/${criteriumId}/score`, {
+  competentie.score = competentie.score === score ? null : score
+  await bewaarCompetentie(competentie)
+}
+
+// Slaat score + toelichting van één competentie op (upsert in evaluatie_score).
+async function bewaarCompetentie(competentie) {
+  if (isIngediend.value) return
+  await fetch(`${API}/evaluaties/${huidigEval.value.evaluatie_id}/competentie/${competentie.competentie_id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ score: criterium.score }),
+    body: JSON.stringify({ score: competentie.score ?? null, toelichting: competentie.toelichting ?? null }),
   })
 }
 
@@ -171,11 +177,12 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in huidigEval.criteria" :key="c.criterium_id">
+              <template v-for="c in huidigEval.competenties" :key="c.competentie_id">
+              <tr>
                 <td class="td-criteria">
-                  <span class="font-semibold">{{ c.competentie }}</span>
-                  <div v-if="c.naam && c.naam !== c.competentie" class="text-xs text-secondary" style="margin-top:4px;font-weight:400;">
-                    {{ c.naam }}
+                  <span class="font-semibold">{{ c.naam }}</span>
+                  <div v-if="c.omschrijving" class="text-xs text-secondary" style="margin-top:4px;font-weight:400;">
+                    {{ c.omschrijving }}
                   </div>
                 </td>
                 <td
@@ -184,7 +191,7 @@ onMounted(async () => {
                   class="td-score"
                   :class="{ 'score-selected': c.score === s, 'score-hover': !isIngediend }"
                   :style="isIngediend ? 'cursor:default;' : 'cursor:pointer;'"
-                  @click="setScore(c.criterium_id, s)"
+                  @click="setScore(c.competentie_id, s)"
                 >
                   <template v-if="getRubriekBeschrijving(c, s)">
                     {{ getRubriekBeschrijving(c, s) }}
@@ -199,6 +206,19 @@ onMounted(async () => {
                   <span class="text-secondary"> /5</span>
                 </td>
               </tr>
+              <tr>
+                <td class="td-toelichting" colspan="6">
+                  <textarea
+                    v-model="c.toelichting"
+                    class="toelichting-input"
+                    rows="2"
+                    :readonly="isIngediend"
+                    :placeholder="isIngediend ? '' : 'Toelichting: beschrijf hoe je deze competentie hebt aangetoond tijdens je stage…'"
+                    @change="bewaarCompetentie(c)"
+                  ></textarea>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -354,5 +374,34 @@ onMounted(async () => {
 .punt-waarde {
   font-weight: 700;
   font-size: 15px;
+}
+
+.td-toelichting {
+  padding: 8px 14px 16px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-top: none;
+  background: #fff;
+}
+
+.toelichting-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  color: var(--text-primary, #111);
+}
+
+.toelichting-input:focus {
+  outline: none;
+  border-color: #111;
+}
+
+.toelichting-input[readonly] {
+  background: var(--gray50, #f9fafb);
+  color: var(--text-secondary, #6b7280);
 }
 </style>
