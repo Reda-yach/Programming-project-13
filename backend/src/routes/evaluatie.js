@@ -17,8 +17,8 @@ function getStageVanStudent(student_id, callback) {
   );
 }
 
-// Haalt één evaluatie op met criteria + rubrieken.
-// Resolveert callback (err, evaluatie | null).
+// Haalt één evaluatie op met competenties (uit het template) + scores van deze
+// evaluatie. Resolveert callback (err, evaluatie | null).
 function getEvaluatieMetCriteria(evaluatie_id, callback) {
   db.query(
     `SELECT e.evaluatie_id, e.beoordelaar_id, e.type, e.totaalscore, e.opmerking, e.ingevuld_op,
@@ -33,34 +33,50 @@ function getEvaluatieMetCriteria(evaluatie_id, callback) {
 
       const evaluatie = rows[0];
 
+      // Opleiding van de student bij deze evaluatie bepalen.
       db.query(
-        `SELECT criterium_id, opleiding, competentie, naam, score, gewicht, volgorde
-           FROM evaluatie_criterium
-          WHERE evaluatie_id = ?
-          ORDER BY volgorde ASC, criterium_id ASC`,
+        `SELECT st.opleiding_id
+           FROM student_evaluatie se
+           JOIN student st ON se.student_id = st.student_id
+          WHERE se.evaluatie_id = ?
+          LIMIT 1`,
         [evaluatie_id],
-        (err2, criteria) => {
-          if (err2) return callback(err2);
-
-          const criteriaIds = criteria.map((c) => c.criterium_id);
-          if (criteriaIds.length === 0) {
-            evaluatie.criteria = [];
-            return callback(null, evaluatie);
-          }
+        (errOpl, oplRows) => {
+          if (errOpl) return callback(errOpl);
+          const opleiding_id = oplRows.length ? oplRows[0].opleiding_id : null;
 
           db.query(
-            `SELECT rubriek_id, criterium_id, punt, beschrijving
-               FROM rubriek
-              WHERE criterium_id IN (?)
-              ORDER BY criterium_id ASC, punt ASC`,
-            [criteriaIds],
-            (err3, rubrieken) => {
-              if (err3) return callback(err3);
-              evaluatie.criteria = criteria.map((c) => ({
-                ...c,
-                rubrieken: rubrieken.filter((r) => r.criterium_id === c.criterium_id),
-              }));
-              return callback(null, evaluatie);
+            `SELECT c.competentie_id, c.naam, c.omschrijving, c.gewicht, es.score, es.toelichting
+               FROM competentie c
+               LEFT JOIN evaluatie_score es
+                 ON es.competentie_id = c.competentie_id AND es.evaluatie_id = ?
+              WHERE c.opleiding_id = ? AND c.is_actief = TRUE
+              ORDER BY c.naam ASC`,
+            [evaluatie_id, opleiding_id],
+            (err2, competenties) => {
+              if (err2) return callback(err2);
+
+              const competentieIds = competenties.map((c) => c.competentie_id);
+              if (competentieIds.length === 0) {
+                evaluatie.competenties = [];
+                return callback(null, evaluatie);
+              }
+
+              db.query(
+                `SELECT competentie_id, punt, beschrijving
+                   FROM competentie_rubriek
+                  WHERE competentie_id IN (?)
+                  ORDER BY punt DESC`,
+                [competentieIds],
+                (err3, rubrieken) => {
+                  if (err3) return callback(err3);
+                  evaluatie.competenties = competenties.map((c) => ({
+                    ...c,
+                    rubrieken: rubrieken.filter((r) => r.competentie_id === c.competentie_id),
+                  }));
+                  return callback(null, evaluatie);
+                }
+              );
             }
           );
         }

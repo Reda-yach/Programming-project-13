@@ -1148,10 +1148,11 @@ app.get('/api/stages/:id/evaluatie-overzicht', verifyToken, (req, res) => {
       e.ingevuld_op,
       g.voornaam AS beoordelaar_voornaam,
       g.naam AS beoordelaar_naam,
-      (SELECT COUNT(*) FROM evaluatie_criterium ec WHERE ec.evaluatie_id = e.evaluatie_id AND ec.score IS NOT NULL) AS ingevulde_criteria,
-      (SELECT COUNT(*) FROM evaluatie_criterium ec WHERE ec.evaluatie_id = e.evaluatie_id) AS totaal_criteria
+      (SELECT COUNT(*) FROM evaluatie_score es WHERE es.evaluatie_id = e.evaluatie_id AND es.score IS NOT NULL) AS ingevulde_criteria,
+      (SELECT COUNT(*) FROM competentie c WHERE c.opleiding_id = st.opleiding_id AND c.is_actief = TRUE) AS totaal_criteria
     FROM evaluatie e
     JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+    JOIN student st ON se.student_id = st.student_id
     JOIN gebruiker g ON e.beoordelaar_id = g.gebruiker_id
     WHERE se.stage_id = ?
     ORDER BY e.ingevuld_op DESC
@@ -1187,24 +1188,8 @@ app.post('/api/evaluaties', verifyToken, (req, res) => {
   });
 });
 
-// Score op een criterium updaten
-app.put('/api/evaluaties/criteria/:criterium_id/score', verifyToken, (req, res) => {
-  const { criterium_id } = req.params;
-  const { score } = req.body;
-  db.query(`
-    UPDATE evaluatie_criterium SET score = ? WHERE criterium_id = ?
-  `, [score, criterium_id], (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    if (results.affectedRows === 0) {
-      res.status(404).json({ error: 'Criterium niet gevonden' });
-      return;
-    }
-    res.json({ message: 'Score bijgewerkt!' });
-  });
-});
+// (Oude /criteria/:criterium_id/score route verwijderd — scores lopen nu via
+//  PUT /api/evaluaties/:id/competentie/:competentie_id.)
 
 // ============================================================
 // NOTIFICATIES
@@ -1946,20 +1931,8 @@ app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'admin'
   });
 });
 
-// Score per criterium opslaan (mentor)
-app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, (req, res) => {
-  const { criterium_id } = req.params;
-  const { score } = req.body;
-  db.query(
-    `UPDATE evaluatie_criterium SET score = ? WHERE criterium_id = ?`,
-    [score, criterium_id],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (results.affectedRows === 0) return res.status(404).json({ error: 'Criterium niet gevonden' });
-      res.json({ message: 'Score opgeslagen!' });
-    }
-  );
-});
+// (Oude /criteria/:criterium_id/mentor route verwijderd — mentorscores lopen nu
+//  via PUT /api/evaluaties/:id/competentie/:competentie_id.)
 
 // Evaluatie totaalscore en opmerking bijwerken
 app.put('/api/evaluaties/:id', verifyToken, (req, res) => {
@@ -2248,37 +2221,18 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
 // DOCENT EVALUATIE
 // ============================================================
 
-// Docent score en feedback opslaan per criterium
-app.put('/api/evaluaties/criteria/:criterium_id/docent', verifyToken, requireRol('docent', 'admin'), (req, res) => {
-  const { criterium_id } = req.params;
-  const { docent_score, docent_feedback } = req.body;
+// (Oude /criteria/:criterium_id/docent route verwijderd — docentscores lopen nu
+//  via PUT /api/evaluaties/:id/competentie/:competentie_id.)
 
-  if (![5, 3, 1, 0].includes(docent_score)) {
-    return res.status(400).json({ error: 'Score moet 5, 3, 1 of 0 zijn' });
-  }
-
-  db.query(`
-    UPDATE evaluatie_criterium
-    SET score = ?,
-        mentor_feedback = COALESCE(mentor_feedback, ?)
-    WHERE criterium_id = ?
-  `, [docent_score, docent_feedback, criterium_id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (results.affectedRows === 0) {
-      return res.status(404).json({ error: 'Criterium niet gevonden' });
-    }
-    res.json({ message: 'Docent score opgeslagen!' });
-  });
-});
-
-// Evaluatie totaalscore berekenen en opslaan
+// Evaluatie totaalscore berekenen en opslaan (som van score × gewicht).
 app.put('/api/evaluaties/:id/totaalscore', verifyToken, requireRol('docent', 'admin'), (req, res) => {
   const { id } = req.params;
 
   db.query(`
-    SELECT SUM(score * gewicht) as totaal, SUM(gewicht) as max_gewicht
-    FROM evaluatie_criterium
-    WHERE evaluatie_id = ?
+    SELECT SUM(es.score * c.gewicht) as totaal, SUM(c.gewicht) as max_gewicht
+    FROM evaluatie_score es
+    JOIN competentie c ON es.competentie_id = c.competentie_id
+    WHERE es.evaluatie_id = ?
   `, [id], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
 
@@ -2327,24 +2281,8 @@ app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'docent
   });
 });
 
-// Mentor score en feedback opslaan per criterium
-app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
-  const { criterium_id } = req.params;
-  const { mentor_score, mentor_feedback } = req.body;
-
-  db.query(`
-    UPDATE evaluatie_criterium
-    SET mentor_score = ?,
-        mentor_feedback = ?
-    WHERE criterium_id = ?
-  `, [mentor_score, mentor_feedback, criterium_id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (results.affectedRows === 0) {
-      return res.status(404).json({ error: 'Criterium niet gevonden' });
-    }
-    res.json({ message: 'Mentor score en feedback opgeslagen!' });
-  });
-});
+// (Tweede oude /criteria/:criterium_id/mentor route verwijderd — mentorscores
+//  lopen nu via PUT /api/evaluaties/:id/competentie/:competentie_id.)
 
 // ============================================================
 // EXTRA STAGE- EN CONTRACTROUTES
