@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <AppTopbar active="evaluatie" />
+    <AppTopbar active="evaluaties" />
     <main class="content">
 
       <p class="breadcrumb">

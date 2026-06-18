@@ -9,7 +9,7 @@ const stageId = route.params.stageId
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
   { label: 'Logboek', to: '/docent-logboek-overzicht' },
-  { label: 'Evaluaties', to: '/docent-evaluaties' },
+  { label: 'Evaluaties', to: '/docent-evaluaties', match: '/docent/evaluaties' },
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])
 
