@@ -1,9 +1,10 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 
 const route = useRoute()
+const API = 'http://localhost:3000/api'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/mentor' },
@@ -11,9 +12,12 @@ const navLinks = ref([
   { label: 'Evaluatie', to: '/mentor/evaluatie' },
 ])
 
+const SCORE_NIVEAUS = [5, 3, 1, 0]
+
 const evaluaties = ref([])
 const geselecteerde = ref(null)
-const criteria = ref([])
+const rijen = ref([])            // per competentie: student- + mentorscore
+const studentIngediend = ref(false)
 const opmerking = ref('')
 const bezig = ref(false)
 const bericht = ref('')
@@ -28,6 +32,10 @@ onMounted(async () => {
   if (stage && fase) await openVoorFase(stage, fase)
 })
 
+function token() {
+  return localStorage.getItem('token')
+}
+
 // Opent de mentor-evaluatie voor een specifieke stage + fase.
 // Bestaat ze nog niet, dan wordt ze eerst aangemaakt.
 async function openVoorFase(stageId, fase) {
@@ -35,11 +43,10 @@ async function openVoorFase(stageId, fase) {
     (e) => String(e.stage_id) === String(stageId) && e.fase === fase,
   )
   if (!match) {
-    const token = localStorage.getItem('token')
     try {
-      await fetch(`http://localhost:3000/api/stages/${stageId}/evaluatie/aanmaken`, {
+      await fetch(`${API}/stages/${stageId}/evaluatie/aanmaken`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body: JSON.stringify({ fase, type: 'mentor' }),
       })
       await laadEvaluaties()
@@ -55,10 +62,9 @@ async function openVoorFase(stageId, fase) {
 
 async function laadEvaluaties() {
   laadFout.value = ''
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/mentors/${gebruiker.id}/evaluaties`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(`${API}/mentors/${gebruiker.id}/evaluaties`, {
+      headers: { Authorization: `Bearer ${token()}` },
     })
     if (!res.ok) throw new Error('Ophalen mislukt')
     evaluaties.value = await res.json()
@@ -67,66 +73,84 @@ async function laadEvaluaties() {
   }
 }
 
+// Laadt het vergelijkingsoverzicht: per competentie de zelfevaluatie van de
+// student naast de (eigen) mentorscore.
 async function selecteer(evaluatie) {
   geselecteerde.value = evaluatie
   bericht.value = ''
   opmerking.value = evaluatie.opmerking || ''
-  criteria.value = []
-  const token = localStorage.getItem('token')
+  rijen.value = []
+  studentIngediend.value = false
   try {
-    const res = await fetch(`http://localhost:3000/api/evaluaties/${evaluatie.evaluatie_id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const res = await fetch(
+      `${API}/stages/${evaluatie.stage_id}/evaluatie/vergelijking?fase=${evaluatie.fase}`,
+      { headers: { Authorization: `Bearer ${token()}` } },
+    )
     const data = await res.json()
-    criteria.value = (data.criteria || []).map((c) => ({ ...c }))
-  } catch {
-    criteria.value = []
+    if (!res.ok) throw new Error(data.error || 'Laden mislukt')
+
+    studentIngediend.value = !!data.evaluaties?.student?.ingediend
+    rijen.value = (data.competenties || []).map((c) => ({
+      competentie_id: c.competentie_id,
+      naam: c.naam,
+      omschrijving: c.omschrijving,
+      rubrieken: c.rubrieken || [],
+      studentScore: c.student?.score ?? null,
+      studentToelichting: c.student?.toelichting ?? '',
+      mentorScore: c.mentor?.score ?? null,
+      mentorToelichting: c.mentor?.toelichting ?? '',
+    }))
+  } catch (e) {
+    laadFout.value = e.message
   }
 }
 
 function terugNaarLijst() {
   geselecteerde.value = null
-  criteria.value = []
+  rijen.value = []
   bericht.value = ''
   opmerking.value = ''
 }
 
-async function slaAllesOp() {
+function rubriekTekst(rij, punt) {
+  return rij.rubrieken.find((r) => r.punt === punt)?.beschrijving || ''
+}
+
+// Mentorscore voor één competentie zetten + opslaan (toggle bij herklik).
+async function zetMentorScore(rij, punt) {
+  rij.mentorScore = rij.mentorScore === punt ? null : punt
+  await bewaarRij(rij)
+}
+
+async function bewaarRij(rij) {
+  await fetch(`${API}/evaluaties/${geselecteerde.value.evaluatie_id}/competentie/${rij.competentie_id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+    body: JSON.stringify({ score: rij.mentorScore ?? null, toelichting: rij.mentorToelichting ?? null }),
+  })
+}
+
+const totaalScore = computed(() => rijen.value.reduce((sum, r) => sum + (r.mentorScore || 0), 0))
+const maxScore = computed(() => rijen.value.length * 5)
+
+// Algemene opmerking + totaalscore opslaan.
+async function slaOp() {
   bezig.value = true
   bericht.value = ''
-  const token = localStorage.getItem('token')
   try {
-    // Sla elke criterium-score op
-    for (const criterium of criteria.value) {
-      if (criterium.score !== null && criterium.score !== undefined) {
-        await fetch(`http://localhost:3000/api/evaluaties/criteria/${criterium.criterium_id}/mentor`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ score: criterium.score }),
-        })
-      }
-    }
-
-    // Sla totaalscore + opmerking op
-    const totaal = criteria.value.reduce((sum, c) => sum + (c.score || 0), 0)
-    await fetch(`http://localhost:3000/api/evaluaties/${geselecteerde.value.evaluatie_id}`, {
+    await fetch(`${API}/evaluaties/${geselecteerde.value.evaluatie_id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ totaalscore: totaal, opmerking: opmerking.value }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ totaalscore: totaalScore.value, opmerking: opmerking.value }),
     })
-
     bericht.value = 'Evaluatie opgeslagen!'
-    geselecteerde.value.totaalscore = totaal
+    geselecteerde.value.totaalscore = totaalScore.value
     await laadEvaluaties()
   } catch {
     bericht.value = 'Opslaan mislukt.'
   } finally {
     bezig.value = false
   }
-}
-
-function totaalScore() {
-  return criteria.value.reduce((sum, c) => sum + (c.score || 0), 0)
 }
 
 function faseLabel(fase) {
@@ -172,15 +196,13 @@ function faseLabel(fase) {
         </div>
       </div>
 
-      <!-- Detail evaluatie -->
+      <!-- Detail: twee kolommen (student links, mentor rechts) -->
       <div v-else>
         <button class="btn btn-secondary mb-16" @click="terugNaarLijst">
           ← Evaluaties
         </button>
 
-        <h1 class="page-title">
-          {{ faseLabel(geselecteerde.fase) }}
-        </h1>
+        <h1 class="page-title">{{ faseLabel(geselecteerde.fase) }}</h1>
         <p class="text-secondary text-sm mt-4 mb-8">
           {{ geselecteerde.voornaam }} {{ geselecteerde.student_naam }} — {{ geselecteerde.bedrijf }}
         </p>
@@ -188,50 +210,79 @@ function faseLabel(fase) {
           Rubric: 5 — Uitstekend &nbsp;|&nbsp; 3 — Goed &nbsp;|&nbsp; 1 — Voldoende &nbsp;|&nbsp; 0 — Niet aangetoond
         </p>
 
+        <div
+          v-if="!studentIngediend"
+          class="card mb-16"
+          style="background:#fffbeb;border:1px solid #fde68a;"
+        >
+          <p class="text-sm" style="color:#92400e;">
+            ⚠️ De student heeft de zelfevaluatie nog niet ingediend. Je ziet hieronder
+            wat er al ingevuld is; dit kan nog wijzigen.
+          </p>
+        </div>
+
         <div v-if="bericht" class="card mb-16" style="background:#f0fdf4;border:1px solid #bbf7d0;">
           <p class="font-semibold" style="color:#15803d;">{{ bericht }}</p>
         </div>
 
-        <!-- Per criterium -->
-        <div
-          v-for="criterium in criteria"
-          :key="criterium.criterium_id"
-          class="card mt-16"
-        >
-          <h2 class="form-section-title">{{ criterium.naam }}</h2>
-          <p class="text-secondary text-sm mt-4">{{ criterium.competentie }}</p>
+        <!-- Per competentie -->
+        <div v-for="rij in rijen" :key="rij.competentie_id" class="card mt-16">
+          <h2 class="form-section-title">{{ rij.naam }}</h2>
+          <p v-if="rij.omschrijving" class="criteria-omschrijving mt-4">{{ rij.omschrijving }}</p>
 
-          <!-- Score knoppen -->
-          <div class="mt-12">
-            <p class="text-secondary text-sm">Score:</p>
-            <div class="flex gap-8 mt-8">
-              <button
-                v-for="punt in [5, 3, 1, 0]"
-                :key="punt"
-                class="btn"
-                :class="criterium.score === punt ? 'btn-primary' : 'btn-secondary'"
-                @click="criterium.score = punt"
-              >
-                {{ punt }}
-              </button>
-              <span v-if="criterium.score !== null && criterium.score !== undefined" class="text-secondary text-sm" style="align-self:center;">
-                Geselecteerd: <strong>{{ criterium.score }}</strong>
-              </span>
-            </div>
-          </div>
+          <div class="vergelijk-grid mt-12">
 
-          <!-- Rubrieken als referentie -->
-          <div v-if="criterium.rubrieken?.length" class="mt-12">
-            <p class="text-secondary text-xs font-semibold">Rubric:</p>
-            <div
-              v-for="r in criterium.rubrieken"
-              :key="r.rubriek_id"
-              class="flex gap-8 text-sm mt-4"
-              :style="criterium.score === r.punt ? 'font-weight:600;' : 'color:var(--text-secondary);'"
-            >
-              <span style="min-width:16px;">{{ r.punt }}</span>
-              <span>{{ r.beschrijving }}</span>
+            <!-- Zelfevaluatie student (read-only) -->
+            <div class="kolom kolom-student">
+              <p class="kolom-titel">Zelfevaluatie student</p>
+              <p class="score-regel">
+                Score:
+                <strong v-if="rij.studentScore != null">{{ rij.studentScore }}/5</strong>
+                <span v-else class="text-secondary">— niet ingevuld</span>
+              </p>
+              <p v-if="rij.studentToelichting" class="toelichting-tekst">
+                {{ rij.studentToelichting }}
+              </p>
+              <p v-else class="text-secondary text-xs" style="font-style:italic;">
+                Geen toelichting gegeven.
+              </p>
             </div>
+
+            <!-- Beoordeling mentor (bewerkbaar) -->
+            <div class="kolom kolom-mentor">
+              <p class="kolom-titel">Jouw beoordeling</p>
+              <div class="flex gap-8 mt-4" style="flex-wrap:wrap;">
+                <button
+                  v-for="punt in SCORE_NIVEAUS"
+                  :key="punt"
+                  class="btn btn-sm"
+                  :class="rij.mentorScore === punt ? 'btn-primary' : 'btn-secondary'"
+                  :title="rubriekTekst(rij, punt)"
+                  @click="zetMentorScore(rij, punt)"
+                >
+                  {{ punt }}
+                </button>
+              </div>
+              <div v-if="rij.rubrieken.length" class="rubriek-lijst mt-8">
+                <div
+                  v-for="r in rij.rubrieken"
+                  :key="r.punt"
+                  class="rubriek-regel"
+                  :class="{ actief: rij.mentorScore === r.punt }"
+                >
+                  <span class="rubriek-punt">{{ r.punt }}</span>
+                  <span>{{ r.beschrijving }}</span>
+                </div>
+              </div>
+              <textarea
+                v-model="rij.mentorToelichting"
+                class="form-input mt-8"
+                rows="2"
+                placeholder="Feedback op deze competentie…"
+                @change="bewaarRij(rij)"
+              ></textarea>
+            </div>
+
           </div>
         </div>
 
@@ -243,7 +294,7 @@ function faseLabel(fase) {
               v-model="opmerking"
               rows="4"
               class="form-input"
-              placeholder="Geef algemene feedback op de stage en de stagiair..."
+              placeholder="Geef algemene feedback op de stage en de stagiair…"
             ></textarea>
           </div>
         </div>
@@ -251,13 +302,9 @@ function faseLabel(fase) {
         <!-- Totaal en opslaan -->
         <div class="card mt-16 flex items-center gap-16">
           <span>
-            Totaalscore: <strong>{{ totaalScore() }}</strong> / {{ criteria.length * 5 }}
+            Totaalscore: <strong>{{ totaalScore }}</strong> / {{ maxScore }}
           </span>
-          <button
-            class="btn btn-primary"
-            @click="slaAllesOp"
-            :disabled="bezig"
-          >
+          <button class="btn btn-primary" style="margin-left:auto;" @click="slaOp" :disabled="bezig">
             {{ bezig ? 'Bezig...' : 'Evaluatie opslaan' }}
           </button>
         </div>
@@ -268,4 +315,79 @@ function faseLabel(fase) {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.vergelijk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.kolom {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.kolom-student {
+  background: var(--gray50, #f9fafb);
+}
+
+.kolom-titel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.criteria-omschrijving {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-primary, #111);
+}
+
+.score-regel {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.toelichting-tekst {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rubriek-lijst {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rubriek-regel {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary, #6b7280);
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.rubriek-regel.actief {
+  background: #111;
+  color: #fff;
+  font-weight: 600;
+}
+
+.rubriek-punt {
+  min-width: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .vergelijk-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
