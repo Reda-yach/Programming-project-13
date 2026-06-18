@@ -26,21 +26,26 @@ const stageBezig = computed(() =>
   new Date() >= new Date(stage.value.startdatum)
 )
 
-const navLinks = computed(() =>
-  stageStatus.value === 'goedgekeurd'
-    ? [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-        { label: 'Contract', to: '/student/contract' },
-        { label: 'Logboek', to: '/student/logboek' },
-        { label: 'Evaluatie', to: '/student/evaluatie' },
-        { label: 'Eindoverzicht', to: '/student/eindoverzicht' },
-      ]
-    : [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-      ],
-)
+const navLinks = computed(() => {
+  if (stageStatus.value !== 'goedgekeurd') {
+    return [
+      { label: 'Dashboard', to: '/student' },
+      { label: 'Aanvraag', to: '/student/aanvraag' },
+    ]
+  }
+  const links = [
+    { label: 'Dashboard', to: '/student' },
+    { label: 'Aanvraag', to: '/student/aanvraag' },
+    { label: 'Contract', to: '/student/contract' },
+    { label: 'Logboek', to: '/student/logboek' },
+    { label: 'Evaluatie', to: '/student/evaluatie' },
+  ]
+  // Eindoverzicht pas zichtbaar als docent én mentor hun finale evaluatie indienden
+  if (stage.value?.eindoverzicht_vrij) {
+    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
+  }
+  return links
+})
 
 const logboekWeek = ref(null)
 const logboekStatus = ref(null)

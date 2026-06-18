@@ -5,14 +5,21 @@ import { useStageStore } from '../stores/stage'
 
 const stageStore = useStageStore()
 
-const navLinks = ref([
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-  { label: 'Contract', to: '/student/contract' },
-  { label: 'Logboek', to: '/student/logboek' },
-  { label: 'Evaluatie', to: '/student/evaluatie' },
-  { label: 'Eindoverzicht', to: '/student/eindoverzicht' },
-])
+const eindoverzichtVrij = computed(() => !!stageStore.aanvraag?.eindoverzicht_vrij)
+
+const navLinks = computed(() => {
+  const links = [
+    { label: 'Dashboard', to: '/student' },
+    { label: 'Aanvraag', to: '/student/aanvraag' },
+    { label: 'Contract', to: '/student/contract' },
+    { label: 'Logboek', to: '/student/logboek' },
+    { label: 'Evaluatie', to: '/student/evaluatie' },
+  ]
+  if (eindoverzichtVrij.value) {
+    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
+  }
+  return links
+})
 
 const stage = ref(null)
 const evaluaties = ref([])
@@ -94,11 +101,13 @@ function formatDatum(d) {
     <main class="content">
       <h1 class="page-title">Eindoverzicht stage</h1>
 
-      <template v-if="!stageActief">
+      <template v-if="!stageActief || !eindoverzichtVrij">
         <div class="card mt-24">
           <p class="font-semibold">Eindoverzicht nog niet beschikbaar</p>
           <p class="text-secondary text-sm mt-8">
-            Dit overzicht is beschikbaar zodra je stage goedgekeurd is.
+            {{ !stageActief
+              ? 'Dit overzicht is beschikbaar zodra je stage goedgekeurd is.'
+              : 'Dit overzicht wordt zichtbaar zodra je docent én mentor hun finale evaluatie hebben ingediend.' }}
           </p>
         </div>
       </template>

@@ -484,7 +484,16 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
             WHERE cb.stage_id = s.stage_id
             ORDER BY cb.beslist_op DESC
             LIMIT 1
-          ) AS commissie_motivatie
+          ) AS commissie_motivatie,
+          (
+            SELECT COUNT(DISTINCT e.type) = 2
+            FROM evaluatie e
+            JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
+            WHERE se.stage_id = s.stage_id
+              AND e.fase = 'finaal'
+              AND e.ingediend = 1
+              AND e.type IN ('docent', 'mentor')
+          ) AS eindoverzicht_vrij
         FROM stage s
         JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
         JOIN mentor m ON s.mentor_id = m.mentor_id
