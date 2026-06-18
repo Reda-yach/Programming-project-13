@@ -60,6 +60,17 @@ const eindEval = computed(() =>
   evaluaties.value.find(e => e.type === 'student' && e.fase === 'finaal')
 )
 
+// Mentor-beoordeling per fase: zichtbaar zodra de mentor minstens één score gaf.
+const mentorTussentijds = computed(() =>
+  evaluaties.value.find(e => e.type === 'mentor' && e.fase === 'tussentijds')
+)
+const mentorEind = computed(() =>
+  evaluaties.value.find(e => e.type === 'mentor' && e.fase === 'finaal')
+)
+function mentorBeschikbaar(m) {
+  return !!m && Number(m.ingevulde_criteria) > 0
+}
+
 function evalStatus(eval_) {
   if (!eval_) return 'niet-gestart'
   if (eval_.ingediend) return 'ingediend'
@@ -142,6 +153,15 @@ onMounted(async () => {
                 : 'Nog niet beschikbaar'
               }}
             </button>
+
+            <router-link
+              v-if="mentorBeschikbaar(mentorTussentijds)"
+              to="/student/evaluatie/tussentijds/beoordeling"
+              class="flex items-center gap-8 font-semibold text-sm"
+              style="margin-top:12px;"
+            >
+              Beoordeling mentor bekijken →
+            </router-link>
           </div>
 
           <!-- Eindevaluatie -->
@@ -171,6 +191,15 @@ onMounted(async () => {
                 : 'Nog niet beschikbaar'
               }}
             </button>
+
+            <router-link
+              v-if="mentorBeschikbaar(mentorEind)"
+              to="/student/evaluatie/finaal/beoordeling"
+              class="flex items-center gap-8 font-semibold text-sm"
+              style="margin-top:12px;"
+            >
+              Beoordeling mentor bekijken →
+            </router-link>
           </div>
 
         </div>

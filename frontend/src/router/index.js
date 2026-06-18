@@ -135,6 +135,11 @@ const router = createRouter({
       component: () => import('../views/StudentEvaluatieInvullen.vue'),
     },
     {
+      path: '/student/evaluatie/:fase/beoordeling',
+      name: 'student-evaluatie-beoordeling',
+      component: () => import('../views/EvaluatieVergelijking.vue'),
+    },
+    {
       path: '/student/eindoverzicht',
       name: 'student-eindoverzicht',
       component: () => import('../views/StudentEindoverzicht.vue'),
