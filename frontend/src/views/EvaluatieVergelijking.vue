@@ -47,10 +47,6 @@ const finaleMotivatie = ref('')
 const eindBezig = ref(false)
 const eindBericht = ref('')
 
-function rubriekTekst(rij, punt) {
-  return rij.rubrieken?.find((r) => r.punt === punt)?.beschrijving || ''
-}
-
 const studentTotaal = computed(() =>
   competenties.value.reduce((s, c) => s + (c.student?.score ?? 0), 0),
 )
@@ -159,11 +155,21 @@ onMounted(laad)
               <p class="kolom-titel">Zelfevaluatie student</p>
               <p class="score-regel">
                 Score:
-                <strong v-if="c.student?.score != null">{{ c.student.score }}/5</strong>
+                <strong v-if="c.student?.score != null">{{ c.student.score }} / 5</strong>
                 <span v-else class="text-secondary">— niet ingevuld</span>
               </p>
-              <p v-if="c.student?.toelichting" class="toelichting-tekst">{{ c.student.toelichting }}</p>
-              <p v-else class="text-secondary text-xs" style="font-style:italic;">Geen toelichting.</p>
+              <div v-if="c.rubrieken?.length" class="rubriek-lijst">
+                <div
+                  v-for="r in c.rubrieken"
+                  :key="r.punt"
+                  class="rubriek-regel"
+                  :class="{ actief: c.student?.score === r.punt }"
+                >
+                  <span class="rubriek-punt">{{ r.punt }}</span>
+                  <span>{{ r.beschrijving }}</span>
+                </div>
+              </div>
+              <p v-if="c.student?.toelichting" class="toelichting-tekst mt-8">{{ c.student.toelichting }}</p>
             </div>
 
             <!-- Mentor -->
@@ -171,14 +177,21 @@ onMounted(laad)
               <p class="kolom-titel">Beoordeling mentor</p>
               <p class="score-regel">
                 Score:
-                <strong v-if="c.mentor?.score != null">{{ c.mentor.score }}/5</strong>
+                <strong v-if="c.mentor?.score != null">{{ c.mentor.score }} / 5</strong>
                 <span v-else class="text-secondary">— niet ingevuld</span>
               </p>
-              <p v-if="c.mentor?.score != null && rubriekTekst(c, c.mentor.score)" class="text-xs text-secondary" style="margin-bottom:6px;">
-                {{ rubriekTekst(c, c.mentor.score) }}
-              </p>
-              <p v-if="c.mentor?.toelichting" class="toelichting-tekst">{{ c.mentor.toelichting }}</p>
-              <p v-else class="text-secondary text-xs" style="font-style:italic;">Geen feedback.</p>
+              <div v-if="c.rubrieken?.length" class="rubriek-lijst">
+                <div
+                  v-for="r in c.rubrieken"
+                  :key="r.punt"
+                  class="rubriek-regel"
+                  :class="{ actief: c.mentor?.score === r.punt }"
+                >
+                  <span class="rubriek-punt">{{ r.punt }}</span>
+                  <span>{{ r.beschrijving }}</span>
+                </div>
+              </div>
+              <p v-if="c.mentor?.toelichting" class="toelichting-tekst mt-8">{{ c.mentor.toelichting }}</p>
             </div>
           </div>
         </div>
@@ -275,6 +288,30 @@ onMounted(laad)
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+.rubriek-lijst {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.rubriek-regel {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary, #6b7280);
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.rubriek-regel.actief {
+  background: #111;
+  color: #fff;
+  font-weight: 600;
+}
+.rubriek-punt {
+  min-width: 14px;
+  font-weight: 700;
 }
 @media (max-width: 640px) {
   .vergelijk-grid {
