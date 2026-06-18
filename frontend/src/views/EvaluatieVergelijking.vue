@@ -37,6 +37,16 @@ const fout = ref('')
 const competenties = ref([])
 const evaluatieMeta = ref({ student: null, mentor: null })
 
+const stageId = ref(route.params.stageId || null)
+const isFinaal = fase === 'finaal'
+
+// Finale eindscore (docent).
+const eindbeoordeling = ref(null)
+const finaleScore = ref('')
+const finaleMotivatie = ref('')
+const eindBezig = ref(false)
+const eindBericht = ref('')
+
 function rubriekTekst(rij, punt) {
   return rij.rubrieken?.find((r) => r.punt === punt)?.beschrijving || ''
 }
@@ -53,25 +63,60 @@ async function laad() {
   laden.value = true
   fout.value = ''
   try {
-    let stageId = route.params.stageId
-    if (!stageId) {
+    if (!stageId.value) {
       await stageStore.laad()
-      stageId = stageStore.aanvraag?.stage_id
+      stageId.value = stageStore.aanvraag?.stage_id
     }
-    if (!stageId) throw new Error('Geen stage gevonden.')
+    if (!stageId.value) throw new Error('Geen stage gevonden.')
 
     const token = localStorage.getItem('token')
-    const res = await fetch(`${API}/stages/${stageId}/evaluatie/vergelijking?fase=${fase}`, {
+    const res = await fetch(`${API}/stages/${stageId.value}/evaluatie/vergelijking?fase=${fase}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Laden mislukt')
     competenties.value = data.competenties || []
     evaluatieMeta.value = data.evaluaties || { student: null, mentor: null }
+
+    if (isFinaal) await laadEindbeoordeling()
   } catch (e) {
     fout.value = e.message
   } finally {
     laden.value = false
+  }
+}
+
+async function laadEindbeoordeling() {
+  const token = localStorage.getItem('token')
+  const res = await fetch(`${API}/stages/${stageId.value}/eindbeoordeling`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return
+  eindbeoordeling.value = await res.json()
+  if (eindbeoordeling.value) {
+    finaleScore.value = eindbeoordeling.value.score
+    finaleMotivatie.value = eindbeoordeling.value.motivatie || ''
+  }
+}
+
+async function bewaarEindscore() {
+  eindBezig.value = true
+  eindBericht.value = ''
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${API}/stages/${stageId.value}/eindbeoordeling`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ score: finaleScore.value, motivatie: finaleMotivatie.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Opslaan mislukt')
+    eindBericht.value = 'Finale score opgeslagen!'
+    await laadEindbeoordeling()
+  } catch (e) {
+    eindBericht.value = e.message
+  } finally {
+    eindBezig.value = false
   }
 }
 
@@ -141,6 +186,53 @@ onMounted(laad)
         <div class="card mt-16 flex items-center gap-16" style="flex-wrap:wrap;">
           <span>Totaal student: <strong>{{ studentTotaal }}</strong> / {{ maxScore }}</span>
           <span>Totaal mentor: <strong>{{ mentorTotaal }}</strong> / {{ maxScore }}</span>
+        </div>
+
+        <!-- Finale score (enkel bij de eindevaluatie) -->
+        <div v-if="isFinaal" class="card mt-16">
+          <h2 class="form-section-title">Finale score docent</h2>
+
+          <!-- Docent: bewerkbaar -->
+          <template v-if="isDocent">
+            <p class="text-secondary text-sm mt-4 mb-12">
+              Geef op basis van de zelfevaluatie en de mentorbeoordeling een finale score (op 20).
+            </p>
+            <div class="flex items-center gap-12" style="flex-wrap:wrap;">
+              <label class="text-sm">Score
+                <input
+                  v-model="finaleScore"
+                  type="number" min="0" max="20" step="0.5"
+                  class="form-input"
+                  style="width:90px;margin-left:8px;"
+                />
+                <span class="text-secondary">/ 20</span>
+              </label>
+            </div>
+            <textarea
+              v-model="finaleMotivatie"
+              rows="4"
+              class="form-input mt-12"
+              placeholder="Motivatie bij de finale score…"
+            ></textarea>
+            <div class="flex items-center gap-16 mt-12">
+              <button class="btn btn-primary" :disabled="eindBezig" @click="bewaarEindscore">
+                {{ eindBezig ? 'Bezig…' : 'Finale score opslaan' }}
+              </button>
+              <span v-if="eindBericht" class="text-sm" style="color:#16a34a;">{{ eindBericht }}</span>
+            </div>
+          </template>
+
+          <!-- Student: read-only -->
+          <template v-else>
+            <p v-if="eindbeoordeling">
+              <span style="font-size:28px;font-weight:700;">{{ eindbeoordeling.score }}</span>
+              <span class="text-secondary"> / 20</span>
+            </p>
+            <p v-if="eindbeoordeling?.motivatie" class="toelichting-tekst mt-8">{{ eindbeoordeling.motivatie }}</p>
+            <p v-if="!eindbeoordeling" class="text-secondary text-sm">
+              De docent heeft nog geen finale score gegeven.
+            </p>
+          </template>
         </div>
       </template>
 
