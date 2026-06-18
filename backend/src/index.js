@@ -1135,6 +1135,59 @@ app.get('/api/stages/:id/evaluatie/vergelijking', verifyToken, (req, res) => {
   );
 });
 
+// Finale eindscore van de docent ophalen voor een stage (null als nog niet gegeven).
+app.get('/api/stages/:id/eindbeoordeling', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT eb.eindbeoordeling_id, eb.stage_id, eb.score, eb.motivatie, eb.beoordeeld_op,
+           g.voornaam AS beoordelaar_voornaam, g.naam AS beoordelaar_naam
+      FROM eindbeoordeling eb
+      JOIN gebruiker g ON eb.beoordelaar_id = g.gebruiker_id
+     WHERE eb.stage_id = ?
+  `, [id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows[0] || null);
+  });
+});
+
+// Finale eindscore (0–20) opslaan of bijwerken. Alleen docent of admin.
+app.put('/api/stages/:id/eindbeoordeling', verifyToken, requireRol('docent', 'admin'), (req, res) => {
+  const { id } = req.params;
+  const { score, motivatie } = req.body;
+  const beoordelaar_id = req.gebruiker.id;
+  const scoreNum = Number(score);
+  if (Number.isNaN(scoreNum) || scoreNum < 0 || scoreNum > 20) {
+    return res.status(400).json({ error: 'Score moet tussen 0 en 20 liggen.' });
+  }
+  db.query(`
+    INSERT INTO eindbeoordeling (stage_id, beoordelaar_id, score, motivatie)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      score = VALUES(score),
+      motivatie = VALUES(motivatie),
+      beoordelaar_id = VALUES(beoordelaar_id),
+      beoordeeld_op = NOW()
+  `, [id, beoordelaar_id, scoreNum, motivatie || null], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    // Student verwittigen dat de finale beoordeling klaarstaat.
+    db.query(
+      `SELECT st.gebruiker_id FROM stage s JOIN student st ON s.student_id = st.student_id WHERE s.stage_id = ?`,
+      [id],
+      (err2, rows) => {
+        if (!err2 && rows.length) {
+          db.query(
+            `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'goed')`,
+            [rows[0].gebruiker_id, 'Je hebt een finale beoordeling ontvangen. Bekijk je eindoverzicht.'],
+            () => {},
+          );
+        }
+        res.json({ message: 'Eindbeoordeling opgeslagen!' });
+      },
+    );
+  });
+});
+
 // Alle evaluaties voor een stage ophalen (overzicht per fase/type)
 app.get('/api/stages/:id/evaluatie-overzicht', verifyToken, (req, res) => {
   const { id } = req.params;
