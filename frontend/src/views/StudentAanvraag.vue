@@ -191,15 +191,13 @@ function bouwAanvraag() {
 async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
-  try {
-    if (stageStore.status === 'aanpassing_gevraagd') {
-      await stageStore.pasAan(bouwAanvraag())
-    } else {
-      await stageStore.dienIn(bouwAanvraag())
-    }
+  const ok = stageStore.status === 'aanpassing_gevraagd'
+    ? await stageStore.pasAan(bouwAanvraag())
+    : await stageStore.dienIn(bouwAanvraag())
+  if (ok) {
     toonBevestiging.value = true
-  } catch (e) {
-    alert(e.message)
+  } else {
+    alert(stageStore.fout || 'Indienen mislukt')
   }
 }
 
@@ -213,30 +211,11 @@ function naarDashboard() {
     <TopBar :links="navLinks" />
 
     <main class="content">
-      <div class="flex items-center gap-16">
-        <h1 class="page-title">Stage-aanvraag indienen</h1>
-        <span
-          v-if="alIngediend"
-          class="badge badge-pill"
-          :class="stageStore.status === 'goedgekeurd' ? 'badge-green' : 'badge-yellow'"
-        >
-          {{ stageStore.status === 'goedgekeurd' ? 'Goedgekeurd' : 'In behandeling' }}
-        </span>
-      </div>
-
-      <!-- Bij ingediende aanvraag een korte toelichting bovenaan -->
-      <p v-if="alIngediend" class="text-secondary text-sm" style="line-height:1.6;">
-        <template v-if="stageStore.status === 'goedgekeurd'">
-          Je stage-aanvraag is goedgekeurd door de stagecommissie.
-          Hieronder zie je de gegevens die je hebt doorgegeven.
-        </template>
-        <template v-else>
-          Je aanvraag is ingediend en wordt beoordeeld door de stagecommissie.
-          Hieronder zie je de gegevens die je hebt doorgegeven.
-        </template>
-      </p>
+      <h1 class="page-title">Stage-aanvraag indienen</h1>
 
       <form @submit.prevent="handleIndienen">
+        <!-- Na indienen alles vergrendelen: fieldset[disabled] blokkeert ook number-spinners en datumpicker -->
+        <fieldset class="form-lock" :disabled="alIngediend">
 
         <!-- Gegevens student -->
         <section class="form-section">
@@ -275,37 +254,37 @@ function naarDashboard() {
           <div class="form-grid-2">
             <div class="form-group">
               <label for="bedrijf">Bedrijfsnaam</label>
-              <input type="text" id="bedrijf" v-model="bedrijf" placeholder="Naam van het bedrijf" :readonly="alIngediend">
+              <input type="text" id="bedrijf" v-model="bedrijf" placeholder="Naam van het bedrijf">
               <span v-if="fouten.bedrijf" class="form-error">{{ fouten.bedrijf }}</span>
             </div>
             <div class="form-group">
               <label for="sector">Sector</label>
-              <input type="text" id="sector" v-model="sector" placeholder="bv. ICT &amp; Consultancy" :readonly="alIngediend">
+              <input type="text" id="sector" v-model="sector" placeholder="bv. ICT &amp; Consultancy">
               <span v-if="fouten.sector" class="form-error">{{ fouten.sector }}</span>
             </div>
             <div class="form-group">
               <label for="straatnaam">Straatnaam</label>
-              <input type="text" id="straatnaam" v-model="straatnaam" placeholder="bv. Nijverheidskaai" :readonly="alIngediend">
+              <input type="text" id="straatnaam" v-model="straatnaam" placeholder="bv. Nijverheidskaai">
               <span v-if="fouten.straatnaam" class="form-error">{{ fouten.straatnaam }}</span>
             </div>
             <div class="form-group">
               <label for="huisnummer">Huisnummer</label>
-              <input type="number" id="huisnummer" v-model="huisnummer" min="1" placeholder="bv. 170" :readonly="alIngediend">
+              <input type="number" id="huisnummer" v-model="huisnummer" min="1" placeholder="bv. 170">
               <span v-if="fouten.huisnummer" class="form-error">{{ fouten.huisnummer }}</span>
             </div>
             <div class="form-group">
               <label for="postcode">Postcode</label>
-              <input type="number" id="postcode" v-model="postcode" placeholder="bv. 1070" :readonly="alIngediend">
+              <input type="number" id="postcode" v-model="postcode" placeholder="bv. 1070">
               <span v-if="fouten.postcode" class="form-error">{{ fouten.postcode }}</span>
             </div>
             <div class="form-group">
               <label for="gemeente">Gemeente</label>
-              <input type="text" id="gemeente" v-model="gemeente" placeholder="bv. Anderlecht" :readonly="alIngediend">
+              <input type="text" id="gemeente" v-model="gemeente" placeholder="bv. Anderlecht">
               <span v-if="fouten.gemeente" class="form-error">{{ fouten.gemeente }}</span>
             </div>
             <div class="form-group">
               <label for="provincie">Provincie</label>
-              <select id="provincie" v-model="provincie" :disabled="alIngediend">
+              <select id="provincie" v-model="provincie">
                 <option value="" disabled>Kies een provincie</option>
                 <option v-for="p in provincies" :key="p" :value="p">{{ p }}</option>
               </select>
@@ -313,17 +292,17 @@ function naarDashboard() {
             </div>
             <div class="form-group form-group-full">
               <label for="opdracht">Omschrijving opdracht</label>
-              <textarea id="opdracht" v-model="opdracht" rows="5" placeholder="Beschrijf de stageopdracht (minstens 20 tekens)" :readonly="alIngediend"></textarea>
+              <textarea id="opdracht" v-model="opdracht" rows="5" placeholder="Beschrijf de stageopdracht (minstens 20 tekens)"></textarea>
               <span v-if="fouten.opdracht" class="form-error">{{ fouten.opdracht }}</span>
             </div>
             <div class="form-group">
               <label for="datum-van">Stageperiode van</label>
-              <input type="date" id="datum-van" v-model="datumVan" :readonly="alIngediend">
+              <input type="date" id="datum-van" v-model="datumVan">
               <span v-if="fouten.datumVan" class="form-error">{{ fouten.datumVan }}</span>
             </div>
             <div class="form-group">
               <label for="datum-tot">Stageperiode tot</label>
-              <input type="date" id="datum-tot" v-model="datumTot" :readonly="alIngediend">
+              <input type="date" id="datum-tot" v-model="datumTot">
               <span v-if="fouten.datumTot" class="form-error">{{ fouten.datumTot }}</span>
             </div>
           </div>
@@ -335,31 +314,33 @@ function naarDashboard() {
           <div class="form-grid-2">
             <div class="form-group">
               <label for="mentor-voornaam">Voornaam mentor</label>
-              <input type="text" id="mentor-voornaam" v-model="mentorVoornaam" placeholder="Voornaam mentor" :readonly="alIngediend">
+              <input type="text" id="mentor-voornaam" v-model="mentorVoornaam" placeholder="Voornaam mentor">
               <span v-if="fouten.mentorVoornaam" class="form-error">{{ fouten.mentorVoornaam }}</span>
             </div>
             <div class="form-group">
               <label for="mentor-achternaam">Achternaam mentor</label>
-              <input type="text" id="mentor-achternaam" v-model="mentorAchternaam" placeholder="Achternaam mentor" :readonly="alIngediend">
+              <input type="text" id="mentor-achternaam" v-model="mentorAchternaam" placeholder="Achternaam mentor">
               <span v-if="fouten.mentorAchternaam" class="form-error">{{ fouten.mentorAchternaam }}</span>
             </div>
             <div class="form-group">
               <label for="mentor-functie">Functie</label>
-              <input type="text" id="mentor-functie" v-model="mentorFunctie" placeholder="bv. Senior Developer" :readonly="alIngediend">
+              <input type="text" id="mentor-functie" v-model="mentorFunctie" placeholder="bv. Senior Developer">
               <span v-if="fouten.mentorFunctie" class="form-error">{{ fouten.mentorFunctie }}</span>
             </div>
             <div class="form-group">
               <label for="mentor-email">E-mail mentor</label>
-              <input type="email" id="mentor-email" v-model="mentorEmail" placeholder="mentor@bedrijf.be" :readonly="alIngediend">
+              <input type="email" id="mentor-email" v-model="mentorEmail" placeholder="mentor@bedrijf.be">
               <span v-if="fouten.mentorEmail" class="form-error">{{ fouten.mentorEmail }}</span>
             </div>
             <div class="form-group">
               <label for="mentor-tel">Telefoon mentor</label>
-              <input type="tel" id="mentor-tel" v-model="mentorTel" placeholder="+32 ..." :readonly="alIngediend">
+              <input type="tel" id="mentor-tel" v-model="mentorTel" placeholder="+32 ...">
               <span v-if="fouten.mentorTel" class="form-error">{{ fouten.mentorTel }}</span>
             </div>
           </div>
         </section>
+
+        </fieldset>
 
         <!-- Indienen-knop alleen tonen als er nog niet is ingediend -->
         <div v-if="!alIngediend" class="mt-24">
@@ -393,5 +374,24 @@ function naarDashboard() {
 /* Laat het omschrijvingsveld over de volledige breedte van het raster lopen */
 .form-group-full {
   grid-column: 1 / -1;
+}
+
+/* fieldset enkel als vergrendel-wrapper, geen eigen rand/opvulling */
+.form-lock {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* Vergrendeld = leesbaar grijs (browser-dimming overschrijven) i.p.v. vervaagd */
+.form-lock:disabled input,
+.form-lock:disabled select,
+.form-lock:disabled textarea {
+  background: var(--gray50);
+  color: var(--text-secondary);
+  -webkit-text-fill-color: var(--text-secondary);
+  opacity: 1;
+  cursor: default;
 }
 </style>

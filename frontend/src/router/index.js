@@ -137,11 +137,6 @@ const router = createRouter({
       component: () => import('../views/CommissieDashboard.vue'),
     },
     {
-      path: '/admin',
-      name: 'admin',
-      component: () => import('../views/AdminDashboard.vue'),
-    },
-    {
       path: '/admin/studenten/nieuw',
       name: 'admin-student-nieuw',
       component: () => import('../views/AdminStudentNieuw.vue'),

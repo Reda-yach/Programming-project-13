@@ -20,6 +20,10 @@ const stageStatus = computed(() => stageStore.status)
 const stage = computed(() => stageStore.aanvraag)
 const motivatie = computed(() => stageStore.motivatie)
 
+// Actief = alle partijen hebben getekend (DB-status 'bezig'). De store mapt
+// 'bezig' naar 'goedgekeurd', dus voor het label lezen we de ruwe status.
+const stageActief = computed(() => stage.value?.status === 'bezig')
+
 const stageBezig = computed(() =>
   stageStatus.value === 'goedgekeurd' &&
   !!stage.value?.startdatum &&
@@ -137,15 +141,16 @@ const evaluaties = computed(() => {
             <span
               class="badge badge-pill"
               :class="{
-                'badge-green': stageStatus === 'goedgekeurd',
-                'badge-yellow': stageStatus === 'in_behandeling',
+                'badge-green': stageActief,
+                'badge-yellow': stageStatus === 'in_behandeling' || (stageStatus === 'goedgekeurd' && !stageActief),
                 'badge-orange': stageStatus === 'aanpassing_gevraagd',
                 'badge-red': stageStatus === 'afgewezen',
                 'badge-gray': stageStatus === 'geen',
               }"
             >
               {{
-                stageStatus === 'goedgekeurd' ? 'Actief'
+                stageActief ? 'Actief'
+                  : stageStatus === 'goedgekeurd' ? 'In behandeling'
                   : stageStatus === 'in_behandeling' ? 'In behandeling'
                   : stageStatus === 'aanpassing_gevraagd' ? 'Aanpassing gevraagd'
                   : stageStatus === 'afgewezen' ? 'Afgewezen'

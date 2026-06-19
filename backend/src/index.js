@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const db = require('./db');
@@ -52,11 +53,17 @@ app.post('/api/login', (req, res) => {
         return;
       }
 
+      // Nieuwe sessie: overschrijft de vorige, zodat oudere tokens (andere
+      // browser/apparaat) ongeldig worden — verifyToken vergelijkt hierop.
+      const sid = crypto.randomBytes(16).toString('hex');
+      db.query('UPDATE gebruiker SET sessie_id = ? WHERE gebruiker_id = ?', [sid, gebruiker.gebruiker_id]);
+
       const token = jwt.sign(
         {
           id: gebruiker.gebruiker_id,
           email: gebruiker.email,
-          rol: gebruiker.rol
+          rol: gebruiker.rol,
+          sid
         },
         process.env.JWT_SECRET,
         { expiresIn: '8h' }
@@ -419,25 +426,15 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
 app.post('/api/stages', verifyToken, (req, res) => {
   const { student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum } = req.body;
 
-  db.query(
-    `SELECT stage_id FROM stage WHERE student_id = ? AND status NOT IN ('afgewezen', 'afgerond')`,
-    [student_id],
-    (err, bestaande) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (bestaande.length > 0) {
-        return res.status(400).json({ error: 'Je hebt al een actieve stage-aanvraag.' });
-      }
-
-      db.query(`
-        INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
-      (err2, results) => {
-        if (err2) return res.status(500).json({ error: err2.message });
-        res.json({ message: 'Stage aangemaakt!', id: results.insertId });
-      });
-    }
-  );
+  // ponytail: dubbele-aanvraag wordt in de UI geblokkeerd (knop verborgen bij actieve status).
+  db.query(`
+    INSERT INTO stage (student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [student_id, bedrijf_id, mentor_id, docent_id, stagetitel, beschrijving, startdatum, einddatum],
+  (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Stage aangemaakt!', id: results.insertId });
+  });
 });
 
 
@@ -1418,10 +1415,16 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
       }
       const c = rows[0];
       if (c.getekend_student && c.getekend_mentor && c.getekend_docent) {
+        // Pas als álle partijen getekend hebben wordt de stage actief (bezig).
+        // Eén handtekening volstaat dus niet.
         db.query(`
           UPDATE stagecontract SET getekend_op = NOW() WHERE stage_id = ?
         `, [stage_id], () => {
-          res.json({ message: 'Contract door iedereen getekend! Datum geregistreerd.' });
+          db.query(
+            `UPDATE stage SET status = 'bezig' WHERE stage_id = ? AND status = 'goedgekeurd'`,
+            [stage_id],
+            () => res.json({ message: 'Contract door iedereen getekend! De stage is nu actief.' }),
+          );
         });
       } else {
         res.json({ message: `Contract getekend door ${rol}!` });
@@ -2201,6 +2204,19 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
   });
 });
 
+// Lijst van docenten — voor de docenttoewijzing bij goedkeuring door de commissie.
+app.get('/api/docenten', verifyToken, requireRol('commissie', 'docent', 'admin'), (req, res) => {
+  db.query(`
+    SELECT d.docent_id, g.voornaam, g.naam
+    FROM docent d
+    JOIN gebruiker g ON d.gebruiker_id = g.gebruiker_id
+    ORDER BY g.naam ASC
+  `, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // ============================================================
 // DOCENT EVALUATIE
 // ============================================================
@@ -2247,59 +2263,6 @@ app.put('/api/evaluaties/:id/totaalscore', verifyToken, requireRol('docent', 'ad
       if (err2) return res.status(500).json({ error: err2.message });
       res.json({ message: 'Totaalscore bijgewerkt!', totaalscore: totaal });
     });
-  });
-});
-
-// ============================================================
-// MENTOR EVALUATIES
-// ============================================================
-
-// Evaluaties ophalen van een specifieke stage voor mentor
-app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
-  const { id } = req.params;
-  db.query(`
-    SELECT
-      e.evaluatie_id,
-      e.type,
-      e.totaalscore,
-      e.opmerking,
-      e.ingevuld_op,
-      g.voornaam,
-      g.naam AS student_naam,
-      st.studentnummer,
-      st.opleiding,
-      s.stage_id,
-      b.naam AS bedrijf
-    FROM evaluatie e
-    JOIN student_evaluatie se ON e.evaluatie_id = se.evaluatie_id
-    JOIN student st ON se.student_id = st.student_id
-    JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
-    JOIN stage s ON se.stage_id = s.stage_id
-    JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-    WHERE s.mentor_id = ?
-    ORDER BY e.ingevuld_op DESC
-  `, [id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
-  });
-});
-
-// Mentor score en feedback opslaan per criterium
-app.put('/api/evaluaties/criteria/:criterium_id/mentor', verifyToken, requireRol('mentor', 'docent', 'admin'), (req, res) => {
-  const { criterium_id } = req.params;
-  const { mentor_score, mentor_feedback } = req.body;
-
-  db.query(`
-    UPDATE evaluatie_criterium
-    SET mentor_score = ?,
-        mentor_feedback = ?
-    WHERE criterium_id = ?
-  `, [mentor_score, mentor_feedback, criterium_id], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (results.affectedRows === 0) {
-      return res.status(404).json({ error: 'Criterium niet gevonden' });
-    }
-    res.json({ message: 'Mentor score en feedback opgeslagen!' });
   });
 });
 
@@ -2379,13 +2342,31 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
     const nieuweStatus = status || results[0].status;
 
     db.query(`
-      UPDATE stage 
-      SET stagetitel = ?, beschrijving = ?, startdatum = ?, einddatum = ?, 
+      UPDATE stage
+      SET stagetitel = ?, beschrijving = ?, startdatum = ?, einddatum = ?,
           bedrijf_id = ?, mentor_id = ?, docent_id = ?, status = ?
       WHERE stage_id = ?
     `, [stagetitel, beschrijving, startdatum, einddatum, bedrijf_id, mentor_id, docent_id, nieuweStatus, id],
     (err2, result) => {
       if (err2) return res.status(500).json({ error: err2.message });
+
+      // Valt de stage terug naar een pre-actieve staat, dan begint de flow
+      // opnieuw: bestaande handtekeningen wissen zodat iedereen opnieuw tekent.
+      // No-op als er nog geen contract is.
+      if (['in_behandeling', 'aanpassing_gevraagd'].includes(nieuweStatus)) {
+        db.query(`
+          UPDATE stagecontract SET
+            getekend_student = FALSE, getekend_mentor = FALSE, getekend_docent = FALSE,
+            handtekening_student = NULL, handtekening_mentor = NULL, handtekening_docent = NULL,
+            getekend_student_op = NULL, getekend_mentor_op = NULL, getekend_docent_op = NULL,
+            getekend_op = NULL
+          WHERE stage_id = ?
+        `, [id], (err3) => {
+          if (err3) return res.status(500).json({ error: err3.message });
+          res.json({ message: 'Stage bijgewerkt!' });
+        });
+        return;
+      }
       res.json({ message: 'Stage bijgewerkt!' });
     });
   });
@@ -2499,23 +2480,6 @@ app.put('/api/logboeken/:id/indienen', verifyToken, (req, res) => {
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Logboek ingediend!' });
-    }
-  );
-});
-
-// Haal feedback op voor een logboek.
-app.get('/api/logboeken/:id/feedback', verifyToken, (req, res) => {
-  const { id } = req.params;
-  db.query(
-    `SELECT lf.feedback_id, lf.opmerking, lf.created_at, g.voornaam, g.naam AS auteur
-     FROM logboek_feedback lf
-     JOIN gebruiker g ON lf.gebruiker_id = g.gebruiker_id
-     WHERE lf.logboek_id = ?
-     ORDER BY lf.created_at ASC`,
-    [id],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
     }
   );
 });

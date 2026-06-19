@@ -25,6 +25,10 @@ const melding = ref('')
 const tekenModus = ref(false)
 const pad = ref(null)
 
+// Docenttoewijzing: bij goedkeuren kiest de commissie de begeleidende docent.
+const docenten = ref([])
+const docentId = ref('')
+
 function authHeaders() {
   return { Authorization: `Bearer ${auth.token}` }
 }
@@ -71,11 +75,21 @@ async function laadAanvragen() {
   }
 }
 
+async function laadDocenten() {
+  try {
+    const res = await fetch(`${API}/docenten`, { headers: authHeaders() })
+    if (res.ok) docenten.value = await res.json()
+  } catch {
+    // dropdown blijft leeg; goedkeuren toont dan een melding
+  }
+}
+
 async function selecteer(id) {
   geselecteerdeId.value = id
   feedback.value = ''
   melding.value = ''
   tekenModus.value = false
+  docentId.value = ''
   detail.value = null
   detailLaden.value = true
   try {
@@ -137,6 +151,10 @@ async function handleDecision(type) {
 // Goedkeuring bevestigen: eerst goedkeuren (maakt de overeenkomst aan),
 // daarna meteen ondertekenen met de handtekening van de commissie.
 async function bevestigGoedkeuring() {
+  if (!docentId.value) {
+    melding.value = 'Kies een begeleidende docent om de stage goed te keuren.'
+    return
+  }
   const handtekening = pad.value?.getData()
   if (!handtekening) {
     melding.value = 'Teken eerst je handtekening om de goedkeuring te bevestigen.'
@@ -150,7 +168,7 @@ async function bevestigGoedkeuring() {
     const res = await fetch(`${API}/begeleider/${stageId}/beslissing`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ beslissing: 'goedgekeurd', motivatie: feedback.value }),
+      body: JSON.stringify({ beslissing: 'goedgekeurd', motivatie: feedback.value, docent_id: docentId.value }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -185,7 +203,10 @@ function annuleerTekenen() {
   melding.value = ''
 }
 
-onMounted(laadAanvragen)
+onMounted(() => {
+  laadAanvragen()
+  laadDocenten()
+})
 </script>
 
 <template>
@@ -294,6 +315,15 @@ onMounted(laadAanvragen)
                 Onderteken de stageovereenkomst om de goedkeuring te bevestigen.
                 De aanvraag wordt daarna goedgekeurd en de overeenkomst aangemaakt.
               </p>
+              <div class="form-group" style="margin-bottom:16px;">
+                <label for="docent">Begeleidende docent</label>
+                <select id="docent" v-model="docentId">
+                  <option value="" disabled>Kies een docent</option>
+                  <option v-for="d in docenten" :key="d.docent_id" :value="d.docent_id">
+                    {{ d.voornaam }} {{ d.naam }}
+                  </option>
+                </select>
+              </div>
               <SignaturePad ref="pad" />
               <div class="flex gap-12" style="margin-top:16px;">
                 <button class="btn btn-outline-green" :disabled="verwerken" @click="bevestigGoedkeuring">

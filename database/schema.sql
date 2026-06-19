@@ -20,6 +20,9 @@ CREATE TABLE gebruiker (
     telefoonnummer      VARCHAR(20),
     wachtwoord_hash     VARCHAR(255)    NOT NULL,
     rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
+    -- Actieve sessie: bij elke login opnieuw gezet. Tokens met een andere
+    -- sessie_id zijn ongeldig → ergens anders inloggen logt de rest uit.
+    sessie_id           VARCHAR(64),
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (gebruiker_id)
@@ -226,6 +229,7 @@ CREATE TABLE evaluatie (
     totaalscore         DECIMAL(5,2),
     opmerking           TEXT,
     ingevuld_op         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ingediend           BOOLEAN         NOT NULL DEFAULT FALSE,
 
     PRIMARY KEY (evaluatie_id),
     CONSTRAINT fk_evaluatie_beoordelaar
