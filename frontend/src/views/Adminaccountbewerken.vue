@@ -54,10 +54,10 @@ async function laad() {
     voornaam.value = u.voornaam || ''
     naam.value     = u.naam     || ''
     email.value    = u.email    || ''
-    afdeling.value = u.afdeling || u.bedrijf || ''
-    rol.value      = u.rol      || ''
-    commissielid.value = u.commissielid || false
-    actief.value   = u.is_actief !== undefined ? Boolean(u.is_actief) : true
+    afdeling.value     = u.afdeling || u.bedrijf || history.state?.listAfdeling || ''
+    rol.value          = u.rol      || ''
+    commissielid.value = Boolean(u.commissielid)
+    actief.value       = u.is_actief !== undefined ? Boolean(u.is_actief) : true
   } catch (e) {
     fout.value = e.message
     console.error(e)
@@ -103,6 +103,12 @@ async function slaOp() {
     }
 
     succes.value = '✓ Opgeslagen'
+    const storedCommissie = JSON.parse(localStorage.getItem('commissieleden') || '{}')
+    storedCommissie[route.params.id] = commissielid.value
+    localStorage.setItem('commissieleden', JSON.stringify(storedCommissie))
+    const storedAfdeling = JSON.parse(localStorage.getItem('afdelingen') || '{}')
+    storedAfdeling[route.params.id] = afdeling.value.trim()
+    localStorage.setItem('afdelingen', JSON.stringify(storedAfdeling))
     await laad()
     setTimeout(() => { succes.value = '' }, 2000)
 
