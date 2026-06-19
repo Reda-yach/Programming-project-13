@@ -1,10 +1,30 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 
-const navLinks = ref([
-  { label: 'Aanvragen', to: '/commissie' },
-])
+const route = useRoute()
+
+const isAdmin = computed(() => {
+  try {
+    const g = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+    return g.rol === 'admin'
+  } catch { return false }
+})
+
+const navLinks = computed(() => {
+  if (isAdmin.value) {
+    return [
+      { label: 'Competenties', to: '/admin/competentiesets' },
+      { label: 'Stages',       to: '/admin/stages' },
+      { label: 'Accounts',     to: '/admin/accounts' },
+      { label: 'Aanvragen',    to: '/admin/aanvragen' },
+    ]
+  }
+  return [
+    { label: 'Aanvragen', to: '/commissie' },
+  ]
+})
 
 const aanvragen = ref([])
 const geselecteerde = ref(null)
