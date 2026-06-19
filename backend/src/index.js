@@ -20,6 +20,14 @@ app.get('/', (req, res) => {
   res.json({ message: 'Backend werkt!' });
 });
 
+// DEBUG: schema check
+app.get('/debug/schema', (req, res) => {
+  db.query('DESCRIBE gebruiker', (err, results) => {
+    if (err) return res.json({ error: err.message });
+    res.json(results);
+  });
+});
+
 // ============================================================
 // AUTHENTICATIE
 // ============================================================
@@ -107,15 +115,117 @@ app.post('/api/login', (req, res) => {
 // ============================================================
 
 // Alle gebruikers ophalen (beveiligd)
+// LEFT JOINs zorgen dat docent_id en mentor_id mee komen voor AdminAccountKoppelen.
 app.get('/api/gebruikers', verifyToken, (req, res) => {
+  db.query(`
+    SELECT
+      g.gebruiker_id,
+      g.voornaam,
+      g.naam,
+      g.email,
+      g.telefoonnummer,
+      g.rol,
+      g.is_actief,
+      g.created_at,
+      d.docent_id,
+      d.specialisatie AS afdeling,
+      m.mentor_id,
+      b.naam AS bedrijf,
+      st.opleiding
+    FROM gebruiker g
+    LEFT JOIN docent d ON d.gebruiker_id = g.gebruiker_id
+    LEFT JOIN mentor  m ON m.gebruiker_id = g.gebruiker_id
+    LEFT JOIN bedrijf b ON m.bedrijf_id = b.bedrijf_id
+    LEFT JOIN student st ON st.gebruiker_id = g.gebruiker_id
+    ORDER BY g.naam ASC
+  `,
+  (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json(results);
+  });
+});
+
+// Één gebruiker ophalen
+app.get('/api/gebruikers/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      g.gebruiker_id,
+      g.voornaam,
+      g.naam,
+      g.email,
+      g.telefoonnummer,
+      g.rol,
+      g.is_actief,
+      g.commissielid,
+      g.afdeling,
+      g.created_at,
+      d.docent_id,
+      m.mentor_id
+    FROM gebruiker g
+    LEFT JOIN docent d ON d.gebruiker_id = g.gebruiker_id
+    LEFT JOIN mentor  m ON m.gebruiker_id = g.gebruiker_id
+    WHERE g.gebruiker_id = ?
+  `, [id], (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    if (results.length === 0) {
+      res.status(404).json({ error: 'Gebruiker niet gevonden' });
+      return;
+    }
+    res.json(results[0]);
+  });
+});
+
+app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { voornaam, naam, email, afdeling, rol, commissielid, is_actief } = req.body;
+
   db.query(
-    'SELECT gebruiker_id, voornaam, naam, email, telefoonnummer, rol, created_at FROM gebruiker',
+    `UPDATE gebruiker SET voornaam = ?, naam = ?, email = ?, afdeling = ?, rol = ?, commissielid = ?, is_actief = ? WHERE gebruiker_id = ?`,
+    [voornaam, naam, email, afdeling, rol, commissielid ? 1 : 0, is_actief ? 1 : 0, id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    }
+  );
+});
+
+app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { voornaam, naam, email, rol, commissielid, is_actief } = req.body;
+
+  db.query(
+    `UPDATE gebruiker SET voornaam = ?, naam = ?, email = ?, rol = ?, commissielid = ?, is_actief = ? WHERE gebruiker_id = ?`,
+    [voornaam, naam, email, rol, commissielid ? 1 : 0, is_actief ? 1 : 0, id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    }
+  );
+});
+
+// Gebruiker verwijderen
+app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(
+    'DELETE FROM gebruiker WHERE gebruiker_id = ?',
+    [id],
     (err, results) => {
       if (err) {
         res.status(500).json({ error: err.message });
         return;
       }
-      res.json(results);
+      if (results.affectedRows === 0) {
+        res.status(404).json({ error: 'Gebruiker niet gevonden.' });
+        return;
+      }
+      res.json({ message: 'Gebruiker verwijderd.' });
     }
   );
 });
@@ -278,6 +388,9 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
   db.query(`
     SELECT
       s.stage_id,
+      s.bedrijf_id,
+      s.mentor_id,
+      s.docent_id,
       g.voornaam AS student_voornaam,
       g.naam AS student_naam,
       g.email AS student_email,
@@ -285,7 +398,7 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
       st.studentnummer,
       st.opleiding,
       b.naam AS bedrijf,
-      b.adres AS bedrijf_adres,
+      CONCAT_WS(' ', b.straatnaam, b.huisnummer, b.postcode, b.gemeente) AS bedrijf_adres,
       b.sector AS bedrijf_sector,
       gm.voornaam AS mentor_voornaam,
       gm.naam AS mentor_naam,
@@ -305,8 +418,8 @@ app.get('/api/stages/:id', verifyToken, (req, res) => {
     JOIN student st ON s.student_id = st.student_id
     JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
     JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-    JOIN mentor m ON s.mentor_id = m.mentor_id
-    JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+    LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+    LEFT JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
     LEFT JOIN docent d ON s.docent_id = d.docent_id
     LEFT JOIN gebruiker gd ON d.gebruiker_id = gd.gebruiker_id
     WHERE s.stage_id = ?
@@ -369,7 +482,7 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           s.einddatum,
           s.status,
           b.naam AS bedrijf,
-          b.adres AS bedrijf_adres,
+          CONCAT_WS(' ', b.straatnaam, b.huisnummer, b.postcode, b.gemeente) AS bedrijf_adres,
           b.sector AS bedrijf_sector,
           (
             SELECT cb.motivatie
@@ -1083,18 +1196,28 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
 // COMPETENTIES
 // ============================================================
  
-// Alle actieve competenties per opleiding ophalen
+// Alle actieve competenties per opleiding ophalen (incl. rubrieken)
 app.get('/api/competenties/:opleiding_id', verifyToken, requireRol('admin'), (req, res) => {
   const { opleiding_id } = req.params;
   db.query(
-    'SELECT * FROM competentie WHERE opleiding_id = ? AND is_actief = TRUE ORDER BY naam ASC',
+    `SELECT competentie_id AS id, naam, omschrijving, gewicht
+     FROM competentie WHERE opleiding_id = ? AND is_actief = TRUE ORDER BY naam ASC`,
     [opleiding_id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json(results);
+    (err, comps) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (comps.length === 0) return res.json([]);
+      const compIds = comps.map(c => c.id);
+      db.query(
+        'SELECT competentie_id, punt, beschrijving FROM competentie_rubriek WHERE competentie_id IN (?) ORDER BY punt DESC',
+        [compIds],
+        (err2, rubrieken) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json(comps.map(c => ({
+            ...c,
+            rubrieken: rubrieken.filter(r => r.competentie_id === c.id),
+          })));
+        }
+      );
     }
   );
 });
@@ -1195,6 +1318,59 @@ app.put('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res) =>
       );
     }
   );
+});
+
+// Rubrieken van een competentie ophalen
+app.get('/api/competenties/:id/rubrieken', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  db.query(
+    'SELECT rubriek_id, competentie_id, punt, beschrijving FROM competentie_rubriek WHERE competentie_id = ? ORDER BY punt DESC',
+    [id],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+});
+
+// Rubrieken opslaan (vervangt alle rubrieken van de competentie)
+app.put('/api/competenties/:id/rubrieken', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { rubrieken } = req.body;
+
+  console.log('[rubrieken PUT] id:', id, 'rubrieken:', JSON.stringify(rubrieken));
+
+  const numId = Number(id);
+  if (isNaN(numId) || numId <= 0) {
+    return res.status(400).json({ error: `Ongeldig competentie ID: "${id}"` });
+  }
+
+  if (!Array.isArray(rubrieken)) {
+    return res.status(400).json({ error: 'rubrieken moet een array zijn.' });
+  }
+
+  const GELDIGE_PUNTEN = [0, 1, 3, 5];
+  const toInsert = rubrieken.filter(r => {
+    const geldig = GELDIGE_PUNTEN.includes(Number(r.punt));
+    if (!geldig) console.warn('[rubrieken PUT] ongeldig punt:', r.punt);
+    return geldig && r.beschrijving?.trim();
+  });
+
+  db.query('DELETE FROM competentie_rubriek WHERE competentie_id = ?', [numId], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    if (toInsert.length === 0) return res.json({ ok: true });
+
+    const values = toInsert.map(r => [numId, Number(r.punt), r.beschrijving.trim()]);
+    db.query(
+      'INSERT INTO competentie_rubriek (competentie_id, punt, beschrijving) VALUES ?',
+      [values],
+      (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ ok: true });
+      }
+    );
+  });
 });
 
 // Competentie deactiveren (soft delete via is_actief = FALSE)
@@ -1303,19 +1479,37 @@ app.get('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => 
             return;
           }
 
-          const result = sets.map(s => ({
-            ...s,
-            competenties: competenties
-              .filter(c => c.set_id === s.set_id)
-              .map(c => ({
-                id:           c.competentie_id,
-                naam:         c.naam,
-                omschrijving: c.omschrijving,
-                gewicht:      c.gewicht,
-              })),
-          }));
+          if (competenties.length === 0) {
+            res.json(sets.map(s => ({ ...s, competenties: [] })));
+            return;
+          }
 
-          res.json(result);
+          const compIds = competenties.map(c => c.competentie_id);
+          db.query(
+            'SELECT * FROM competentie_rubriek WHERE competentie_id IN (?) ORDER BY punt DESC',
+            [compIds],
+            (errRub, rubrieken) => {
+              if (errRub) {
+                res.status(500).json({ error: errRub.message });
+                return;
+              }
+
+              const result = sets.map(s => ({
+                ...s,
+                competenties: competenties
+                  .filter(c => c.set_id === s.set_id)
+                  .map(c => ({
+                    id:           c.competentie_id,
+                    naam:         c.naam,
+                    omschrijving: c.omschrijving,
+                    gewicht:      c.gewicht,
+                    rubrieken:    rubrieken.filter(r => r.competentie_id === c.competentie_id),
+                  })),
+              }));
+
+              res.json(result);
+            }
+          );
         }
       );
     }
@@ -1364,3 +1558,5 @@ app.delete('/api/competentiesets/:id', verifyToken, requireRol('admin'), (req, r
     }
   );
 });
+process.on('uncaughtException', (err) => { console.error('UNCAUGHT:', err); });
+process.on('unhandledRejection', (err) => { console.error('UNHANDLED:', err); });
