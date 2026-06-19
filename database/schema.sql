@@ -31,10 +31,12 @@ CREATE TABLE gebruiker (
     telefoonnummer      VARCHAR(20),
     wachtwoord_hash     VARCHAR(255)    NOT NULL,
     rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
+    afdeling            VARCHAR(150),
     -- Actieve sessie: bij elke login opnieuw gezet. Tokens met een andere
     -- sessie_id zijn ongeldig → ergens anders inloggen logt de rest uit.
     sessie_id           VARCHAR(64),
     is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
+    commissielid        BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (gebruiker_id)
