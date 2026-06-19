@@ -140,3 +140,29 @@ ALTER TABLE competentie
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id)
 );
+-- --------------------------------------------
+-- MIGRATIE 16: is_actief toevoegen aan gebruiker (soft disable accounts)
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
+-- --------------------------------------------
+-- MIGRATIE 17: competentie_rubriek tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS competentie_rubriek (
+    rubriek_id      INT  NOT NULL AUTO_INCREMENT,
+    competentie_id  INT  NOT NULL,
+    punt            INT  NOT NULL,
+    beschrijving    TEXT,
+    PRIMARY KEY (rubriek_id),
+    UNIQUE KEY uq_comp_punt (competentie_id, punt),
+    FOREIGN KEY (competentie_id)
+        REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- --------------------------------------------
+-- MIGRATIE 18: commissielid kolom toevoegen aan gebruiker
+-- Stelt in of een docent ook in de commissie kan werken
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN commissielid BOOLEAN NOT NULL DEFAULT FALSE;
