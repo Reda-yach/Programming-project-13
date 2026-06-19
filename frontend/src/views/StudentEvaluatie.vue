@@ -97,6 +97,14 @@ function naarEvaluatie(fase) {
     ? beschikbaarheid.value.tussentijds.beschikbaar
     : beschikbaarheid.value.eind.beschikbaar
   if (!beschikbaar) return
+  const studentEval = fase === 'tussentijds' ? tussentijdsEval.value : eindEval.value
+  const mentor = fase === 'tussentijds' ? mentorTussentijds.value : mentorEind.value
+  // Zodra de student ingediend heeft én de mentor beoordeeld heeft, toont
+  // 'Bekijk evaluatie' meteen de samenvatting met zelfevaluatie + mentorscore.
+  if (evalStatus(studentEval) === 'ingediend' && mentorBeschikbaar(mentor)) {
+    router.push(`/student/evaluatie/${fase}/beoordeling`)
+    return
+  }
   router.push(`/student/evaluatie/${fase}`)
 }
 
@@ -153,15 +161,6 @@ onMounted(async () => {
                 : 'Nog niet beschikbaar'
               }}
             </button>
-
-            <router-link
-              v-if="mentorBeschikbaar(mentorTussentijds)"
-              to="/student/evaluatie/tussentijds/beoordeling"
-              class="flex items-center gap-8 font-semibold text-sm"
-              style="margin-top:12px;"
-            >
-              Beoordeling mentor bekijken →
-            </router-link>
           </div>
 
           <!-- Eindevaluatie -->
@@ -191,15 +190,6 @@ onMounted(async () => {
                 : 'Nog niet beschikbaar'
               }}
             </button>
-
-            <router-link
-              v-if="mentorBeschikbaar(mentorEind)"
-              to="/student/evaluatie/finaal/beoordeling"
-              class="flex items-center gap-8 font-semibold text-sm"
-              style="margin-top:12px;"
-            >
-              Beoordeling mentor bekijken →
-            </router-link>
           </div>
 
         </div>

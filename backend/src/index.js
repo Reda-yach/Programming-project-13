@@ -1010,16 +1010,26 @@ app.post('/api/stages/:id/evaluatie/aanmaken', verifyToken, (req, res) => {
 app.put('/api/evaluaties/:id/competentie/:competentie_id', verifyToken, (req, res) => {
   const { id, competentie_id } = req.params;
   const { score, toelichting } = req.body;
-  db.query(
-    `INSERT INTO evaluatie_score (evaluatie_id, competentie_id, score, toelichting)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE score = VALUES(score), toelichting = VALUES(toelichting)`,
-    [id, competentie_id, score ?? null, toelichting ?? null],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Score opgeslagen!' });
+
+  // Een ingediende evaluatie is vergrendeld: scores mogen niet meer wijzigen.
+  db.query('SELECT ingediend FROM evaluatie WHERE evaluatie_id = ?', [id], (errC, rowsC) => {
+    if (errC) return res.status(500).json({ error: errC.message });
+    if (rowsC.length === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
+    if (rowsC[0].ingediend) {
+      return res.status(400).json({ error: 'Evaluatie is al ingediend en kan niet meer aangepast worden' });
     }
-  );
+
+    db.query(
+      `INSERT INTO evaluatie_score (evaluatie_id, competentie_id, score, toelichting)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE score = VALUES(score), toelichting = VALUES(toelichting)`,
+      [id, competentie_id, score ?? null, toelichting ?? null],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Score opgeslagen!' });
+      }
+    );
+  });
 });
 
 // Vergelijkingsoverzicht voor een stage + fase: per competentie de score en
@@ -1159,30 +1169,36 @@ app.put('/api/stages/:id/eindbeoordeling', verifyToken, requireRol('docent', 'ad
   if (Number.isNaN(scoreNum) || scoreNum < 0 || scoreNum > 20) {
     return res.status(400).json({ error: 'Score moet tussen 0 en 20 liggen.' });
   }
-  db.query(`
-    INSERT INTO eindbeoordeling (stage_id, beoordelaar_id, score, motivatie)
-    VALUES (?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      score = VALUES(score),
-      motivatie = VALUES(motivatie),
-      beoordelaar_id = VALUES(beoordelaar_id),
-      beoordeeld_op = NOW()
-  `, [id, beoordelaar_id, scoreNum, motivatie || null], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
 
-    // Student verwittigen dat de finale beoordeling klaarstaat.
+  // De finale beoordeling kan maar één keer gegeven worden: bestaat ze al,
+  // dan is ze vergrendeld en mag ze niet meer aangepast worden.
+  db.query('SELECT eindbeoordeling_id FROM eindbeoordeling WHERE stage_id = ?', [id], (errC, rowsC) => {
+    if (errC) return res.status(500).json({ error: errC.message });
+    if (rowsC.length > 0) {
+      return res.status(409).json({ error: 'De finale beoordeling is al gegeven en kan niet meer aangepast worden.' });
+    }
+
     db.query(
-      `SELECT st.gebruiker_id FROM stage s JOIN student st ON s.student_id = st.student_id WHERE s.stage_id = ?`,
-      [id],
-      (err2, rows) => {
-        if (!err2 && rows.length) {
-          db.query(
-            `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'goed')`,
-            [rows[0].gebruiker_id, 'Je hebt een finale beoordeling ontvangen. Bekijk je eindoverzicht.'],
-            () => {},
-          );
-        }
-        res.json({ message: 'Eindbeoordeling opgeslagen!' });
+      `INSERT INTO eindbeoordeling (stage_id, beoordelaar_id, score, motivatie) VALUES (?, ?, ?, ?)`,
+      [id, beoordelaar_id, scoreNum, motivatie || null],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        // Student verwittigen dat de finale beoordeling klaarstaat.
+        db.query(
+          `SELECT st.gebruiker_id FROM stage s JOIN student st ON s.student_id = st.student_id WHERE s.stage_id = ?`,
+          [id],
+          (err2, rows) => {
+            if (!err2 && rows.length) {
+              db.query(
+                `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'goed')`,
+                [rows[0].gebruiker_id, 'Je hebt een finale beoordeling ontvangen. Bekijk je eindoverzicht.'],
+                () => {},
+              );
+            }
+            res.json({ message: 'Eindbeoordeling opgeslagen!' });
+          },
+        );
       },
     );
   });
@@ -1966,6 +1982,7 @@ app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'admin'
         e.totaalscore,
         e.opmerking,
         e.ingevuld_op,
+        e.ingediend,
         g_student.voornaam,
         g_student.naam AS student_naam,
         b.naam AS bedrijf,
@@ -1992,15 +2009,25 @@ app.get('/api/mentors/:id/evaluaties', verifyToken, requireRol('mentor', 'admin'
 app.put('/api/evaluaties/:id', verifyToken, (req, res) => {
   const { id } = req.params;
   const { totaalscore, opmerking } = req.body;
-  db.query(
-    `UPDATE evaluatie SET totaalscore = ?, opmerking = ? WHERE evaluatie_id = ?`,
-    [totaalscore, opmerking, id],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (results.affectedRows === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
-      res.json({ message: 'Evaluatie bijgewerkt!' });
+
+  // Een ingediende evaluatie is vergrendeld en mag niet meer bijgewerkt worden.
+  db.query('SELECT ingediend FROM evaluatie WHERE evaluatie_id = ?', [id], (errC, rowsC) => {
+    if (errC) return res.status(500).json({ error: errC.message });
+    if (rowsC.length === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
+    if (rowsC[0].ingediend) {
+      return res.status(400).json({ error: 'Evaluatie is al ingediend en kan niet meer aangepast worden' });
     }
-  );
+
+    db.query(
+      `UPDATE evaluatie SET totaalscore = ?, opmerking = ? WHERE evaluatie_id = ?`,
+      [totaalscore, opmerking, id],
+      (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.affectedRows === 0) return res.status(404).json({ error: 'Evaluatie niet gevonden' });
+        res.json({ message: 'Evaluatie bijgewerkt!' });
+      }
+    );
+  });
 });
 
 // ============================================================

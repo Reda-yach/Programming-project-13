@@ -126,10 +126,7 @@ onMounted(laad)
 
       <button class="btn btn-secondary mb-16" @click="router.back()">← Terug</button>
 
-      <h1 class="page-title" style="margin-bottom:4px;">{{ titel }} — beoordeling</h1>
-      <p class="text-secondary text-xs mb-16">
-        Rubric: 5 — Uitstekend &nbsp;|&nbsp; 3 — Goed &nbsp;|&nbsp; 1 — Voldoende &nbsp;|&nbsp; 0 — Niet aangetoond
-      </p>
+      <h1 class="page-title mb-16">{{ titel }} — beoordeling</h1>
 
       <div v-if="laden" class="text-secondary text-sm">Laden…</div>
       <div v-else-if="fout" style="color:#dc2626;font-size:14px;">{{ fout }}</div>
@@ -205,10 +202,12 @@ onMounted(laad)
         <div v-if="isFinaal" class="card mt-16">
           <h2 class="form-section-title">Finale score docent</h2>
 
-          <!-- Docent: bewerkbaar -->
-          <template v-if="isDocent">
+          <!-- Docent: bewerkbaar zolang er nog géén finale score is. Eenmaal
+               gegeven is de score vergrendeld en verdwijnt het formulier. -->
+          <template v-if="isDocent && !eindbeoordeling">
             <p class="text-secondary text-sm mt-4 mb-12">
               Geef op basis van de zelfevaluatie en de mentorbeoordeling een finale score (op 20).
+              Let op: dit kan maar één keer.
             </p>
             <div class="flex items-center gap-12" style="flex-wrap:wrap;">
               <label class="text-sm">Score
@@ -231,17 +230,20 @@ onMounted(laad)
               <button class="btn btn-primary" :disabled="eindBezig" @click="bewaarEindscore">
                 {{ eindBezig ? 'Bezig…' : 'Finale score opslaan' }}
               </button>
-              <span v-if="eindBericht" class="text-sm" style="color:#16a34a;">{{ eindBericht }}</span>
+              <span v-if="eindBericht" class="text-sm" style="color:#dc2626;">{{ eindBericht }}</span>
             </div>
           </template>
 
-          <!-- Student: read-only -->
+          <!-- Read-only: zodra de score gegeven is (docent én student zien dit) -->
           <template v-else>
             <p v-if="eindbeoordeling">
               <span style="font-size:28px;font-weight:700;">{{ eindbeoordeling.score }}</span>
               <span class="text-secondary"> / 20</span>
             </p>
             <p v-if="eindbeoordeling?.motivatie" class="toelichting-tekst mt-8">{{ eindbeoordeling.motivatie }}</p>
+            <p v-if="eindbeoordeling" class="text-secondary text-xs mt-8">
+              🔒 De finale beoordeling is gegeven en kan niet meer aangepast worden.
+            </p>
             <p v-if="!eindbeoordeling" class="text-secondary text-sm">
               De docent heeft nog geen finale score gegeven.
             </p>

@@ -399,3 +399,25 @@ CREATE TABLE eindbeoordeling (
         FOREIGN KEY (beoordelaar_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+-- ============================================
+-- WACHTWOORD_RESET — "wachtwoord vergeten"
+-- ============================================
+-- We slaan NOOIT de ruwe reset-token op, enkel een SHA-256 hash ervan.
+-- De ruwe token gaat alleen per e-mail naar de gebruiker. Zo kan een lek
+-- van de database niet leiden tot misbruik van openstaande reset-links.
+CREATE TABLE wachtwoord_reset (
+    reset_id        INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id    INT             NOT NULL,
+    token_hash      CHAR(64)        NOT NULL,          -- SHA-256 hex (64 tekens)
+    verloopt_op     DATETIME        NOT NULL,          -- vervaltijd (bv. +1 uur)
+    gebruikt_op     DATETIME        NULL,              -- gevuld zodra de token gebruikt is (eenmalig)
+    aangemaakt_op   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (reset_id),
+    UNIQUE KEY uq_token_hash (token_hash),
+    KEY idx_reset_gebruiker (gebruiker_id),
+    CONSTRAINT fk_reset_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);

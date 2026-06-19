@@ -37,7 +37,7 @@ De implementatie volgt het Figma-prototype (Prototype_groep13), schermen voor de
 
 ## 5. Afgewerkte verfijningen
 
-1. **Notificatie-type** — ✅ `notificatie` heeft nu een `type`-kolom (`info`/`goed`/`waarschuwing`/`fout`), zie [schema.sql](../database/schema.sql) en migratie 13 in [migratie.sql](../database/migratie.sql). De dashboard-route geeft `type` mee en het dashboard kleurt het icoon hierop; de tekst-heuristiek blijft enkel als fallback voor oude rijen zonder type.
+1. **Notificatie-type** — ✅ `notificatie` heeft nu een `type`-kolom (`info`/`goed`/`waarschuwing`/`fout`), zie [schema.sql](../database/schema.sql) en migratie 17 in [migratie.sql](../database/migrations_archief/migratie.sql). De dashboard-route geeft `type` mee en het dashboard kleurt het icoon hierop; de tekst-heuristiek blijft enkel als fallback voor oude rijen zonder type.
 2. **Rol-dropdown** — ✅ de [TopBar](../frontend/src/components/TopBar.vue) toont rechtsboven een rol-dropdown (rol + ▾) die de accountinfo (naam, e-mail, rol) toont; "Uitloggen" wist nu ook echt de sessie en navigeert naar het loginscherm.
 
 ## 6. Conclusie

@@ -18,14 +18,25 @@ const stage = ref(null)
 const evaluaties = ref([])
 const logboeken = ref([])
 const contract = ref(null)
+const eindbeoordeling = ref(null)
 const laadFout = ref('')
 
 onMounted(async () => {
   await stageStore.laad()
   if (stageId.value) {
-    await Promise.all([laadStage(), laadEvaluaties(), laadLogboeken(), laadContract()])
+    await Promise.all([laadStage(), laadEvaluaties(), laadLogboeken(), laadContract(), laadEindbeoordeling()])
   }
 })
+
+async function laadEindbeoordeling() {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}/eindbeoordeling`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) eindbeoordeling.value = await res.json()
+  } catch { /* stil */ }
+}
 
 const stageId = computed(() => stageStore.aanvraag?.stage_id || null)
 const stageActief = computed(() => {
@@ -105,8 +116,34 @@ function formatDatum(d) {
 
       <template v-else>
 
+        <!-- Finale beoordeling docent -->
+        <div
+          v-if="eindbeoordeling"
+          class="card mt-24"
+          style="background:#f0fdf4;border:1px solid #bbf7d0;"
+        >
+          <h2 class="form-section-title">Finale beoordeling</h2>
+          <div class="flex items-center gap-16 mt-8" style="flex-wrap:wrap;">
+            <span style="font-size:40px;font-weight:700;line-height:1;">{{ eindbeoordeling.score }}</span>
+            <span class="text-secondary" style="font-size:18px;">/ 20</span>
+          </div>
+          <p v-if="eindbeoordeling.motivatie" class="text-sm mt-12" style="white-space:pre-wrap;">
+            {{ eindbeoordeling.motivatie }}
+          </p>
+          <p class="text-secondary text-xs mt-12">
+            Door {{ eindbeoordeling.beoordelaar_voornaam }} {{ eindbeoordeling.beoordelaar_naam }}
+            · {{ formatDatum(eindbeoordeling.beoordeeld_op) }}
+          </p>
+        </div>
+        <div v-else class="card mt-24">
+          <h2 class="form-section-title">Finale beoordeling</h2>
+          <p class="text-secondary text-sm mt-8">
+            De docent heeft nog geen finale score gegeven.
+          </p>
+        </div>
+
         <!-- Stagegegevens -->
-        <div class="card mt-24">
+        <div class="card mt-16">
           <h2 class="form-section-title">Stage</h2>
           <div class="form-grid-2 mt-12">
             <div>

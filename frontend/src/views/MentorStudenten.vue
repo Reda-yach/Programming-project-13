@@ -16,6 +16,7 @@ const navLinks = ref([
 
 const stagiairs = ref([])
 const contracten = ref({})
+const evaluaties = ref([])
 const laden = ref(true)
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 
@@ -43,10 +44,23 @@ onMounted(async () => {
     for (const s of stagiairs.value) {
       await laadContract(s.stage_id)
     }
+    // Mentor-evaluaties ophalen om per stage/fase de ingediend-status te kennen.
+    const evalRes = await fetch(`http://localhost:3000/api/mentors/${gebruiker.id}/evaluaties`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (evalRes.ok) evaluaties.value = await evalRes.json()
   } finally {
     laden.value = false
   }
 })
+
+// Is de mentor-evaluatie voor deze stage + fase al ingediend?
+function evaluatieIngediend(stageId, fase) {
+  const e = evaluaties.value.find(
+    (ev) => String(ev.stage_id) === String(stageId) && ev.fase === fase,
+  )
+  return !!e?.ingediend
+}
 
 async function laadContract(stageId) {
   const token = localStorage.getItem('token')
@@ -214,9 +228,11 @@ function naarEvaluatie(s, fase) {
               <td>
                 <template v-if="evalBeschikbaarheid(s).tussentijds.beschikbaar">
                   <button class="pill-knop pill-zwart" @click="naarEvaluatie(s, 'tussentijds')">
-                    Evalueren →
+                    {{ evaluatieIngediend(s.stage_id, 'tussentijds') ? 'Bekijken →' : 'Evalueren →' }}
                   </button>
-                  <div class="text-secondary text-xs mt-4">Wachtend op evaluatie van jou</div>
+                  <div class="text-secondary text-xs mt-4">
+                    {{ evaluatieIngediend(s.stage_id, 'tussentijds') ? 'Ingediend ✓' : 'Wachtend op evaluatie van jou' }}
+                  </div>
                 </template>
                 <template v-else>
                   <span class="pill badge-grijs">🔒 Niet beschikbaar</span>
@@ -230,9 +246,11 @@ function naarEvaluatie(s, fase) {
               <td>
                 <template v-if="evalBeschikbaarheid(s).eind.beschikbaar">
                   <button class="pill-knop pill-zwart" @click="naarEvaluatie(s, 'finaal')">
-                    Evalueren →
+                    {{ evaluatieIngediend(s.stage_id, 'finaal') ? 'Bekijken →' : 'Evalueren →' }}
                   </button>
-                  <div class="text-secondary text-xs mt-4">Wachtend op evaluatie van jou</div>
+                  <div class="text-secondary text-xs mt-4">
+                    {{ evaluatieIngediend(s.stage_id, 'finaal') ? 'Ingediend ✓' : 'Wachtend op evaluatie van jou' }}
+                  </div>
                 </template>
                 <template v-else>
                   <span class="pill badge-grijs">🔒 Niet beschikbaar</span>
