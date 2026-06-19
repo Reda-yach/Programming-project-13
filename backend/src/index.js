@@ -126,6 +126,7 @@ app.get('/api/gebruikers', verifyToken, (req, res) => {
       g.telefoonnummer,
       g.rol,
       g.is_actief,
+      g.commissielid,
       g.created_at,
       d.docent_id,
       d.specialisatie AS afdeling,
@@ -161,13 +162,15 @@ app.get('/api/gebruikers/:id', verifyToken, (req, res) => {
       g.rol,
       g.is_actief,
       g.commissielid,
-      g.afdeling,
       g.created_at,
       d.docent_id,
-      m.mentor_id
+      d.specialisatie AS afdeling,
+      m.mentor_id,
+      b.naam AS bedrijf
     FROM gebruiker g
     LEFT JOIN docent d ON d.gebruiker_id = g.gebruiker_id
     LEFT JOIN mentor  m ON m.gebruiker_id = g.gebruiker_id
+    LEFT JOIN bedrijf b ON m.bedrijf_id = b.bedrijf_id
     WHERE g.gebruiker_id = ?
   `, [id], (err, results) => {
     if (err) {
@@ -187,25 +190,23 @@ app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
   const { voornaam, naam, email, afdeling, rol, commissielid, is_actief } = req.body;
 
   db.query(
-    `UPDATE gebruiker SET voornaam = ?, naam = ?, email = ?, afdeling = ?, rol = ?, commissielid = ?, is_actief = ? WHERE gebruiker_id = ?`,
-    [voornaam, naam, email, afdeling, rol, commissielid ? 1 : 0, is_actief ? 1 : 0, id],
-    (err, results) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ ok: true });
-    }
-  );
-});
-
-app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
-  const { id } = req.params;
-  const { voornaam, naam, email, rol, commissielid, is_actief } = req.body;
-
-  db.query(
     `UPDATE gebruiker SET voornaam = ?, naam = ?, email = ?, rol = ?, commissielid = ?, is_actief = ? WHERE gebruiker_id = ?`,
     [voornaam, naam, email, rol, commissielid ? 1 : 0, is_actief ? 1 : 0, id],
-    (err, results) => {
+    (err) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ ok: true });
+
+      if (rol === 'docent' && afdeling !== undefined) {
+        db.query(
+          `UPDATE docent SET specialisatie = ? WHERE gebruiker_id = ?`,
+          [afdeling || null, id],
+          (err2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ ok: true });
+          }
+        );
+      } else {
+        res.json({ ok: true });
+      }
     }
   );
 });
