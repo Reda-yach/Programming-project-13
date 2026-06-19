@@ -156,11 +156,10 @@ onMounted(laadStages)
               </td>
               <td>
                 <button
-                  v-if="!volledig(stage)"
                   class="btn btn-primary btn-sm"
                   @click="naarKoppelen(stage)"
                 >
-                  Koppel →
+                  {{ volledig(stage) ? 'Bewerk →' : 'Koppel →' }}
                 </button>
               </td>
             </tr>
