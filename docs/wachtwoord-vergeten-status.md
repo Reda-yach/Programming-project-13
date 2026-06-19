@@ -42,7 +42,7 @@ De volledige backend-flow voor "wachtwoord vergeten" is nu gebouwd.
     zodat de flow lokaal getest kan worden zonder mailserver
 
 ### 3. Database-ondersteuning (aanwezig)
-- Tabel `wachtwoord_reset` toegevoegd in `database/migratie.sql` (MIGRATIE 12)
+- Tabel `wachtwoord_reset` staat in `database/schema.sql` (ook in `database/migrations_archief/migratie.sql`, MIGRATIE 16)
   - `token_hash` (SHA-256, ruwe token wordt nooit opgeslagen)
   - `verloopt_op` (geldigheidsduur, standaard 60 min)
   - `gebruikt_op` (eenmalig gebruik)

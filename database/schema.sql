@@ -10,6 +10,17 @@ CREATE DATABASE IF NOT EXISTS stageverloop
 USE stageverloop;
 
 -- ------------------------------------------------------------
+-- 0. OPLEIDING
+-- ------------------------------------------------------------
+CREATE TABLE opleiding (
+    opleiding_id        INT             NOT NULL AUTO_INCREMENT,
+    naam                VARCHAR(150)    NOT NULL,
+
+    PRIMARY KEY (opleiding_id),
+    UNIQUE KEY uq_opleiding_naam (naam)
+);
+
+-- ------------------------------------------------------------
 -- 1. GEBRUIKER
 -- ------------------------------------------------------------
 CREATE TABLE gebruiker (
@@ -36,12 +47,16 @@ CREATE TABLE student (
     gebruiker_id        INT             NOT NULL UNIQUE,
     studentnummer       VARCHAR(20)     NOT NULL UNIQUE,
     opleiding           VARCHAR(100)    NOT NULL,
+    opleiding_id        INT             NULL,
     academiejaar        VARCHAR(20)     NOT NULL,
 
     PRIMARY KEY (student_id),
     CONSTRAINT fk_student_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_student_opleiding
+        FOREIGN KEY (opleiding_id) REFERENCES opleiding(opleiding_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- ------------------------------------------------------------
@@ -258,41 +273,8 @@ CREATE TABLE student_evaluatie (
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- ------------------------------------------------------------
--- 12. EVALUATIECRITERIUM
--- ------------------------------------------------------------
-CREATE TABLE evaluatie_criterium (
-    criterium_id        INT             NOT NULL AUTO_INCREMENT,
-    evaluatie_id        INT             NOT NULL,
-    opleiding           VARCHAR(100)    NOT NULL,
-    competentie         VARCHAR(150)    NOT NULL,
-    naam                VARCHAR(150)    NOT NULL,
-    score               INT,
-    mentor_score        INT,
-    mentor_feedback     TEXT,
-    gewicht             DECIMAL(5,2)    NOT NULL DEFAULT 1.00,
-    volgorde            INT             NOT NULL DEFAULT 0,
-
-    PRIMARY KEY (criterium_id),
-    CONSTRAINT fk_criterium_evaluatie
-        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- ------------------------------------------------------------
--- 13. RUBRIEK
--- ------------------------------------------------------------
-CREATE TABLE rubriek (
-    rubriek_id          INT             NOT NULL AUTO_INCREMENT,
-    criterium_id        INT             NOT NULL,
-    punt                INT             NOT NULL,
-    beschrijving        TEXT            NOT NULL,
-
-    PRIMARY KEY (rubriek_id),
-    CONSTRAINT fk_rubriek_criterium
-        FOREIGN KEY (criterium_id) REFERENCES evaluatie_criterium(criterium_id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
+-- (12/13: evaluatie_criterium + rubriek verwijderd — vervangen door
+--  evaluatie_score, gedefinieerd na de competentie-tabel verderop.)
 
 -- ------------------------------------------------------------
 -- 14. COMPETENTIE RUBRIEK (per score-niveau beschrijving, ingesteld door admin)
@@ -358,7 +340,10 @@ CREATE TABLE competentie (
     is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    PRIMARY KEY (competentie_id)
+    PRIMARY KEY (competentie_id),
+    CONSTRAINT fk_competentie_opleiding
+        FOREIGN KEY (opleiding_id) REFERENCES opleiding(opleiding_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
 );
 -- ------------------------------------------------------------
 -- 17. COMPETENTIESET
@@ -373,4 +358,71 @@ CREATE TABLE competentieset (
 
     PRIMARY KEY (set_id)
 
+);
+
+-- ------------------------------------------------------------
+-- 18. EVALUATIE SCORE (score per competentie per evaluatie)
+-- ------------------------------------------------------------
+-- Vervangt evaluatie_criterium + rubriek: in plaats van competentie- en
+-- rubriektekst per evaluatie te kopieren, verwijst elke score rechtstreeks
+-- naar competentie_id. De vergelijking student/mentor/docent wordt zo een
+-- simpele JOIN en de rubriektekst staat enkel in competentie_rubriek.
+CREATE TABLE evaluatie_score (
+    score_id            INT             NOT NULL AUTO_INCREMENT,
+    evaluatie_id        INT             NOT NULL,
+    competentie_id      INT             NOT NULL,
+    score               INT             NULL,
+    toelichting         TEXT            NULL,
+
+    PRIMARY KEY (score_id),
+    UNIQUE KEY uq_eval_competentie (evaluatie_id, competentie_id),
+    CONSTRAINT fk_evalscore_evaluatie
+        FOREIGN KEY (evaluatie_id) REFERENCES evaluatie(evaluatie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_evalscore_competentie
+        FOREIGN KEY (competentie_id) REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 19. EINDBEOORDELING (finale score door de docent na de eindevaluatie)
+-- ------------------------------------------------------------
+CREATE TABLE eindbeoordeling (
+    eindbeoordeling_id  INT             NOT NULL AUTO_INCREMENT,
+    stage_id            INT             NOT NULL,
+    beoordelaar_id      INT             NOT NULL,
+    score               DECIMAL(5,2)    NOT NULL,
+    motivatie           TEXT,
+    beoordeeld_op       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (eindbeoordeling_id),
+    UNIQUE KEY uq_eindbeoordeling_stage (stage_id),
+    CONSTRAINT fk_eindbeoordeling_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_eindbeoordeling_beoordelaar
+        FOREIGN KEY (beoordelaar_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- ============================================
+-- WACHTWOORD_RESET — "wachtwoord vergeten"
+-- ============================================
+-- We slaan NOOIT de ruwe reset-token op, enkel een SHA-256 hash ervan.
+-- De ruwe token gaat alleen per e-mail naar de gebruiker. Zo kan een lek
+-- van de database niet leiden tot misbruik van openstaande reset-links.
+CREATE TABLE wachtwoord_reset (
+    reset_id        INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id    INT             NOT NULL,
+    token_hash      CHAR(64)        NOT NULL,          -- SHA-256 hex (64 tekens)
+    verloopt_op     DATETIME        NOT NULL,          -- vervaltijd (bv. +1 uur)
+    gebruikt_op     DATETIME        NULL,              -- gevuld zodra de token gebruikt is (eenmalig)
+    aangemaakt_op   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (reset_id),
+    UNIQUE KEY uq_token_hash (token_hash),
+    KEY idx_reset_gebruiker (gebruiker_id),
+    CONSTRAINT fk_reset_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
 );

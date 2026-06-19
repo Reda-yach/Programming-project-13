@@ -87,14 +87,9 @@ const router = createRouter({
       component: () => import('../views/DocentEvaluatieOverzicht.vue'),
     },
     {
-      path: '/docent/evaluatie/:stageId/:type',
-      name: 'docent-evaluatie',
-      component: () => import('../views/DocentEvaluatie.vue'),
-    },
-    {
-      path: '/docent/evaluatie/:stageId/:type/invullen',
-      name: 'docent-evaluatie-invullen',
-      component: () => import('../views/DocentEvaluatieInvullen.vue'),
+      path: '/docent/evaluatie/:stageId/:fase/vergelijking',
+      name: 'docent-evaluatie-vergelijking',
+      component: () => import('../views/EvaluatieVergelijking.vue'),
     },
     {
       path: '/mentor',
@@ -125,6 +120,11 @@ const router = createRouter({
       path: '/student/evaluatie/:fase',
       name: 'student-evaluatie-invullen',
       component: () => import('../views/StudentEvaluatieInvullen.vue'),
+    },
+    {
+      path: '/student/evaluatie/:fase/beoordeling',
+      name: 'student-evaluatie-beoordeling',
+      component: () => import('../views/EvaluatieVergelijking.vue'),
     },
     {
       path: '/student/eindoverzicht',

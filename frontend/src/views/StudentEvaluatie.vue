@@ -60,9 +60,20 @@ const eindEval = computed(() =>
   evaluaties.value.find(e => e.type === 'student' && e.fase === 'finaal')
 )
 
+// Mentor-beoordeling per fase: zichtbaar zodra de mentor minstens één score gaf.
+const mentorTussentijds = computed(() =>
+  evaluaties.value.find(e => e.type === 'mentor' && e.fase === 'tussentijds')
+)
+const mentorEind = computed(() =>
+  evaluaties.value.find(e => e.type === 'mentor' && e.fase === 'finaal')
+)
+function mentorBeschikbaar(m) {
+  return !!m && Number(m.ingevulde_criteria) > 0
+}
+
 function evalStatus(eval_) {
   if (!eval_) return 'niet-gestart'
-  if (Number(eval_.ingevulde_criteria) === Number(eval_.totaal_criteria) && eval_.totaal_criteria > 0) return 'ingediend'
+  if (eval_.ingediend) return 'ingediend'
   return 'bezig'
 }
 
@@ -86,6 +97,14 @@ function naarEvaluatie(fase) {
     ? beschikbaarheid.value.tussentijds.beschikbaar
     : beschikbaarheid.value.eind.beschikbaar
   if (!beschikbaar) return
+  const studentEval = fase === 'tussentijds' ? tussentijdsEval.value : eindEval.value
+  const mentor = fase === 'tussentijds' ? mentorTussentijds.value : mentorEind.value
+  // Zodra de student ingediend heeft én de mentor beoordeeld heeft, toont
+  // 'Bekijk evaluatie' meteen de samenvatting met zelfevaluatie + mentorscore.
+  if (evalStatus(studentEval) === 'ingediend' && mentorBeschikbaar(mentor)) {
+    router.push(`/student/evaluatie/${fase}/beoordeling`)
+    return
+  }
   router.push(`/student/evaluatie/${fase}`)
 }
 
@@ -117,13 +136,7 @@ onMounted(async () => {
 
           <!-- Tussentijdse evaluatie -->
           <div class="card">
-            <div class="flex justify-between items-center" style="margin-bottom:8px;">
-              <h2 style="font-size:16px;font-weight:600;">Tussentijdse evaluatie</h2>
-              <span v-if="evalStatus(tussentijdsEval) === 'ingediend'" class="badge badge-green badge-pill">Ingediend</span>
-              <span v-else-if="evalStatus(tussentijdsEval) === 'bezig'" class="badge badge-yellow badge-pill">Bezig</span>
-              <span v-else-if="beschikbaarheid.tussentijds.beschikbaar" class="badge badge-pill" style="background:var(--gray100,#f3f4f6);color:var(--text-secondary);">Niet gestart</span>
-              <span v-else class="badge badge-pill" style="background:var(--gray100,#f3f4f6);color:var(--text-secondary);">🔒 Niet beschikbaar</span>
-            </div>
+            <h2 style="font-size:16px;font-weight:600;margin-bottom:8px;">Tussentijdse evaluatie</h2>
 
             <p class="text-secondary text-sm">Halverwege je stage beoordeel je jezelf op de competenties.</p>
 
@@ -142,7 +155,7 @@ onMounted(async () => {
               @click="naarEvaluatie('tussentijds')"
             >
               {{
-                evalStatus(tussentijdsEval) === 'ingediend' ? 'Bekijken →'
+                evalStatus(tussentijdsEval) === 'ingediend' ? 'Bekijk evaluatie →'
                 : evalStatus(tussentijdsEval) === 'bezig' ? 'Verder invullen →'
                 : beschikbaarheid.tussentijds.beschikbaar ? 'Starten →'
                 : 'Nog niet beschikbaar'
@@ -152,13 +165,7 @@ onMounted(async () => {
 
           <!-- Eindevaluatie -->
           <div class="card">
-            <div class="flex justify-between items-center" style="margin-bottom:8px;">
-              <h2 style="font-size:16px;font-weight:600;">Eindevaluatie</h2>
-              <span v-if="evalStatus(eindEval) === 'ingediend'" class="badge badge-green badge-pill">Ingediend</span>
-              <span v-else-if="evalStatus(eindEval) === 'bezig'" class="badge badge-yellow badge-pill">Bezig</span>
-              <span v-else-if="beschikbaarheid.eind.beschikbaar" class="badge badge-pill" style="background:var(--gray100,#f3f4f6);color:var(--text-secondary);">Niet gestart</span>
-              <span v-else class="badge badge-pill" style="background:var(--gray100,#f3f4f6);color:var(--text-secondary);">🔒 Niet beschikbaar</span>
-            </div>
+            <h2 style="font-size:16px;font-weight:600;margin-bottom:8px;">Eindevaluatie</h2>
 
             <p class="text-secondary text-sm">Aan het einde van je stage doe je een volledige zelfreflectie.</p>
 
@@ -177,7 +184,7 @@ onMounted(async () => {
               @click="naarEvaluatie('finaal')"
             >
               {{
-                evalStatus(eindEval) === 'ingediend' ? 'Bekijken →'
+                evalStatus(eindEval) === 'ingediend' ? 'Bekijk evaluatie →'
                 : evalStatus(eindEval) === 'bezig' ? 'Verder invullen →'
                 : beschikbaarheid.eind.beschikbaar ? 'Starten →'
                 : 'Nog niet beschikbaar'

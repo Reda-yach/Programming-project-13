@@ -9,6 +9,7 @@ const stageStore = useStageStore()
 onMounted(async () => {
   await stageStore.laad()
   await laadLogboekStatus()
+  await laadEvalStatus()
 })
 
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
@@ -122,6 +123,28 @@ const evaluaties = computed(() => {
     eind: { beschikbaar: nu >= eindeDatum, vanaf: eindeDatum },
   }
 })
+
+// Ingediend-status van de zelfevaluaties, om de dashboard-knop te laten
+// wisselen tussen "Nu invullen" en "Bekijk evaluatie".
+const evalOverzicht = ref([])
+async function laadEvalStatus() {
+  const id = stage.value?.stage_id
+  if (!id) return
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${id}/evaluatie-overzicht`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return
+    evalOverzicht.value = await res.json()
+  } catch {}
+}
+const tussentijdsIngediend = computed(() =>
+  !!evalOverzicht.value.find(e => e.type === 'student' && e.fase === 'tussentijds' && e.ingediend)
+)
+const eindIngediend = computed(() =>
+  !!evalOverzicht.value.find(e => e.type === 'student' && e.fase === 'finaal' && e.ingediend)
+)
 </script>
 
 <template>
@@ -295,7 +318,7 @@ const evaluaties = computed(() => {
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            {{ tussentijdsIngediend ? 'Bekijk evaluatie →' : 'Nu invullen →' }}
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
             Nog niet beschikbaar
@@ -324,7 +347,7 @@ const evaluaties = computed(() => {
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            {{ eindIngediend ? 'Bekijk evaluatie →' : 'Nu invullen →' }}
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
             Nog niet beschikbaar

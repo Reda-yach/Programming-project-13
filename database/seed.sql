@@ -5,6 +5,12 @@
 USE stageverloop;
 
 -- --------------------------------------------
+-- 0. OPLEIDING
+-- --------------------------------------------
+INSERT INTO opleiding (opleiding_id, naam) VALUES
+  (1, 'Toegepaste Informatica');
+
+-- --------------------------------------------
 -- 1. GEBRUIKERS
 -- --------------------------------------------
 INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES
@@ -17,8 +23,8 @@ INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, r
 -- --------------------------------------------
 -- 2. STUDENT
 -- --------------------------------------------
-INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES
-  (1, 'EHB-2024-0842', 'Toegepaste Informatica', '2024-2025');
+INSERT INTO student (gebruiker_id, studentnummer, opleiding, opleiding_id, academiejaar) VALUES
+  (1, 'EHB-2024-0842', 'Toegepaste Informatica', 1, '2024-2025');
 
 -- --------------------------------------------
 -- 3. DOCENT
@@ -80,6 +86,31 @@ INSERT INTO logboek_feedback (logboek_id, gebruiker_id, opmerking) VALUES
   (1, 3, 'Goede start! Blijf zo verder.');
 
 -- --------------------------------------------
+-- 9B. COMPETENTIE (template, beheerd door admin per opleiding)
+-- --------------------------------------------
+INSERT INTO competentie (competentie_id, naam, omschrijving, gewicht, opleiding_id) VALUES
+  (1, 'Technische vaardigheden', 'Kwaliteit en onderhoudbaarheid van de geschreven code', 1.00, 1),
+  (2, 'Probleemoplossend denken', 'Zelfstandig problemen analyseren en oplossen', 1.00, 1),
+  (3, 'Communicatie', 'Rapporteren en samenwerken met het team', 1.00, 1);
+
+-- --------------------------------------------
+-- 9C. COMPETENTIE RUBRIEK (beschrijving per score-niveau)
+-- --------------------------------------------
+INSERT INTO competentie_rubriek (competentie_id, punt, beschrijving) VALUES
+  (1, 5, 'Code is proper, gedocumenteerd en volledig zelfstandig opgeleverd'),
+  (1, 3, 'Code is degelijk maar kan verfijnd worden'),
+  (1, 1, 'Code werkt deels maar mist structuur'),
+  (1, 0, 'Geen bruikbare code aangetoond'),
+  (2, 5, 'Lost problemen volledig zelfstandig op'),
+  (2, 3, 'Lost problemen op met beperkte hulp'),
+  (2, 1, 'Lost problemen enkel op met veel begeleiding'),
+  (2, 0, 'Geen probleemoplossend vermogen aangetoond'),
+  (3, 5, 'Communiceert proactief en helder'),
+  (3, 3, 'Communiceert goed op vraag'),
+  (3, 1, 'Communiceert beperkt'),
+  (3, 0, 'Geen communicatie aangetoond');
+
+-- --------------------------------------------
 -- 10. EVALUATIE
 -- --------------------------------------------
 INSERT INTO evaluatie (beoordelaar_id, type, totaalscore, opmerking) VALUES
@@ -92,20 +123,12 @@ INSERT INTO student_evaluatie (student_id, evaluatie_id, stage_id) VALUES
   (1, 1, 1);
 
 -- --------------------------------------------
--- 12. EVALUATIECRITERIUM
+-- 12. EVALUATIE SCORE (scores van de mentor-evaluatie per competentie)
 -- --------------------------------------------
-INSERT INTO evaluatie_criterium (evaluatie_id, opleiding, competentie, naam, score, volgorde) VALUES
-  (1, 'Toegepaste Informatica', 'Technische vaardigheden', 'Kwaliteit van code', 8, 1),
-  (1, 'Toegepaste Informatica', 'Probleemoplossend denken', 'Zelfstandig problemen oplossen', 7, 2),
-  (1, 'Toegepaste Informatica', 'Communicatie', 'Rapporteren en samenwerken', 9, 3);
-
--- --------------------------------------------
--- 13. RUBRIEK
--- --------------------------------------------
-INSERT INTO rubriek (criterium_id, punt, beschrijving) VALUES
-  (1, 8, 'Code is proper en gedocumenteerd'),
-  (2, 7, 'Lost problemen op met hulp'),
-  (3, 9, 'Communiceert proactief');
+INSERT INTO evaluatie_score (evaluatie_id, competentie_id, score, toelichting) VALUES
+  (1, 1, 5, 'Code is proper en gedocumenteerd'),
+  (1, 2, 3, 'Lost problemen op met beperkte hulp'),
+  (1, 3, 5, 'Communiceert proactief');
 
 -- --------------------------------------------
 -- 14. COMMISSIE BESLISSING
