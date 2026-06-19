@@ -2,15 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import { navLinks } from './adminNav'
 
 const API = 'http://localhost:3000/api'
-
-const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competentiesets' },
-  { label: 'Stages',       to: '/admin/stages' },
-  { label: 'Accounts',     to: '/admin/accounts' },
-  { label: 'Aanvragen',    to: '/admin/aanvragen' },
-])
 
 const route  = useRoute()
 const router = useRouter()
@@ -152,6 +146,10 @@ async function verwijderAccount() {
   }
 }
 
+function toggleActief() {
+  actief.value = !actief.value
+}
+
 onMounted(laad)
 </script>
 
@@ -221,6 +219,24 @@ onMounted(laad)
                 Kan in commissie werken
               </label>
             </div>
+          </div>
+
+          <hr class="card-divider" />
+
+          <!-- Status toggle -->
+          <div class="form-section-title" style="border:none; padding:0;">Status</div>
+          <div class="toggle" style="align-items:center;">
+            <div
+              class="toggle-switch"
+              :class="{ on: actief }"
+              @click="toggleActief"
+            ></div>
+            <span class="toggle-label" style="font-weight:500;">{{ actief ? 'Actief' : 'Inactief' }}</span>
+            <span style="font-size:13px; color:var(--text-secondary);">
+              {{ actief
+                ? 'Dit account kan inloggen en het systeem gebruiken.'
+                : 'Dit account heeft geen toegang tot het systeem.' }}
+            </span>
           </div>
 
           <hr class="card-divider" />

@@ -1,7 +1,8 @@
 <script setup>
-import { RouterLink, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 
-defineProps({
+const props = defineProps({
   links: {
     type: Array,
     default: () => [],
@@ -9,6 +10,17 @@ defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
+
+// ponytail: vlakke routes → eigen prefix-match i.p.v. active-class (exacte record-match)
+const activeTo = computed(() => {
+  const path = route.path
+  return props.links
+    .filter(l => [l.to, l.match].filter(Boolean)
+      .some(p => path === p || path.startsWith(p + '/')))
+    .map(l => l.to)
+    .sort((a, b) => b.length - a.length)[0]
+})
 
 function uitloggen() {
   localStorage.removeItem('token')
@@ -29,7 +41,7 @@ function uitloggen() {
         :key="link.to"
         :to="link.to"
         class="nav-item"
-        active-class="active"
+        :class="{ active: link.to === activeTo }"
       >
         {{ link.label }}
       </RouterLink>

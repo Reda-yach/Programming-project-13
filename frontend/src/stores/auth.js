@@ -27,6 +27,31 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => Boolean(token.value))
 
+  // Log in op een andere tab? Dan verandert localStorage daar, en deze tab
+  // krijgt een 'storage' event (vuurt alleen in ANDERE tabs, niet in de tab
+  // die zelf inlogt). Wijkt het token af van het onze, dan stuurt deze (oude)
+  // tab zichzelf naar de loginpagina met een reden, zodat de LoginView een
+  // melding kan tonen.
+  //
+  // Belangrijk: NIET clearSession() hier — dat wist de gedeelde localStorage,
+  // óók het token dat de nieuwe tab net schreef, waardoor die opnieuw moet
+  // inloggen. We raken localStorage dus niet aan; de volledige reload leest
+  // gewoon de actuele sessie.
+  //
+  // ponytail: zelfde browser deelt localStorage, dus de oude tab is niet écht
+  // "uitgelogd" (token bestaat nog) — hij toont enkel login + melding. Voor
+  // echte single-session over tabs/browsers/apparaten: server-side de oude
+  // tokens ongeldig maken bij login.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (e) => {
+      if (e.key !== STORAGE_KEY || !token.value) return
+      const nieuwToken = e.newValue ? JSON.parse(e.newValue).token : null
+      if (nieuwToken !== token.value) {
+        window.location.href = '/login?reden=elders'
+      }
+    })
+  }
+
   function saveSession(session) {
     token.value = session.token
     user.value = session.user
@@ -55,7 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
       student: '/student',
       docent: '/docent',
       mentor: '/mentor',
-      admin: '/admin',
+      admin: '/admin/competenties',
       commissie: '/commissie',
     }
 

@@ -28,6 +28,7 @@ const navLinks = computed(() => {
 
 const aanvragen = ref([])
 const geselecteerde = ref(null)
+const detailLaden = ref(false)
 const motivatie = ref('')
 const bezig = ref(false)
 const bericht = ref('')
@@ -51,10 +52,23 @@ async function laadAanvragen() {
   }
 }
 
-function selecteer(aanvraag) {
-  geselecteerde.value = aanvraag
+async function selecteer(aanvraag) {
   motivatie.value = ''
   bericht.value = ''
+  // Volledig detail ophalen; de lijst bevat maar een handvol velden.
+  detailLaden.value = true
+  geselecteerde.value = aanvraag
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${aanvraag.stage_id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) geselecteerde.value = await res.json()
+  } catch {
+    // Bij fout tonen we het beperkte lijst-object dat we al hadden.
+  } finally {
+    detailLaden.value = false
+  }
 }
 
 function terugNaarLijst() {
@@ -153,14 +167,66 @@ function formatDatum(d) {
       <div v-else>
         <button class="btn btn-secondary mb-16" @click="terugNaarLijst">← Overzicht</button>
 
-        <h1 class="page-title">{{ geselecteerde.voornaam }} {{ geselecteerde.student_naam }}</h1>
+        <h1 class="page-title">
+          {{ geselecteerde.student_voornaam || geselecteerde.voornaam }}
+          {{ geselecteerde.student_naam || geselecteerde.student }}
+        </h1>
 
         <div class="card mt-16">
           <h2 class="form-section-title">Gegevens aanvraag</h2>
-          <div class="form-grid-2 mt-12">
+          <p v-if="detailLaden" class="text-secondary text-sm mt-12">Gegevens laden…</p>
+          <div v-else class="form-grid-2 mt-12">
+            <div>
+              <p class="text-secondary text-sm">Studentnummer</p>
+              <p class="font-semibold">{{ geselecteerde.studentnummer || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Opleiding</p>
+              <p>{{ geselecteerde.opleiding || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">E-mail student</p>
+              <p>{{ geselecteerde.student_email || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Telefoon student</p>
+              <p>{{ geselecteerde.student_telefoon || '—' }}</p>
+            </div>
             <div>
               <p class="text-secondary text-sm">Bedrijf</p>
-              <p class="font-semibold">{{ geselecteerde.bedrijf }}</p>
+              <p class="font-semibold">{{ geselecteerde.bedrijf || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Sector</p>
+              <p>{{ geselecteerde.bedrijf_sector || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Adres bedrijf</p>
+              <p>
+                {{ geselecteerde.bedrijf_straatnaam || '' }} {{ geselecteerde.bedrijf_huisnummer || '' }}<br>
+                {{ geselecteerde.bedrijf_postcode || '' }} {{ geselecteerde.bedrijf_gemeente || '' }}
+              </p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Provincie</p>
+              <p>{{ geselecteerde.bedrijf_provincie || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Stagementor</p>
+              <p>
+                {{ geselecteerde.mentor_voornaam }} {{ geselecteerde.mentor_naam }}
+                <span v-if="geselecteerde.mentor_functie" class="text-secondary">
+                  ({{ geselecteerde.mentor_functie }})
+                </span>
+              </p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Contact mentor</p>
+              <p>{{ geselecteerde.mentor_email || '—' }} · {{ geselecteerde.mentor_telefoon || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Docent EHB</p>
+              <p>{{ [geselecteerde.docent_voornaam, geselecteerde.docent_naam].filter(Boolean).join(' ') || 'Nog niet toegewezen' }}</p>
             </div>
             <div>
               <p class="text-secondary text-sm">Periode</p>
@@ -168,7 +234,11 @@ function formatDatum(d) {
             </div>
             <div>
               <p class="text-secondary text-sm">Stagetitel</p>
-              <p>{{ geselecteerde.stagetitel }}</p>
+              <p>{{ geselecteerde.stagetitel || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-secondary text-sm">Ingediend op</p>
+              <p>{{ formatDatum(geselecteerde.ingediend_op) }}</p>
             </div>
             <div>
               <p class="text-secondary text-sm">Status</p>
@@ -177,7 +247,7 @@ function formatDatum(d) {
               </span>
             </div>
           </div>
-          <div v-if="geselecteerde.beschrijving" class="mt-16">
+          <div v-if="!detailLaden && geselecteerde.beschrijving" class="mt-16">
             <p class="text-secondary text-sm">Opdrachtsomschrijving</p>
             <p class="mt-4" style="white-space:pre-line;line-height:1.6;">{{ geselecteerde.beschrijving }}</p>
           </div>

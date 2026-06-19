@@ -4,6 +4,11 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 
+// Je reset je wachtwoord omdat je niet ingelogd bent; een oude sessie hoort weg.
+// Anders bounced LoginView je via onMounted meteen naar een dashboard.
+localStorage.removeItem('token')
+localStorage.removeItem('gebruiker')
+
 // Token komt uit de query: /wachtwoord-reset?token=...
 const token = computed(() => route.query.token || '')
 

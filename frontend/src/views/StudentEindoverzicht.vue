@@ -5,27 +5,45 @@ import { useStageStore } from '../stores/stage'
 
 const stageStore = useStageStore()
 
-const navLinks = ref([
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-  { label: 'Contract', to: '/student/contract' },
-  { label: 'Logboek', to: '/student/logboek' },
-  { label: 'Evaluatie', to: '/student/evaluatie' },
-  { label: 'Eindoverzicht', to: '/student/eindoverzicht' },
-])
+const eindoverzichtVrij = computed(() => !!stageStore.aanvraag?.eindoverzicht_vrij)
+
+const navLinks = computed(() => {
+  const links = [
+    { label: 'Dashboard', to: '/student' },
+    { label: 'Aanvraag', to: '/student/aanvraag' },
+    { label: 'Contract', to: '/student/contract' },
+    { label: 'Logboek', to: '/student/logboek' },
+    { label: 'Evaluatie', to: '/student/evaluatie' },
+  ]
+  if (eindoverzichtVrij.value) {
+    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
+  }
+  return links
+})
 
 const stage = ref(null)
 const evaluaties = ref([])
 const logboeken = ref([])
 const contract = ref(null)
+const eindbeoordeling = ref(null)
 const laadFout = ref('')
 
 onMounted(async () => {
   await stageStore.laad()
   if (stageId.value) {
-    await Promise.all([laadStage(), laadEvaluaties(), laadLogboeken(), laadContract()])
+    await Promise.all([laadStage(), laadEvaluaties(), laadLogboeken(), laadContract(), laadEindbeoordeling()])
   }
 })
+
+async function laadEindbeoordeling() {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}/eindbeoordeling`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) eindbeoordeling.value = await res.json()
+  } catch { /* stil */ }
+}
 
 const stageId = computed(() => stageStore.aanvraag?.stage_id || null)
 const stageActief = computed(() => {
@@ -94,19 +112,47 @@ function formatDatum(d) {
     <main class="content">
       <h1 class="page-title">Eindoverzicht stage</h1>
 
-      <template v-if="!stageActief">
+      <template v-if="!stageActief || !eindoverzichtVrij">
         <div class="card mt-24">
           <p class="font-semibold">Eindoverzicht nog niet beschikbaar</p>
           <p class="text-secondary text-sm mt-8">
-            Dit overzicht is beschikbaar zodra je stage goedgekeurd is.
+            {{ !stageActief
+              ? 'Dit overzicht is beschikbaar zodra je stage goedgekeurd is.'
+              : 'Dit overzicht wordt zichtbaar zodra je docent én mentor hun finale evaluatie hebben ingediend.' }}
           </p>
         </div>
       </template>
 
       <template v-else>
 
+        <!-- Finale beoordeling docent -->
+        <div
+          v-if="eindbeoordeling"
+          class="card mt-24"
+          style="background:#f0fdf4;border:1px solid #bbf7d0;"
+        >
+          <h2 class="form-section-title">Finale beoordeling</h2>
+          <div class="flex items-center gap-16 mt-8" style="flex-wrap:wrap;">
+            <span style="font-size:40px;font-weight:700;line-height:1;">{{ eindbeoordeling.score }}</span>
+            <span class="text-secondary" style="font-size:18px;">/ 20</span>
+          </div>
+          <p v-if="eindbeoordeling.motivatie" class="text-sm mt-12" style="white-space:pre-wrap;">
+            {{ eindbeoordeling.motivatie }}
+          </p>
+          <p class="text-secondary text-xs mt-12">
+            Door {{ eindbeoordeling.beoordelaar_voornaam }} {{ eindbeoordeling.beoordelaar_naam }}
+            · {{ formatDatum(eindbeoordeling.beoordeeld_op) }}
+          </p>
+        </div>
+        <div v-else class="card mt-24">
+          <h2 class="form-section-title">Finale beoordeling</h2>
+          <p class="text-secondary text-sm mt-8">
+            De docent heeft nog geen finale score gegeven.
+          </p>
+        </div>
+
         <!-- Stagegegevens -->
-        <div class="card mt-24">
+        <div class="card mt-16">
           <h2 class="form-section-title">Stage</h2>
           <div class="form-grid-2 mt-12">
             <div>
@@ -132,9 +178,21 @@ function formatDatum(d) {
         <div class="card mt-16">
           <h2 class="form-section-title">Stagecontract</h2>
           <div v-if="contract" class="flex gap-24 mt-12" style="flex-wrap:wrap;">
-            <span>Student: {{ contract.getekend_student ? '✅' : '⏳' }}</span>
-            <span>Mentor: {{ contract.getekend_mentor ? '✅' : '⏳' }}</span>
-            <span>Docent: {{ contract.getekend_docent ? '✅' : '⏳' }}</span>
+            <span>Student:
+              <span class="badge" :class="contract.getekend_student ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span>Mentor:
+              <span class="badge" :class="contract.getekend_mentor ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span>Docent:
+              <span class="badge" :class="contract.getekend_docent ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
           </div>
           <p v-if="contractVolledig" class="text-sm mt-8" style="color:#16a34a;">
             Volledig ondertekend op {{ formatDatum(contract.getekend_op) }}

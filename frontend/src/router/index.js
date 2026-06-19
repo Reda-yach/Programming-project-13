@@ -37,7 +37,8 @@ const router = createRouter({
     {
       path: '/docent',
       name: 'docent',
-      component: () => import('../views/DocentInCommissieStudenten.vue'),
+      // /docent is enkel het landingspunt na login → toon de studentenlijst (kaarten-view).
+      redirect: '/docent-studenten',
     },
     {
       path: '/docent-logboek-overzicht',
@@ -60,35 +61,21 @@ const router = createRouter({
       component: () => import('../views/DocentLogboekDetail.vue'),
     },
     {
-      path: '/mentor',
-      name: 'mentor',
-      component: () => import('../views/MentorLogboek.vue'),
-    },
-    {
       path: '/docent-studenten',
       name: 'docent-studenten',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
     // ── Admin (all routes require admin role) ─────────────────────────────
     {
+      // Oude tabel-UI is verwijderd; bestaande links naar /docent/studenten
+      // (AppTopbar, evaluatie-terugknoppen) leiden nu naar de kaarten-view.
       path: '/docent/studenten',
-      name: 'docent-studenten-overzicht',
-      component: () => import('../views/DocentStudenten.vue'),
+      redirect: '/docent-studenten',
     },
     {
       path: '/aanvragen',
       name: 'commissie-aanvragen',
       component: () => import('@/views/CommissieAanvragenView.vue'),
-    },
-    {
-      path: '/docent/studenten/:id',
-      name: 'docent-student-detail',
-      component: () => import('../views/DocentStudentDetail.vue'),
-    },
-    {
-      path: '/docent/logboek/:studentId',
-      name: 'docent-logboek-detail-nieuw',
-      component: () => import('../views/DocentLogboekDetail.vue'),
     },
     {
       path: '/docent/aanvragen',
@@ -101,19 +88,14 @@ const router = createRouter({
       component: () => import('../views/DocentEvaluatieOverzicht.vue'),
     },
     {
-      path: '/docent/evaluatie/:stageId/:type',
-      name: 'docent-evaluatie',
-      component: () => import('../views/DocentEvaluatie.vue'),
-    },
-    {
-      path: '/docent/evaluatie/:stageId/:type/invullen',
-      name: 'docent-evaluatie-invullen',
-      component: () => import('../views/DocentEvaluatieInvullen.vue'),
+      path: '/docent/evaluatie/:stageId/:fase/vergelijking',
+      name: 'docent-evaluatie-vergelijking',
+      component: () => import('../views/EvaluatieVergelijking.vue'),
     },
     {
       path: '/mentor',
-      name: 'mentor-dashboard',
-      component: () => import('../views/MentorDashboard.vue'),
+      name: 'mentor-studenten',
+      component: () => import('../views/MentorStudenten.vue'),
     },
     {
       path: '/mentor/logboeken',
@@ -136,6 +118,16 @@ const router = createRouter({
       component: () => import('../views/StudentContract.vue'),
     },
     {
+      path: '/student/evaluatie/:fase',
+      name: 'student-evaluatie-invullen',
+      component: () => import('../views/StudentEvaluatieInvullen.vue'),
+    },
+    {
+      path: '/student/evaluatie/:fase/beoordeling',
+      name: 'student-evaluatie-beoordeling',
+      component: () => import('../views/EvaluatieVergelijking.vue'),
+    },
+    {
       path: '/student/eindoverzicht',
       name: 'student-eindoverzicht',
       component: () => import('../views/StudentEindoverzicht.vue'),
@@ -144,11 +136,6 @@ const router = createRouter({
       path: '/commissie',
       name: 'commissie',
       component: () => import('../views/CommissieDashboard.vue'),
-    },
-    {
-      path: '/admin',
-      name: 'admin',
-      component: () => import('../views/AdminDashboard.vue'),
     },
     {
       path: '/admin/studenten/nieuw',

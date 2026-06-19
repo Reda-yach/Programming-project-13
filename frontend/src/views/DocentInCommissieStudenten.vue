@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+import SignaturePad from '@/components/SignaturePad.vue'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -13,6 +14,8 @@ const studenten = ref([])
 const contracten = ref({})
 const berichtContract = ref({})
 const laadFout = ref('')
+const tekenStageId = ref(null) // stage waarvan de tekenpad open staat
+const pad = ref(null)
 
 onMounted(async () => {
   await laadStudenten()
@@ -31,16 +34,24 @@ async function laadContract(stageId) {
 }
 
 async function tekenContract(stageId) {
+  const handtekening = pad.value?.getData()
+  if (!handtekening) {
+    berichtContract.value[stageId] = 'Teken eerst je handtekening in het vak.'
+    return
+  }
   const token = localStorage.getItem('token')
   try {
     const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rol: 'docent' }),
+      body: JSON.stringify({ rol: 'docent', handtekening }),
     })
     const data = await res.json()
     berichtContract.value[stageId] = data.message || data.error
-    await laadContract(stageId)
+    if (res.ok) {
+      tekenStageId.value = null
+      await laadContract(stageId)
+    }
   } catch {
     berichtContract.value[stageId] = 'Er ging iets mis.'
   }
@@ -176,20 +187,43 @@ function formatDatum(d) {
           class="mt-12" style="border-top:1px solid var(--border);padding-top:12px;">
           <p class="text-secondary text-xs font-semibold mb-8">Stagecontract</p>
           <div class="flex gap-16 items-center" style="flex-wrap:wrap;">
-            <span class="text-sm">Student: {{ contracten[student.stage_id].getekend_student ? '✅' : '⏳' }}</span>
-            <span class="text-sm">Mentor: {{ contracten[student.stage_id].getekend_mentor ? '✅' : '⏳' }}</span>
-            <span class="text-sm">Docent: {{ contracten[student.stage_id].getekend_docent ? '✅' : '⏳' }}</span>
+            <span class="text-sm">Student:
+              <span class="badge" :class="contracten[student.stage_id].getekend_student ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span class="text-sm">Mentor:
+              <span class="badge" :class="contracten[student.stage_id].getekend_mentor ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
+            <span class="text-sm">Docent:
+              <span class="badge" :class="contracten[student.stage_id].getekend_docent ? 'badge-green' : 'badge-gray'">
+                {{ contracten[student.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
+              </span>
+            </span>
             <span v-if="berichtContract[student.stage_id]" class="text-sm" style="color:#16a34a;">
               {{ berichtContract[student.stage_id] }}
             </span>
             <button
-              v-if="!contracten[student.stage_id].getekend_docent"
+              v-if="!contracten[student.stage_id].getekend_docent && tekenStageId !== student.stage_id"
               class="btn btn-primary btn-sm"
-              @click="tekenContract(student.stage_id)"
+              @click="tekenStageId = student.stage_id; berichtContract[student.stage_id] = ''"
             >
               Contract ondertekenen
             </button>
-            <span v-else class="text-sm" style="color:#16a34a;">Jij hebt al ondertekend</span>
+            <span v-else-if="contracten[student.stage_id].getekend_docent" class="text-sm" style="color:#16a34a;">Jij hebt al ondertekend</span>
+          </div>
+
+          <!-- Tekenpad voor de docent/commissie -->
+          <div v-if="tekenStageId === student.stage_id" class="mt-12" style="max-width:420px;">
+            <SignaturePad ref="pad" />
+            <div class="flex gap-8 mt-8">
+              <button class="btn btn-primary btn-sm" @click="tekenContract(student.stage_id)">
+                Handtekening opslaan
+              </button>
+              <button class="btn btn-secondary btn-sm" @click="tekenStageId = null">Annuleren</button>
+            </div>
           </div>
         </div>
       </div>

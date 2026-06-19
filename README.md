@@ -116,10 +116,11 @@ SELECT * FROM evaluatie_criterium;
 ```
 Je zou 5 gebruikers en 3 evaluatiecriteria moeten zien.
 
-> **Let op (bestaande databases):** `schema.sql` bevat het volledige, actuele schema.
-> `database/migratie.sql` is enkel bedoeld om een **oudere** database bij te werken
-> (o.a. de `logboek_dag`- en `notificatie.type`-uitbreidingen). Voer het niet uit op
-> een database die je net met `schema.sql` hebt aangemaakt.
+> **Let op (bestaande databases):** `schema.sql` bevat het volledige, actuele schema —
+> voor een nieuwe database heb je enkel `schema.sql` + `seed.sql` nodig. De oude
+> migratiescripts staan ter referentie in `database/migrations_archief/` en zijn enkel
+> bedoeld om een **bestaande**, oudere database bij te werken. Voer ze niet uit op een
+> database die je net met `schema.sql` hebt aangemaakt.
 
 ## Tabellen
 | Tabel | Omschrijving |

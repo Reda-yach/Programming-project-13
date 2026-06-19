@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db = require('../db');
 
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -12,8 +13,20 @@ function verifyToken(req, res, next) {
     if (err) {
       return res.status(403).json({ error: 'Ongeldig token' });
     }
-    req.gebruiker = gebruiker; // { id, email, rol }
-    next();
+
+    // Single-session: token moet de huidige sessie van de gebruiker zijn.
+    // Ergens anders inloggen zet een nieuwe sessie_id → dit (oude) token klopt
+    // dan niet meer. code 'sessie_elders' zodat de frontend gericht uitlogt.
+    // ponytail: één extra SELECT per request — prima op deze schaal; cache het
+    // pas als de DB er last van krijgt.
+    db.query('SELECT sessie_id FROM gebruiker WHERE gebruiker_id = ?', [gebruiker.id], (dbErr, rows) => {
+      if (dbErr) return res.status(500).json({ error: dbErr.message });
+      if (rows.length === 0 || rows[0].sessie_id !== gebruiker.sid) {
+        return res.status(401).json({ error: 'Je bent ergens anders ingelogd.', code: 'sessie_elders' });
+      }
+      req.gebruiker = gebruiker; // { id, email, rol, sid }
+      next();
+    });
   });
 }
 

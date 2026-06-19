@@ -8,7 +8,7 @@ const route = useRoute()
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
-  { label: 'Logboek', to: '/docent-logboek-overzicht' },
+  { label: 'Logboek', to: '/docent-logboek-overzicht', match: '/docent/logboek' },
   { label: 'Evaluaties', to: '/docent-evaluaties' },
   { label: 'Aanvragen', to: '/docent-aanvragen' },
 ])

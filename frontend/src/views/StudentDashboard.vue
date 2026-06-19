@@ -9,6 +9,7 @@ const stageStore = useStageStore()
 onMounted(async () => {
   await stageStore.laad()
   await laadLogboekStatus()
+  await laadEvalStatus()
 })
 
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
@@ -20,27 +21,36 @@ const stageStatus = computed(() => stageStore.status)
 const stage = computed(() => stageStore.aanvraag)
 const motivatie = computed(() => stageStore.motivatie)
 
+// Actief = alle partijen hebben getekend (DB-status 'bezig'). De store mapt
+// 'bezig' naar 'goedgekeurd', dus voor het label lezen we de ruwe status.
+const stageActief = computed(() => stage.value?.status === 'bezig')
+
 const stageBezig = computed(() =>
   stageStatus.value === 'goedgekeurd' &&
   !!stage.value?.startdatum &&
   new Date() >= new Date(stage.value.startdatum)
 )
 
-const navLinks = computed(() =>
-  stageStatus.value === 'goedgekeurd'
-    ? [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-        { label: 'Contract', to: '/student/contract' },
-        { label: 'Logboek', to: '/student/logboek' },
-        { label: 'Evaluatie', to: '/student/evaluatie' },
-        { label: 'Eindoverzicht', to: '/student/eindoverzicht' },
-      ]
-    : [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-      ],
-)
+const navLinks = computed(() => {
+  if (stageStatus.value !== 'goedgekeurd') {
+    return [
+      { label: 'Dashboard', to: '/student' },
+      { label: 'Aanvraag', to: '/student/aanvraag' },
+    ]
+  }
+  const links = [
+    { label: 'Dashboard', to: '/student' },
+    { label: 'Aanvraag', to: '/student/aanvraag' },
+    { label: 'Contract', to: '/student/contract' },
+    { label: 'Logboek', to: '/student/logboek' },
+    { label: 'Evaluatie', to: '/student/evaluatie' },
+  ]
+  // Eindoverzicht pas zichtbaar als docent én mentor hun finale evaluatie indienden
+  if (stage.value?.eindoverzicht_vrij) {
+    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
+  }
+  return links
+})
 
 const logboekWeek = ref(null)
 const logboekStatus = ref(null)
@@ -71,16 +81,16 @@ function formatTijd(ts) {
   return isNaN(d) ? '' : d.toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 function meldingPresentatie(b) {
-  if (b === 'aanpassing_gevraagd') return { icon: '✏️', titel: 'Aanpassing gevraagd' }
-  if (b === 'afgewezen') return { icon: '❌', titel: 'Aanvraag afgewezen' }
-  if (b === 'goedgekeurd') return { icon: '✅', titel: 'Aanvraag goedgekeurd' }
-  return { icon: '📋', titel: 'Beslissing commissie' }
+  if (b === 'aanpassing_gevraagd') return { titel: 'Aanpassing gevraagd' }
+  if (b === 'afgewezen') return { titel: 'Aanvraag afgewezen' }
+  if (b === 'goedgekeurd') return { titel: 'Aanvraag goedgekeurd' }
+  return { titel: 'Beslissing commissie' }
 }
 
 const meldingen = computed(() =>
   (stageStore.meldingen || []).map((m) => {
     const p = meldingPresentatie(m.beslissing)
-    return { icon: p.icon, titel: p.titel, tijd: formatTijd(m.beslist_op), sub: m.motivatie || 'Geen motivatie opgegeven.' }
+    return { titel: p.titel, tijd: formatTijd(m.beslist_op), sub: m.motivatie || 'Geen motivatie opgegeven.' }
   })
 )
 
@@ -113,6 +123,28 @@ const evaluaties = computed(() => {
     eind: { beschikbaar: nu >= eindeDatum, vanaf: eindeDatum },
   }
 })
+
+// Ingediend-status van de zelfevaluaties, om de dashboard-knop te laten
+// wisselen tussen "Nu invullen" en "Bekijk evaluatie".
+const evalOverzicht = ref([])
+async function laadEvalStatus() {
+  const id = stage.value?.stage_id
+  if (!id) return
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${id}/evaluatie-overzicht`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return
+    evalOverzicht.value = await res.json()
+  } catch {}
+}
+const tussentijdsIngediend = computed(() =>
+  !!evalOverzicht.value.find(e => e.type === 'student' && e.fase === 'tussentijds' && e.ingediend)
+)
+const eindIngediend = computed(() =>
+  !!evalOverzicht.value.find(e => e.type === 'student' && e.fase === 'finaal' && e.ingediend)
+)
 </script>
 
 <template>
@@ -132,15 +164,16 @@ const evaluaties = computed(() => {
             <span
               class="badge badge-pill"
               :class="{
-                'badge-green': stageStatus === 'goedgekeurd',
-                'badge-yellow': stageStatus === 'in_behandeling',
+                'badge-green': stageActief,
+                'badge-yellow': stageStatus === 'in_behandeling' || (stageStatus === 'goedgekeurd' && !stageActief),
                 'badge-orange': stageStatus === 'aanpassing_gevraagd',
                 'badge-red': stageStatus === 'afgewezen',
                 'badge-gray': stageStatus === 'geen',
               }"
             >
               {{
-                stageStatus === 'goedgekeurd' ? 'Actief'
+                stageActief ? 'Actief'
+                  : stageStatus === 'goedgekeurd' ? 'In behandeling'
                   : stageStatus === 'in_behandeling' ? 'In behandeling'
                   : stageStatus === 'aanpassing_gevraagd' ? 'Aanpassing gevraagd'
                   : stageStatus === 'afgewezen' ? 'Afgewezen'
@@ -153,7 +186,7 @@ const evaluaties = computed(() => {
           <!-- Goedgekeurd / lopend -->
           <template v-if="stageStatus === 'goedgekeurd'">
             <div class="flex items-center gap-12" style="margin-bottom: 16px;">
-              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏢</div>
+              <div style="width:48px;height:48px;background:var(--gray50);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--text-secondary);flex-shrink:0;">{{ stage?.bedrijf?.charAt(0) || '' }}</div>
               <div>
                 <div class="font-semibold" style="font-size:16px;">{{ stage?.bedrijf }}</div>
                 <div class="text-secondary text-xs">
@@ -285,10 +318,10 @@ const evaluaties = computed(() => {
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            {{ tussentijdsIngediend ? 'Bekijk evaluatie →' : 'Nu invullen →' }}
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
 
@@ -314,10 +347,10 @@ const evaluaties = computed(() => {
             class="flex items-center gap-8 font-semibold text-sm"
             style="padding-top:8px;"
           >
-            Nu invullen →
+            {{ eindIngediend ? 'Bekijk evaluatie →' : 'Nu invullen →' }}
           </RouterLink>
           <span v-else class="flex items-center gap-8 text-sm text-secondary" style="padding-top:8px;">
-            Nog niet beschikbaar 🔒︎
+            Nog niet beschikbaar
           </span>
         </div>
       </section>
@@ -336,7 +369,6 @@ const evaluaties = computed(() => {
             class="notification-item"
             :style="i === meldingen.length - 1 ? 'border-bottom:none;' : ''"
           >
-            <div class="notification-icon">{{ melding.icon }}</div>
             <div class="notification-body">
               <div class="flex justify-between">
                 <span class="notification-title">{{ melding.titel }}</span>

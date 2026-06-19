@@ -2,15 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import { navLinks } from './adminNav'
 
 const API = 'http://localhost:3000/api'
-
-const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competentiesets' },
-  { label: 'Stages',       to: '/admin/stages' },
-  { label: 'Accounts',     to: '/admin/accounts' },
-  { label: 'Aanvragen',    to: '/admin/aanvragen' },
-])
 
 const router = useRouter()
 
@@ -67,7 +61,6 @@ async function laadStages() {
         bedrijf:      s.bedrijf || '—',
         periode:      formatPeriode(s.startdatum, s.einddatum),
         docent:       d.docent_voornaam ? `${d.docent_voornaam} ${d.docent_naam}` : null,
-        mentor:       d.mentor_voornaam ? `${d.mentor_voornaam} ${d.mentor_naam}` : null,
         mentor_naam_orig: d.mentor_voornaam ? `${d.mentor_voornaam[0]}. ${d.mentor_naam}` : null,
       }
     })
@@ -80,7 +73,7 @@ async function laadStages() {
 }
 
 function volledig(stage) {
-  return !!(stage.docent && stage.mentor)
+  return !!(stage.docent && stage.mentor_naam_orig)
 }
 
 function naarKoppelen(stage) {
@@ -147,7 +140,7 @@ onMounted(laadStages)
                 <span v-else style="color:var(--text-secondary);">—</span>
               </td>
               <td>
-                <span v-if="stage.mentor">{{ stage.mentor_naam_orig }}</span>
+                <span v-if="stage.mentor_naam_orig">{{ stage.mentor_naam_orig }}</span>
                 <span v-else style="color:var(--text-secondary);">—</span>
               </td>
               <td>

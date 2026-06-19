@@ -5,6 +5,7 @@ const db = require('../db');
 // verifyToken lokale kopie (zelfde als in stage.js)
 
 const { verifyToken } = require('../middleware/auth');
+const { mailBijNotificatie } = require('../services/mail');
 
 // Alle openstaande aanvragen ophalen
 router.get('/openstaand', verifyToken, (req, res) => {
@@ -86,7 +87,7 @@ function bouwMelding(beslissing, motivatie) {
 
 router.put('/:id/beslissing', verifyToken, async (req, res) => {
   const stageId = parseInt(req.params.id, 10);
-  const { beslissing, motivatie } = req.body;
+  const { beslissing, motivatie, docent_id } = req.body;
 
   // Alleen commissie/docent/admin mogen beslissen.
   if (!['commissie', 'docent', 'admin'].includes(req.gebruiker.rol)) {
@@ -106,6 +107,13 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
   // Motivatie is verplicht bij afkeuren of aanpassingen vragen.
   if ((beslissing === 'afgewezen' || beslissing === 'meer_info') && !motivatie?.trim()) {
     return res.status(400).json({ error: 'Motivatie is verplicht bij afkeuren of aanpassingen vragen.' });
+  }
+
+  // Goedkeuren koppelt meteen een begeleidende docent aan de stage; het
+  // docent-dashboard filtert op stage.docent_id. Ongeldige id's vangt de
+  // foreign key af (rollt de transactie terug).
+  if (beslissing === 'goedgekeurd' && !docent_id) {
+    return res.status(400).json({ error: 'Kies een begeleidende docent om de stage goed te keuren.' });
   }
 
   const nieuweStatus = BESLISSING_NAAR_STATUS[beslissing];
@@ -146,11 +154,26 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
       [stageId, req.gebruiker.id, beslissing, motivatie?.trim() || null],
     );
 
-    // 2. Stage-status bijwerken.
-    await conn.execute('UPDATE stage SET status = ? WHERE stage_id = ?', [nieuweStatus, stageId]);
+    // 2. Stage-status bijwerken (+ docent toewijzen bij goedkeuring).
+    if (beslissing === 'goedgekeurd') {
+      await conn.execute('UPDATE stage SET status = ?, docent_id = ? WHERE stage_id = ?', [nieuweStatus, docent_id, stageId]);
+    } else {
+      await conn.execute('UPDATE stage SET status = ? WHERE stage_id = ?', [nieuweStatus, stageId]);
+    }
+
+    // 2b. Bij goedkeuring: de stageovereenkomst alvast aanmaken zodat ze meteen
+    //     ondertekend kan worden (de commissie tekent direct na goedkeuren).
+    if (beslissing === 'goedgekeurd') {
+      await conn.execute(
+        `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+         VALUES (?, FALSE, FALSE, FALSE)`,
+        [stageId],
+      );
+    }
 
     // 3. Student op de hoogte brengen.
     const melding = bouwMelding(beslissing, motivatie?.trim());
+    mailBijNotificatie(studentGebruikerId, melding.bericht);
     await conn.execute(
       `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, ?)`,
       [studentGebruikerId, melding.bericht, melding.type],

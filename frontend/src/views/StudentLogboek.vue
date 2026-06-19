@@ -342,7 +342,7 @@ onMounted(async () => {
             </div>
 
             <div v-if="isDagToekomst(actieveDag)" style="color:var(--text-secondary);font-size:14px;padding:8px 0;">
-              🔒 Deze dag is nog niet begonnen — je kunt hem invullen zodra de dag aangebroken is.
+              Deze dag is nog niet begonnen — je kunt hem invullen zodra de dag aangebroken is.
             </div>
             <div v-else-if="!isReadonly" class="flex items-center gap-12">
               <button class="btn btn-primary" :disabled="opslaanBezig" @click="slaanOp">
@@ -372,7 +372,7 @@ onMounted(async () => {
                 </span>
               </div>
               <p v-if="aantalIngevuld < 5" class="text-xs" style="color:var(--orange,#ea580c);margin-top:8px;">
-                ⚠ Vul eerst alle 5 dagen in voordat je het logboek indient.
+                Vul eerst alle 5 dagen in voordat je het logboek indient.
               </p>
             </div>
             <button
@@ -381,7 +381,7 @@ onMounted(async () => {
               :disabled="!kanIndienen || indienenBezig"
               :style="!kanIndienen ? 'opacity:0.5;cursor:not-allowed;' : ''"
               @click="dienIn"
-            >{{ indienenBezig ? 'Indienen…' : '✈ Logboek indienen' }}</button>
+            >{{ indienenBezig ? 'Indienen…' : 'Logboek indienen' }}</button>
           </div>
 
           <!-- Ingediend bericht -->

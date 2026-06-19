@@ -51,4 +51,41 @@ async function stuurMail({ to, subject, text, html }) {
   return { messageId: info.messageId };
 }
 
-module.exports = { stuurMail };
+/**
+ * Stuur een e-mail naar de gebruiker bij wie een notificatie wordt aangemaakt.
+ * Fire-and-forget: nooit awaiten, nooit throwen — een mislukte mail mag de
+ * lopende request niet raken.
+ * @param {number} gebruikerId
+ * @param {string} bericht  De notificatietekst (zelfde als in de in-app melding).
+ */
+// ponytail: stuurt mail naar de notificatie-ontvanger; geen queue/retry — voeg toe als volume groeit.
+async function mailBijNotificatie(gebruikerId, bericht) {
+  try {
+    const db = require('../db').promise();
+    const [rows] = await db.query(
+      'SELECT email, voornaam FROM gebruiker WHERE gebruiker_id = ?',
+      [gebruikerId],
+    );
+    if (!rows.length || !rows[0].email) return;
+
+    const { email, voornaam } = rows[0];
+    const dashboard = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    await stuurMail({
+      to: email,
+      subject: 'Nieuwe melding in je stagedossier — Stageverloop',
+      text:
+        `Hallo ${voornaam},\n\n` +
+        `${bericht}\n\n` +
+        `Bekijk je dossier: ${dashboard}\n`,
+      html:
+        `<p>Hallo ${voornaam},</p>` +
+        `<p>${bericht}</p>` +
+        `<p><a href="${dashboard}">Bekijk je dossier</a></p>`,
+    });
+  } catch (err) {
+    console.error('[mail] notificatie-mail mislukt:', err.message);
+  }
+}
+
+module.exports = { stuurMail, mailBijNotificatie };

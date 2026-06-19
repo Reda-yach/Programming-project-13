@@ -24,7 +24,6 @@ function logout() {
       <RouterLink to="/aanvragen" class="nav-item">Aanvragen</RouterLink>
     </nav>
     <div class="topbar-right">
-      <span class="role-btn">Commissie</span>
       <button type="button" class="uitloggen" @click="logout">Uitloggen</button>
     </div>
   </header>

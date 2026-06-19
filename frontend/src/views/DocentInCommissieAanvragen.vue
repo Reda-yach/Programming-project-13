@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+import SignaturePad from '@/components/SignaturePad.vue'
 
 const navLinks = ref([
   { label: 'Studenten', to: '/docent-studenten' },
@@ -23,6 +24,10 @@ const foutLijst = ref(null)
 const foutDetail = ref(null)
 const foutBeslissing = ref(null)
 const feedbackFout = ref(null)
+
+// Bij goedkeuren moet de docent/commissie meteen de overeenkomst ondertekenen.
+const tekenModus = ref(false)
+const pad = ref(null)
 
 function formatDatum(iso) {
   if (!iso) return '—'
@@ -58,6 +63,7 @@ async function selecteer(id) {
   foutDetail.value = null
   foutBeslissing.value = null
   feedbackFout.value = null
+  tekenModus.value = false
 
   ladenDetail.value = true
   try {
@@ -76,6 +82,12 @@ async function selecteer(id) {
 async function besliss(actie) {
   feedbackFout.value = null
   foutBeslissing.value = null
+
+  // Goedkeuren vereist een handtekening: toon eerst het teken-canvas.
+  if (actie === 'goedkeuren') {
+    tekenModus.value = true
+    return
+  }
 
   if ((actie === 'afkeuren' || actie === 'aanpassing') && !feedback.value.trim()) {
     feedbackFout.value = 'Feedback is verplicht bij afkeuren of aanpassing vragen.'
@@ -98,20 +110,72 @@ async function besliss(actie) {
       return
     }
 
-    const index = aanvragen.value.findIndex(a => a.stage_id === geselecteerdId.value)
-    aanvragen.value.splice(index, 1)
-    detail.value = null
-    feedback.value = ''
-
-    if (aanvragen.value.length > 0) {
-      selecteer(aanvragen.value[Math.min(index, aanvragen.value.length - 1)].stage_id)
-    } else {
-      geselecteerdId.value = null
-    }
+    verwijderUitLijst()
   } catch {
     foutBeslissing.value = 'Kan geen verbinding maken met de server.'
   } finally {
     bezig.value = false
+  }
+}
+
+// Goedkeuring bevestigen: eerst goedkeuren (maakt de overeenkomst aan),
+// daarna meteen ondertekenen met de handtekening van de commissie.
+async function bevestigGoedkeuring() {
+  const handtekening = pad.value?.getData()
+  if (!handtekening) {
+    foutBeslissing.value = 'Teken eerst je handtekening om de goedkeuring te bevestigen.'
+    return
+  }
+
+  const stageId = geselecteerdId.value
+  bezig.value = true
+  foutBeslissing.value = null
+  try {
+    const res = await fetch(`http://localhost:3000/api/stages/${stageId}/beslissing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ beslissing: 'goedkeuren', motivatie: feedback.value.trim() }),
+    })
+    if (!res.ok) {
+      foutBeslissing.value = (await res.json()).error ?? 'Goedkeuring kon niet worden opgeslagen.'
+      return
+    }
+
+    const tekenRes = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ rol: 'docent', handtekening }),
+    })
+    if (!tekenRes.ok) {
+      foutBeslissing.value = (await tekenRes.json()).error ?? 'Goedgekeurd, maar ondertekenen mislukte.'
+      return
+    }
+
+    tekenModus.value = false
+    verwijderUitLijst()
+  } catch {
+    foutBeslissing.value = 'Kan geen verbinding maken met de server.'
+  } finally {
+    bezig.value = false
+  }
+}
+
+function annuleerTekenen() {
+  tekenModus.value = false
+  foutBeslissing.value = null
+}
+
+// Afgehandelde aanvraag uit de lijst halen en naar de volgende springen.
+function verwijderUitLijst() {
+  const index = aanvragen.value.findIndex(a => a.stage_id === geselecteerdId.value)
+  if (index !== -1) aanvragen.value.splice(index, 1)
+  detail.value = null
+  feedback.value = ''
+
+  if (aanvragen.value.length > 0) {
+    selecteer(aanvragen.value[Math.min(index, aanvragen.value.length - 1)].stage_id)
+  } else {
+    geselecteerdId.value = null
   }
 }
 
@@ -216,34 +280,55 @@ onMounted(laadAanvragen)
             <h3 class="card-title" style="margin-bottom:16px;">Beoordeling</h3>
             <hr class="card-divider" />
 
-            <div class="form-group" style="margin-bottom:20px;">
-              <label for="feedback">
-                Feedback of motivatie
-                <span class="text-secondary text-xs">(verplicht bij afkeuren of aanpassing)</span>
-              </label>
-              <textarea
-                id="feedback"
-                v-model="feedback"
-                rows="4"
-                placeholder="Schrijf hier je feedback of motivatie..."
-                :disabled="bezig"
-              ></textarea>
-              <span v-if="feedbackFout" class="form-error">{{ feedbackFout }}</span>
-            </div>
+            <!-- Teken-modus: commissie ondertekent de overeenkomst bij goedkeuring -->
+            <template v-if="tekenModus">
+              <p class="text-sm" style="margin-bottom:12px;">
+                Onderteken de stageovereenkomst om de goedkeuring te bevestigen.
+                De aanvraag wordt daarna goedgekeurd en de overeenkomst aangemaakt.
+              </p>
+              <SignaturePad ref="pad" />
+              <p v-if="foutBeslissing" class="form-error" style="margin-top:12px;">{{ foutBeslissing }}</p>
+              <div class="flex gap-12" style="margin-top:16px;">
+                <button class="btn btn-outline-green" :disabled="bezig" @click="bevestigGoedkeuring">
+                  ✔ Goedkeuring bevestigen &amp; ondertekenen
+                </button>
+                <button class="btn btn-outline" :disabled="bezig" @click="annuleerTekenen">
+                  Annuleren
+                </button>
+              </div>
+            </template>
 
-            <p v-if="foutBeslissing" class="form-error" style="margin-bottom:12px;">{{ foutBeslissing }}</p>
+            <!-- Standaard beoordeling -->
+            <template v-else>
+              <div class="form-group" style="margin-bottom:20px;">
+                <label for="feedback">
+                  Feedback of motivatie
+                  <span class="text-secondary text-xs">(verplicht bij afkeuren of aanpassing)</span>
+                </label>
+                <textarea
+                  id="feedback"
+                  v-model="feedback"
+                  rows="4"
+                  placeholder="Schrijf hier je feedback of motivatie..."
+                  :disabled="bezig"
+                ></textarea>
+                <span v-if="feedbackFout" class="form-error">{{ feedbackFout }}</span>
+              </div>
 
-            <div class="flex gap-12">
-              <button class="btn btn-outline-green" :disabled="bezig" @click="besliss('goedkeuren')">
-                ✔ Goedkeuren
-              </button>
-              <button class="btn btn-outline-orange" :disabled="bezig" @click="besliss('aanpassing')">
-                ✎ Aanpassingen vragen
-              </button>
-              <button class="btn btn-outline-red" :disabled="bezig" @click="besliss('afkeuren')">
-                ✖ Afkeuren
-              </button>
-            </div>
+              <p v-if="foutBeslissing" class="form-error" style="margin-bottom:12px;">{{ foutBeslissing }}</p>
+
+              <div class="flex gap-12">
+                <button class="btn btn-outline-green" :disabled="bezig" @click="besliss('goedkeuren')">
+                  ✔ Goedkeuren
+                </button>
+                <button class="btn btn-outline-orange" :disabled="bezig" @click="besliss('aanpassing')">
+                  ✎ Aanpassingen vragen
+                </button>
+                <button class="btn btn-outline-red" :disabled="bezig" @click="besliss('afkeuren')">
+                  ✖ Afkeuren
+                </button>
+              </div>
+            </template>
           </div>
         </template>
 

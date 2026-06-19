@@ -124,7 +124,6 @@ CREATE TABLE IF NOT EXISTS competentie (
 
     PRIMARY KEY (competentie_id)
 );
-<<<<<<< HEAD
 
 -- --------------------------------------------
 -- MIGRATIE 14: validatie kolommen toevoegen aan logboek
@@ -146,15 +145,12 @@ ALTER TABLE evaluatie_criterium
 -- --------------------------------------------
 -- MIGRATIE 16: wachtwoord_reset tabel voor "wachtwoord vergeten"
 -- --------------------------------------------
--- We slaan NOOIT de ruwe reset-token op, enkel een SHA-256 hash ervan.
--- De ruwe token gaat alleen per e-mail naar de gebruiker. Zo kan een lek
--- van de database niet leiden tot misbruik van openstaande reset-links.
 CREATE TABLE wachtwoord_reset (
     reset_id        INT             NOT NULL AUTO_INCREMENT,
     gebruiker_id    INT             NOT NULL,
-    token_hash      CHAR(64)        NOT NULL,          -- SHA-256 hex (64 tekens)
-    verloopt_op     DATETIME        NOT NULL,          -- vervaltijd (bv. +1 uur)
-    gebruikt_op     DATETIME        NULL,              -- gevuld zodra de token gebruikt is (eenmalig)
+    token_hash      CHAR(64)        NOT NULL,
+    verloopt_op     DATETIME        NOT NULL,
+    gebruikt_op     DATETIME        NULL,
     aangemaakt_op   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (reset_id),
@@ -168,9 +164,6 @@ CREATE TABLE wachtwoord_reset (
 -- --------------------------------------------
 -- MIGRATIE 17: type-kolom op notificatie
 -- --------------------------------------------
--- Bepaalt de kleur/het icoon van een melding op het studentdashboard
--- (✓ goed, ⚠ waarschuwing, ✕ fout, 🔔 info). Bestaande rijen worden,
--- waar mogelijk, op basis van hun tekst ingedeeld; de rest blijft 'info'.
 ALTER TABLE notificatie
   ADD COLUMN type ENUM('info','goed','waarschuwing','fout') NOT NULL DEFAULT 'info' AFTER bericht;
 
@@ -184,9 +177,6 @@ UPDATE notificatie SET type = 'waarschuwing'
 -- --------------------------------------------
 -- MIGRATIE 18: status 'aanpassing_gevraagd' toevoegen aan stage
 -- --------------------------------------------
--- De stagecommissie kan een aanvraag terugsturen met de vraag om
--- aanpassingen (commissie_beslissing.beslissing = 'meer_info'). Daarvoor
--- heeft de stage een eigen status nodig die los staat van 'afgewezen'.
 ALTER TABLE stage
   MODIFY COLUMN status
     ENUM('ingediend','in_behandeling','goedgekeurd','afgewezen','bezig','afgerond','aanpassing_gevraagd')
@@ -198,16 +188,17 @@ ALTER TABLE stage
 ALTER TABLE logboek_dag
   ADD COLUMN reflectie TEXT AFTER activiteiten,
   ADD COLUMN leerpunten TEXT AFTER reflectie;
-=======
--- ────────────────────────────────────────────────────────────────────────────
--- MIGRATIE 14: is_actief kolom toevoegen aan competentie (soft delete)
--- ────────────────────────────────────────────────────────────────────────────
+
+-- --------------------------------------------
+-- MIGRATIE 20: is_actief kolom toevoegen aan competentie (soft delete)
+-- --------------------------------------------
 ALTER TABLE competentie
   ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
-  -- ────────────────────────────────────────────────────────────────────────────
--- MIGRATIE 15: Competentieset tabel aanmaken om sets van competenties te beheren
--- ────────────────────────────────────────────────────────────────────────────
-  CREATE TABLE competentieset (
+
+-- --------------------------------------------
+-- MIGRATIE 21: competentieset tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS competentieset (
     set_id       INT          NOT NULL AUTO_INCREMENT,
     naam         VARCHAR(255) NOT NULL,
     opleiding    VARCHAR(255) NOT NULL,
@@ -216,4 +207,37 @@ ALTER TABLE competentie
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (set_id)
 );
->>>>>>> feature/admin-commissie-schermen
+
+-- --------------------------------------------
+-- MIGRATIE 22: provincie toevoegen aan bedrijf
+-- --------------------------------------------
+ALTER TABLE bedrijf
+  ADD COLUMN provincie VARCHAR(50) AFTER gemeente;
+
+-- --------------------------------------------
+-- MIGRATIE 23: is_actief toevoegen aan gebruiker (soft disable accounts)
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- --------------------------------------------
+-- MIGRATIE 24: competentie_rubriek tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS competentie_rubriek (
+    rubriek_id      INT  NOT NULL AUTO_INCREMENT,
+    competentie_id  INT  NOT NULL,
+    punt            INT  NOT NULL,
+    beschrijving    TEXT,
+    PRIMARY KEY (rubriek_id),
+    UNIQUE KEY uq_comp_punt (competentie_id, punt),
+    FOREIGN KEY (competentie_id)
+        REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- --------------------------------------------
+-- MIGRATIE 25: commissielid kolom toevoegen aan gebruiker
+-- Stelt in of een docent ook in de commissie kan werken
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN IF NOT EXISTS commissielid BOOLEAN NOT NULL DEFAULT FALSE;

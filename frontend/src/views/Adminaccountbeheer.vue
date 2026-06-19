@@ -2,15 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import { navLinks } from './adminNav'
 
 const API = 'http://localhost:3000/api'
-
-const navLinks = ref([
-  { label: 'Competenties', to: '/admin/competentiesets' },
-  { label: 'Stages',       to: '/admin/stages' },
-  { label: 'Accounts',     to: '/admin/accounts' },
-  { label: 'Aanvragen',    to: '/admin/aanvragen' },
-])
 
 const router        = useRouter()
 const gebruikers    = ref([])

@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-defineProps({
+const props = defineProps({
   links: {
     type: Array,
     default: () => [],
@@ -12,36 +12,34 @@ defineProps({
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
-const open = ref(false)
-const wrap = ref(null)
-
-const rolLabel = computed(() => {
-  const rol = authStore.user?.rol
-  return rol ? rol.charAt(0).toUpperCase() + rol.slice(1) : 'Account'
+// ponytail: vlakke routes → eigen prefix-match i.p.v. active-class (exacte record-match)
+const activeTo = computed(() => {
+  const path = route.path
+  return props.links
+    .filter(l => [l.to, l.match].filter(Boolean)
+      .some(p => path === p || path.startsWith(p + '/')))
+    .map(l => l.to)
+    .sort((a, b) => b.length - a.length)[0]
 })
 
-const volledigeNaam = computed(() => {
-  const u = authStore.user
-  if (!u) return ''
-  return [u.voornaam, u.naam].filter(Boolean).join(' ')
+const gebruikerNaam = computed(() => {
+  try {
+    const g = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+    if (g.voornaam && g.naam) return `${g.voornaam} ${g.naam}`
+    if (g.voornaam) return g.voornaam
+    if (g.naam) return g.naam
+    return g.rol ? g.rol.charAt(0).toUpperCase() + g.rol.slice(1) : 'Account'
+  } catch {
+    return 'Account'
+  }
 })
-
-function toggle() {
-  open.value = !open.value
-}
-
-function sluitBijBuitenklik(e) {
-  if (wrap.value && !wrap.value.contains(e.target)) open.value = false
-}
 
 function uitloggen() {
   authStore.clearSession()
   router.push('/login')
 }
-
-onMounted(() => document.addEventListener('click', sluitBijBuitenklik))
-onBeforeUnmount(() => document.removeEventListener('click', sluitBijBuitenklik))
 </script>
 
 <template>
@@ -57,29 +55,24 @@ onBeforeUnmount(() => document.removeEventListener('click', sluitBijBuitenklik))
         :key="link.to"
         :to="link.to"
         class="nav-item"
-        active-class="active"
+        :class="{ active: link.to === activeTo }"
       >
         {{ link.label }}
       </RouterLink>
     </nav>
 
     <div class="topbar-right">
-      <div v-if="authStore.user" ref="wrap" class="role-wrap">
-        <button class="role-btn" type="button" :aria-expanded="open" @click="toggle">
-          {{ rolLabel }}
-          <span class="role-chevron" :class="{ open }">▾</span>
-        </button>
-
-        <div v-if="open" class="role-menu">
-          <div class="role-menu-name">{{ volledigeNaam }}</div>
-          <div class="role-menu-email">{{ authStore.user.email }}</div>
-          <span class="badge badge-gray role-menu-badge">{{ rolLabel }}</span>
-        </div>
-      </div>
-
+      <span class="gebruiker-naam">{{ gebruikerNaam }} ▾</span>
       <button class="uitloggen" type="button" @click="uitloggen">Uitloggen</button>
     </div>
   </header>
 </template>
 
-<style scoped></style>
+<style scoped>
+.gebruiker-naam {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 16px;
+}
+</style>
