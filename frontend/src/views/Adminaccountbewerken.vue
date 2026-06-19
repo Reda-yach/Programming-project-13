@@ -28,6 +28,7 @@ const naam       = ref('')
 const email      = ref('')
 const afdeling   = ref('')
 const rol        = ref('')
+const commissielid = ref(false)
 const actief     = ref(true)
 
 const ROL_LABELS = {
@@ -39,10 +40,6 @@ const ROL_LABELS = {
 }
 
 const rolLabel = computed(() => ROL_LABELS[rol.value] || rol.value)
-
-function toggleActief() {
-  actief.value = !actief.value
-}
 
 async function laad() {
   bezig.value = true
@@ -59,7 +56,7 @@ async function laad() {
     email.value    = u.email    || ''
     afdeling.value = u.afdeling || u.bedrijf || ''
     rol.value      = u.rol      || ''
-    // actief field — if backend returns it, use it; otherwise default true
+    commissielid.value = u.commissielid || false
     actief.value   = u.is_actief !== undefined ? Boolean(u.is_actief) : true
   } catch (e) {
     fout.value = e.message
@@ -70,34 +67,48 @@ async function laad() {
 }
 
 async function slaOp() {
+  
+  if (!route.params.id) {
+    fout.value = 'FOUT: Geen user ID in URL!'
+    return
+  }
+
   opslaan.value = true
-  fout.value    = ''
-  succes.value  = ''
+  fout.value = ''
+  succes.value = ''
+
   try {
     const token = localStorage.getItem('token')
-    const body  = {
-      voornaam:  voornaam.value,
-      naam:      naam.value,
-      email:     email.value,
-      rol:       rol.value,
-      is_actief: actief.value,
-    }
-    const res = await fetch(`${API}/gebruikers/${route.params.id}`, {
+    const response = await fetch(`${API}/gebruikers/${route.params.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        voornaam: voornaam.value.trim(),
+        naam: naam.value.trim(),
+        email: email.value.trim(),
+        afdeling: afdeling.value.trim(),
+        rol: rol.value,
+        commissielid: commissielid.value,
+        is_actief: actief.value,
+      }),
     })
-    if (!res.ok) {
-      const data = await res.json().catch(() => null)
-      throw new Error(data?.error || 'Opslaan mislukt.')
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data?.error || `HTTP ${response.status}`)
     }
-    succes.value = 'Wijzigingen opgeslagen.'
+
+    succes.value = '✓ Opgeslagen'
+    await laad()
+    setTimeout(() => { succes.value = '' }, 2000)
+
   } catch (e) {
-    fout.value = 'Opslaan mislukt: ' + e.message
-    console.error(e)
+    fout.value = '✗ ' + e.message
+    setTimeout(() => { fout.value = '' }, 3000)
   } finally {
     opslaan.value = false
   }
@@ -191,28 +202,19 @@ onMounted(laad)
 
           <!-- Rol -->
           <div class="form-section-title" style="border:none; padding:0;">Rol(len)</div>
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <span class="rol-tag">{{ rolLabel }}</span>
-            <!-- "+ Rol toevoegen" is visual-only — multi-role not supported by current schema -->
-            <span class="rol-add" title="Multi-rol vereist schema-aanpassing">+ Rol toevoegen</span>
-          </div>
-
-          <hr class="card-divider" />
-
-          <!-- Status toggle -->
-          <div class="form-section-title" style="border:none; padding:0;">Status</div>
-          <div class="toggle" style="align-items:center;">
-            <div
-              class="toggle-switch"
-              :class="{ on: actief }"
-              @click="toggleActief"
-            ></div>
-            <span class="toggle-label" style="font-weight:500;">{{ actief ? 'Actief' : 'Inactief' }}</span>
-            <span style="font-size:13px; color:var(--text-secondary);">
-              {{ actief
-                ? 'Dit account kan inloggen en het systeem gebruiken.'
-                : 'Dit account heeft geen toegang tot het systeem.' }}
-            </span>
+            <div v-if="rol.toLowerCase() === 'docent'" class="commissie-checkbox" style="display:flex; align-items:center; gap:8px;">
+              <input
+                type="checkbox"
+                v-model="commissielid"
+                id="commissielid-check"
+                style="width:16px; height:16px; cursor:pointer;"
+              />
+              <label for="commissielid-check" style="cursor:pointer; font-size:13px; color:var(--text-secondary);">
+                Kan in commissie werken
+              </label>
+            </div>
           </div>
 
           <hr class="card-divider" />
@@ -279,16 +281,6 @@ onMounted(laad)
   padding: 4px 10px;
   border-radius: 4px;
 }
-.rol-add {
-  background: var(--gray50);
-  color: var(--text-secondary);
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  cursor: not-allowed;
-  opacity: 0.7;
-}
 
 /* ── Modal overlay (zelfde stijl als Competentiesets/Competentiebeheer) ───── */
 .modal-overlay {
@@ -344,4 +336,4 @@ onMounted(laad)
 }
 .btn-delete:hover { opacity: 0.88; }
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
-</style>
+</style>git checkout feature/admin-commissie-schermen
