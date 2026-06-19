@@ -24,6 +24,18 @@ const activeTo = computed(() => {
     .sort((a, b) => b.length - a.length)[0]
 })
 
+const gebruikerNaam = computed(() => {
+  try {
+    const g = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+    if (g.voornaam && g.naam) return `${g.voornaam} ${g.naam}`
+    if (g.voornaam) return g.voornaam
+    if (g.naam) return g.naam
+    return g.rol ? g.rol.charAt(0).toUpperCase() + g.rol.slice(1) : 'Account'
+  } catch {
+    return 'Account'
+  }
+})
+
 function uitloggen() {
   authStore.clearSession()
   router.push('/login')
@@ -50,9 +62,17 @@ function uitloggen() {
     </nav>
 
     <div class="topbar-right">
+      <span class="gebruiker-naam">{{ gebruikerNaam }} ▾</span>
       <button class="uitloggen" type="button" @click="uitloggen">Uitloggen</button>
     </div>
   </header>
 </template>
 
-<style scoped></style>
+<style scoped>
+.gebruiker-naam {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 16px;
+}
+</style>

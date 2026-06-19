@@ -65,6 +65,7 @@ const router = createRouter({
       name: 'docent-studenten',
       component: () => import('../views/DocentInCommissieStudenten.vue'),
     },
+    // ── Admin (all routes require admin role) ─────────────────────────────
     {
       // Oude tabel-UI is verwijderd; bestaande links naar /docent/studenten
       // (AppTopbar, evaluatie-terugknoppen) leiden nu naar de kaarten-view.
@@ -150,11 +151,50 @@ const router = createRouter({
       path: '/admin/competentiesets',
       name: 'admin-competentiesets',
       component: () => import('../views/Admincompetentiesets.vue'),
+      meta: { requiresAdmin: true },
     },
     {
       path: '/admin/competentiebeheer',
       name: 'admin-competentiebeheer',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/stages',
+      name: 'admin-stages',
+      component: () => import('../views/Adminstagebeheer.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/stages/:id/koppelen',
+      name: 'admin-stage-koppelen',
+      component: () => import('../views/Adminaccountkoppelen.vue'),
+      props: true,
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/accounts',
+      name: 'admin-accounts',
+      component: () => import('../views/Adminaccountbeheer.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/accounts/:id/bewerken',
+      name: 'admin-account-bewerken',
+      component: () => import('../views/Adminaccountbewerken.vue'),
+      props: true,
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/aanvragen',
+      name: 'admin-aanvragen',
+      component: () => import('../views/CommissieDashboard.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/commissie',
+      name: 'commissie-dashboard',
+      component: () => import('../views/CommissieDashboard.vue'),
     },
     {
       path: '/wachtwoord-vergeten',
@@ -176,9 +216,24 @@ router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth !== false && !token) {
     next({ name: 'login' })
-  } else {
-    next()
+    return
   }
+
+  // 2. Admin-only route → verify rol from stored gebruiker object
+  if (to.meta.requiresAdmin) {
+    try {
+      const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+      if (gebruiker.rol !== 'admin') {
+        next({ name: 'login' })
+        return
+      }
+    } catch {
+      next({ name: 'login' })
+      return
+    }
+  }
+
+  next()
 })
 
 export default router

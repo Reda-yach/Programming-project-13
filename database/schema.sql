@@ -34,6 +34,7 @@ CREATE TABLE gebruiker (
     -- Actieve sessie: bij elke login opnieuw gezet. Tokens met een andere
     -- sessie_id zijn ongeldig → ergens anders inloggen logt de rest uit.
     sessie_id           VARCHAR(64),
+    is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (gebruiker_id)

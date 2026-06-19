@@ -213,3 +213,31 @@ CREATE TABLE IF NOT EXISTS competentieset (
 -- --------------------------------------------
 ALTER TABLE bedrijf
   ADD COLUMN provincie VARCHAR(50) AFTER gemeente;
+
+-- --------------------------------------------
+-- MIGRATIE 23: is_actief toevoegen aan gebruiker (soft disable accounts)
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN IF NOT EXISTS is_actief BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- --------------------------------------------
+-- MIGRATIE 24: competentie_rubriek tabel aanmaken
+-- --------------------------------------------
+CREATE TABLE IF NOT EXISTS competentie_rubriek (
+    rubriek_id      INT  NOT NULL AUTO_INCREMENT,
+    competentie_id  INT  NOT NULL,
+    punt            INT  NOT NULL,
+    beschrijving    TEXT,
+    PRIMARY KEY (rubriek_id),
+    UNIQUE KEY uq_comp_punt (competentie_id, punt),
+    FOREIGN KEY (competentie_id)
+        REFERENCES competentie(competentie_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- --------------------------------------------
+-- MIGRATIE 25: commissielid kolom toevoegen aan gebruiker
+-- Stelt in of een docent ook in de commissie kan werken
+-- --------------------------------------------
+ALTER TABLE gebruiker
+  ADD COLUMN IF NOT EXISTS commissielid BOOLEAN NOT NULL DEFAULT FALSE;
