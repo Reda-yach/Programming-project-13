@@ -2648,7 +2648,6 @@ app.put('/api/stages/:id', verifyToken, (req, res) => {
 // ============================================================
 // ROUTERMODULES
 // ============================================================
-app.use('/api/stage', require('./routes/stage'));
 app.use('/api/begeleider', require('./routes/begeleider'));
 
 // ============================================================
