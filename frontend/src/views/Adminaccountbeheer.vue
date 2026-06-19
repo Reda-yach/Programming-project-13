@@ -12,11 +12,13 @@ const navLinks = ref([
   { label: 'Aanvragen',    to: '/admin/aanvragen' },
 ])
 
-const router     = useRouter()
-const gebruikers = ref([])
-const bezig      = ref(true)
-const fout       = ref('')
-const zoekterm   = ref('')
+const router        = useRouter()
+const gebruikers    = ref([])
+const bezig         = ref(true)
+const fout          = ref('')
+const zoekterm      = ref('')
+const commissieleden = ref(JSON.parse(localStorage.getItem('commissieleden') || '{}'))
+const afdelingen     = ref(JSON.parse(localStorage.getItem('afdelingen')     || '{}'))
 
 // Rol badge colours matching the Figma
 const ROL_BADGE = {
@@ -35,19 +37,22 @@ function rolBadgeClass(rol) {
   return ROL_BADGE[rol] || 'badge-gray'
 }
 
-// "Afdeling / Bedrijf" — mentors have a bedrijf, school staff have afdeling
+// "Afdeling / Bedrijf" — per rol ander veld
 function afdelingBedrijf(u) {
-  return u.bedrijf || u.afdeling || '—'
+  if (u.rol === 'mentor')  return afdelingen.value[u.gebruiker_id] || u.bedrijf   || '—'
+  if (u.rol === 'student') return u.opleiding || '—'
+  return afdelingen.value[u.gebruiker_id] || u.afdeling || '—'
 }
 
 const gefilterdeGebruikers = computed(() => {
   const q = zoekterm.value.toLowerCase().trim()
-  if (!q) return gebruikers.value
-  return gebruikers.value.filter(u =>
-    `${u.voornaam} ${u.naam}`.toLowerCase().includes(q) ||
-    u.email?.toLowerCase().includes(q) ||
-    u.rol?.toLowerCase().includes(q)
-  )
+  return gebruikers.value
+    .filter(u => u.rol !== 'admin')
+    .filter(u => !q ||
+      `${u.voornaam} ${u.naam}`.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.rol?.toLowerCase().includes(q)
+    )
 })
 
 async function laad() {
@@ -72,7 +77,11 @@ async function laad() {
 }
 
 function naarBewerken(gebruiker) {
-  router.push({ name: 'admin-account-bewerken', params: { id: gebruiker.gebruiker_id } })
+  router.push({
+    name: 'admin-account-bewerken',
+    params: { id: gebruiker.gebruiker_id },
+    state: { listAfdeling: afdelingen.value[gebruiker.gebruiker_id] || gebruiker.afdeling || gebruiker.bedrijf || '' },
+  })
 }
 
 onMounted(laad)
@@ -120,6 +129,9 @@ onMounted(laad)
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                   <span :class="['badge', 'badge-pill', rolBadgeClass(u.rol)]">
                     {{ rolLabel(u.rol) }}
+                  </span>
+                  <span v-if="u.commissielid || commissieleden[u.gebruiker_id]" class="badge badge-pill badge-blue">
+                    Commissie
                   </span>
                 </div>
               </td>
