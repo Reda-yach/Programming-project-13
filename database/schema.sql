@@ -21,6 +21,7 @@ CREATE TABLE gebruiker (
     wachtwoord_hash     VARCHAR(255)    NOT NULL,
     rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
     is_actief           BOOLEAN         NOT NULL DEFAULT TRUE,
+    commissielid        BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (gebruiker_id)

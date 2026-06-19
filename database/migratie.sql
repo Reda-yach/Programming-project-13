@@ -165,4 +165,4 @@ CREATE TABLE IF NOT EXISTS competentie_rubriek (
 -- Stelt in of een docent ook in de commissie kan werken
 -- --------------------------------------------
 ALTER TABLE gebruiker
-  ADD COLUMN commissielid BOOLEAN NOT NULL DEFAULT FALSE;
+  ADD COLUMN IF NOT EXISTS commissielid BOOLEAN NOT NULL DEFAULT FALSE;
