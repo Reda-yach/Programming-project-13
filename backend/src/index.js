@@ -109,7 +109,15 @@ app.post('/api/login', (req, res) => {
 // Alle gebruikers ophalen (beveiligd)
 app.get('/api/gebruikers', verifyToken, (req, res) => {
   db.query(
-    'SELECT gebruiker_id, voornaam, naam, email, telefoonnummer, rol, created_at FROM gebruiker',
+    `SELECT g.gebruiker_id, g.voornaam, g.naam, g.email, g.telefoonnummer, g.rol, g.is_actief, g.commissielid, g.created_at,
+            d.docent_id, d.specialisatie AS afdeling,
+            m.mentor_id, b.naam AS bedrijf,
+            s.opleiding
+     FROM gebruiker g
+     LEFT JOIN docent  d ON d.gebruiker_id = g.gebruiker_id
+     LEFT JOIN mentor  m ON m.gebruiker_id = g.gebruiker_id
+     LEFT JOIN bedrijf b ON m.bedrijf_id   = b.bedrijf_id
+     LEFT JOIN student s ON s.gebruiker_id = g.gebruiker_id`,
     (err, results) => {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -118,6 +126,59 @@ app.get('/api/gebruikers', verifyToken, (req, res) => {
       res.json(results);
     }
   );
+});
+
+app.get('/api/gebruikers/:id', verifyToken, (req, res) => {
+  const { id } = req.params;
+  db.query(`
+    SELECT
+      g.gebruiker_id, g.voornaam, g.naam, g.email, g.telefoonnummer,
+      g.rol, g.is_actief, g.commissielid, g.created_at,
+      d.docent_id, d.specialisatie AS afdeling,
+      m.mentor_id, b.naam AS bedrijf
+    FROM gebruiker g
+    LEFT JOIN docent  d ON d.gebruiker_id = g.gebruiker_id
+    LEFT JOIN mentor  m ON m.gebruiker_id = g.gebruiker_id
+    LEFT JOIN bedrijf b ON m.bedrijf_id   = b.bedrijf_id
+    WHERE g.gebruiker_id = ?
+  `, [id], (err, results) => {
+    if (err)              return res.status(500).json({ error: err.message });
+    if (!results.length)  return res.status(404).json({ error: 'Gebruiker niet gevonden' });
+    res.json(results[0]);
+  });
+});
+
+app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  const { voornaam, naam, email, afdeling, rol, commissielid, is_actief } = req.body;
+  db.query(
+    `UPDATE gebruiker SET voornaam=?, naam=?, email=?, rol=?, commissielid=?, is_actief=? WHERE gebruiker_id=?`,
+    [voornaam, naam, email, rol, commissielid ? 1 : 0, is_actief ? 1 : 0, id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rol === 'docent' && afdeling !== undefined) {
+        db.query(
+          `UPDATE docent SET specialisatie=? WHERE gebruiker_id=?`,
+          [afdeling || null, id],
+          (err2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ ok: true });
+          }
+        );
+      } else {
+        res.json({ ok: true });
+      }
+    }
+  );
+});
+
+app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+  const { id } = req.params;
+  db.query('DELETE FROM gebruiker WHERE gebruiker_id = ?', [id], (err, results) => {
+    if (err)                    return res.status(500).json({ error: err.message });
+    if (!results.affectedRows)  return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
+    res.json({ message: 'Gebruiker verwijderd.' });
+  });
 });
 
 // ============================================================
@@ -1434,6 +1495,26 @@ app.delete('/api/competenties/:id', verifyToken, requireRol('admin'), (req, res)
     }
   );
 });
+
+app.put('/api/competenties/:id/rubrieken', verifyToken, requireRol('admin'), (req, res) => {
+  const competentie_id = req.params.id;
+  const { rubrieken } = req.body;
+  if (!Array.isArray(rubrieken) || rubrieken.length === 0) {
+    return res.status(400).json({ error: 'Rubrieken array vereist.' });
+  }
+  const values = rubrieken.map(r => [competentie_id, r.punt, r.beschrijving || '']);
+  db.query(
+    `INSERT INTO competentie_rubriek (competentie_id, punt, beschrijving)
+     VALUES ?
+     ON DUPLICATE KEY UPDATE beschrijving = VALUES(beschrijving)`,
+    [values],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    }
+  );
+});
+
 // ============================================================
 // DOCENTEN
 // ============================================================
