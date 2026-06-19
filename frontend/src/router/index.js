@@ -96,7 +96,14 @@ const router = createRouter({
     },
     {
       path: '/admin/aanvragen',
-      redirect: '/docent-aanvragen',
+      name: 'admin-aanvragen',
+      component: () => import('../views/CommissieDashboard.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/commissie',
+      name: 'commissie-dashboard',
+      component: () => import('../views/CommissieDashboard.vue'),
     },
   ],
 })
