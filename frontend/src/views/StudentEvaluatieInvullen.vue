@@ -13,13 +13,6 @@ const API = 'http://localhost:3000/api'
 const fase = route.params.fase
 const titel = fase === 'tussentijds' ? 'Tussentijdse evaluatie' : 'Eindevaluatie'
 
-const navLinks = [
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-  { label: 'Logboek', to: '/student/logboek' },
-  { label: 'Evaluatie', to: '/student/evaluatie' },
-]
-
 const SCORE_LABELS = {
   5: { kort: '5 pt', lang: 'Uitstekend' },
   3: { kort: '3 pt', lang: 'Goed' },
@@ -150,7 +143,7 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
     <main class="content">
 
       <p class="breadcrumb" style="margin-bottom:8px;">

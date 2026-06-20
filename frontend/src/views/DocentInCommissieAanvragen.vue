@@ -1,14 +1,37 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import TopBar from '@/components/TopBar.vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 import SignaturePad from '@/components/SignaturePad.vue'
 
-const navLinks = ref([
-  { label: 'Studenten', to: '/docent-studenten' },
-  { label: 'Logboek', to: '/docent-logboek-overzicht' },
-  { label: 'Evaluaties', to: '/docent-evaluaties' },
-  { label: 'Aanvragen', to: '/docent-aanvragen' },
-])
+// Deze pagina wordt gedeeld door de docent (/docent-aanvragen) en de admin
+// (/admin/aanvragen). De inhoud is identiek; enkel de navigatie/topbar volgt
+// de rol, zodat elk zijn eigen menu houdt.
+const isAdmin = computed(() => {
+  try {
+    return JSON.parse(localStorage.getItem('gebruiker') || '{}').rol === 'admin'
+  } catch {
+    return false
+  }
+})
+
+const topBar = computed(() => (isAdmin.value ? TopBar : TopBarDocentStagecommissie))
+
+const navLinks = computed(() =>
+  isAdmin.value
+    ? [
+        { label: 'Competenties', to: '/admin/competentiesets' },
+        { label: 'Stages', to: '/admin/stages' },
+        { label: 'Accounts', to: '/admin/accounts' },
+        { label: 'Aanvragen', to: '/admin/aanvragen' },
+      ]
+    : [
+        { label: 'Studenten', to: '/docent-studenten' },
+        { label: 'Logboek', to: '/docent-logboek-overzicht' },
+        { label: 'Evaluaties', to: '/docent-evaluaties' },
+        { label: 'Aanvragen', to: '/docent-aanvragen' },
+      ]
+)
 
 const token = localStorage.getItem('token')
 
@@ -184,7 +207,7 @@ onMounted(laadAanvragen)
 
 <template>
   <div class="page">
-    <TopBarDocentStagecommissie :links="navLinks" />
+    <component :is="topBar" :links="navLinks" />
 
     <div class="split-layout">
 

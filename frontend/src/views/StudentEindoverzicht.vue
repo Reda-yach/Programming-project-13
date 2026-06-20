@@ -7,19 +7,6 @@ const stageStore = useStageStore()
 
 const eindoverzichtVrij = computed(() => !!stageStore.aanvraag?.eindoverzicht_vrij)
 
-const navLinks = computed(() => {
-  const links = [
-    { label: 'Dashboard', to: '/student' },
-    { label: 'Aanvraag', to: '/student/aanvraag' },
-    { label: 'Contract', to: '/student/contract' },
-    { label: 'Logboek', to: '/student/logboek' },
-    { label: 'Evaluatie', to: '/student/evaluatie' },
-  ]
-  if (eindoverzichtVrij.value) {
-    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
-  }
-  return links
-})
 
 const stage = ref(null)
 const evaluaties = ref([])
@@ -107,7 +94,7 @@ function formatDatum(d) {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
       <h1 class="page-title">Eindoverzicht stage</h1>

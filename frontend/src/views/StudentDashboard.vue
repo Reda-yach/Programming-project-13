@@ -31,26 +31,7 @@ const stageBezig = computed(() =>
   new Date() >= new Date(stage.value.startdatum)
 )
 
-const navLinks = computed(() => {
-  if (stageStatus.value !== 'goedgekeurd') {
-    return [
-      { label: 'Dashboard', to: '/student' },
-      { label: 'Aanvraag', to: '/student/aanvraag' },
-    ]
-  }
-  const links = [
-    { label: 'Dashboard', to: '/student' },
-    { label: 'Aanvraag', to: '/student/aanvraag' },
-    { label: 'Contract', to: '/student/contract' },
-    { label: 'Logboek', to: '/student/logboek' },
-    { label: 'Evaluatie', to: '/student/evaluatie' },
-  ]
-  // Eindoverzicht pas zichtbaar als docent én mentor hun finale evaluatie indienden
-  if (stage.value?.eindoverzicht_vrij) {
-    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
-  }
-  return links
-})
+// Navigatie komt centraal uit de store (zelfde tabs op elk studentscherm).
 
 const logboekWeek = ref(null)
 const logboekStatus = ref(null)
@@ -149,7 +130,7 @@ const eindIngediend = computed(() =>
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
       <section>
@@ -193,6 +174,24 @@ const eindIngediend = computed(() =>
                   Stageperiode: {{ formatDatum(stage?.startdatum) }} – {{ formatDatum(stage?.einddatum) }}
                 </div>
               </div>
+            </div>
+
+            <!-- Tussenfase: goedgekeurd, maar nog niet door alle drie getekend.
+                 De stage is nog niet actief; enkel het contract is beschikbaar. -->
+            <div
+              v-if="!stageStore.volledigGetekend"
+              class="card"
+              style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:4px;"
+            >
+              <p class="font-semibold" style="color:#92400e;">Onderteken je stagecontract</p>
+              <p class="text-secondary text-sm mt-4" style="line-height:1.6;">
+                Je aanvraag is goedgekeurd. Zodra de stagecommissie, je mentor én jij het
+                contract hebben ondertekend, wordt je stage actief en gaan je logboek en
+                evaluatie open.
+              </p>
+              <RouterLink to="/student/contract" class="btn btn-primary mt-12">
+                Naar contract
+              </RouterLink>
             </div>
           </template>
 

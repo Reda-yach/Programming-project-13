@@ -17,20 +17,6 @@ const stageBezig = computed(() =>
   new Date() >= new Date(stageStore.aanvraag.startdatum)
 )
 
-const navLinks = computed(() =>
-  stageStore.status === 'goedgekeurd'
-    ? [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-        { label: 'Logboek', to: '/student/logboek' },
-        { label: 'Evaluatie', to: '/student/evaluatie' },
-      ]
-    : [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-      ]
-)
-
 const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
 
 const student = ref({
@@ -208,7 +194,7 @@ function naarDashboard() {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
       <h1 class="page-title">Stage-aanvraag indienen</h1>

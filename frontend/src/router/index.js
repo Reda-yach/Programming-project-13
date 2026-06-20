@@ -188,7 +188,9 @@ const router = createRouter({
     {
       path: '/admin/aanvragen',
       name: 'admin-aanvragen',
-      component: () => import('../views/CommissieDashboard.vue'),
+      // Deelt de split-layout aanvragenpagina met de docent; de view is
+      // rol-bewust (admin-navigatie + admin-topbar).
+      component: () => import('../views/DocentInCommissieAanvragen.vue'),
       meta: { requiresAdmin: true },
     },
     {

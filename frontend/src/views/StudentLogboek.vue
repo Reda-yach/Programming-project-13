@@ -10,13 +10,6 @@ const dagNamen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag']
 const dagKort = { maandag: 'Ma', dinsdag: 'Di', woensdag: 'Wo', donderdag: 'Do', vrijdag: 'Vr' }
 const dagIndex = { maandag: 0, dinsdag: 1, woensdag: 2, donderdag: 3, vrijdag: 4 }
 
-const navLinks = [
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-  { label: 'Logboek', to: '/student/logboek' },
-  { label: 'Evaluatie', to: '/student/evaluatie' },
-]
-
 const huidigeWeek = ref(1)
 const maxWeek = ref(1)
 const logboek = ref(null)
@@ -204,7 +197,9 @@ function formatDatum(iso) {
 
 onMounted(async () => {
   await stageStore.laad()
-  if (stageStore.status !== 'goedgekeurd') {
+  // Logboek pas beschikbaar als het contract door alle drie de partijen is
+  // getekend (stage actief). Goedgekeurd-maar-niet-getekend volstaat niet.
+  if (!stageStore.volledigGetekend) {
     maxWeek.value = 0
     return
   }
@@ -220,7 +215,7 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
 
@@ -228,8 +223,8 @@ onMounted(async () => {
       <template v-if="maxWeek === 0">
         <h1 class="page-title">Logboek</h1>
         <p class="text-secondary" style="margin-top:8px;">
-          <template v-if="stageStore.status !== 'goedgekeurd'">
-            Je stage-aanvraag is nog niet goedgekeurd. Het logboek wordt beschikbaar zodra de stagecommissie je aanvraag heeft goedgekeurd.
+          <template v-if="!stageStore.volledigGetekend">
+            Het logboek wordt beschikbaar zodra het stagecontract door alle partijen (stagecommissie, mentor en jezelf) is ondertekend.
           </template>
           <template v-else>
             Je stage is nog niet begonnen. Je kunt het logboek invullen vanaf de eerste stagedag.

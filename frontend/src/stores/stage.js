@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const API = 'http://localhost:3000/api'
 
@@ -26,6 +26,43 @@ export const useStageStore = defineStore('stage', () => {
   const motivatie = ref(null)
   const meldingen = ref([])
   const fout = ref(null)
+
+  // Onderscheid tussen twee fases na de aanvraag:
+  //  - commissieGoedgekeurd: de commissie heeft goedgekeurd (DB-status
+  //    'goedgekeurd' of 'bezig'). Het contract bestaat en mag getekend worden.
+  //  - volledigGetekend: alle drie de partijen (commissie/docent, mentor,
+  //    student) hebben getekend → DB-status 'bezig' → de stage is actief en
+  //    logboek/evaluatie gaan open.
+  const commissieGoedgekeurd = computed(() => status.value === 'goedgekeurd')
+  const volledigGetekend = computed(() => aanvraag.value?.status === 'bezig')
+
+  // Eén bron van waarheid voor de student-navigatie, zodat elk scherm exact
+  // dezelfde tabbladen toont. De zichtbare tabs volgen de fase:
+  //   1. nog niet goedgekeurd        → Dashboard, Aanvraag
+  //   2. goedgekeurd, nog niet getekend → + Contract (om te ondertekenen)
+  //   3. volledig getekend (bezig)   → Dashboard, Logboek, Evaluatie, Contract
+  const studentNavLinks = computed(() => {
+    const dashboard = { label: 'Dashboard', to: '/student' }
+    const aanvraagTab = { label: 'Aanvraag', to: '/student/aanvraag' }
+    const contractTab = { label: 'Contract', to: '/student/contract' }
+
+    if (!commissieGoedgekeurd.value) {
+      return [dashboard, aanvraagTab]
+    }
+    if (!volledigGetekend.value) {
+      return [dashboard, aanvraagTab, contractTab]
+    }
+    const links = [
+      dashboard,
+      { label: 'Logboek', to: '/student/logboek' },
+      { label: 'Evaluatie', to: '/student/evaluatie' },
+      contractTab,
+    ]
+    if (aanvraag.value?.eindoverzicht_vrij) {
+      links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
+    }
+    return links
+  })
 
   async function laad() {
     fout.value = null
@@ -207,5 +244,17 @@ export const useStageStore = defineStore('stage', () => {
     }
   }
 
-  return { status, aanvraag, motivatie, meldingen, fout, laad, dienIn, pasAan }
+  return {
+    status,
+    aanvraag,
+    motivatie,
+    meldingen,
+    fout,
+    commissieGoedgekeurd,
+    volledigGetekend,
+    studentNavLinks,
+    laad,
+    dienIn,
+    pasAan,
+  }
 })
