@@ -64,7 +64,18 @@ app.post('/api/login', (req, res) => {
       // Nieuwe sessie: overschrijft de vorige, zodat oudere tokens (andere
       // browser/apparaat) ongeldig worden — verifyToken vergelijkt hierop.
       const sid = crypto.randomBytes(16).toString('hex');
-      db.query('UPDATE gebruiker SET sessie_id = ? WHERE gebruiker_id = ?', [sid, gebruiker.gebruiker_id]);
+      // Wacht tot de nieuwe sessie écht is weggeschreven vóór we het token
+      // teruggeven. Anders kan het dashboard (op een trage DB) z'n eerste call
+      // doen vóór sessie_id gezet is → verifyToken ziet een mismatch → onterechte 401.
+      try {
+        await db.promise().query(
+          'UPDATE gebruiker SET sessie_id = ? WHERE gebruiker_id = ?',
+          [sid, gebruiker.gebruiker_id]
+        );
+      } catch (sessieErr) {
+        res.status(500).json({ error: sessieErr.message });
+        return;
+      }
 
       const token = jwt.sign(
         {

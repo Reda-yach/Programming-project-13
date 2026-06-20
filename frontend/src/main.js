@@ -13,10 +13,17 @@ window.fetch = async (...args) => {
   const res = await origFetch(...args)
   const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || ''
   if (res.status === 401 && !url.includes('/api/login') && localStorage.getItem('token')) {
-    localStorage.removeItem('stage-auth')
-    localStorage.removeItem('token')
-    localStorage.removeItem('gebruiker')
-    if (!location.pathname.startsWith('/login')) location.href = '/login?reden=elders'
+    // Alleen uitloggen bij een ÉCHT sessie-conflict (backend code 'sessie_elders'),
+    // niet bij elke willekeurige 401 — anders maskeert een toevallige 401 zich als
+    // "elders ingelogd" en word je onterecht naar de loginpagina gestuurd.
+    let code = null
+    try { code = (await res.clone().json()).code } catch { /* geen JSON-body */ }
+    if (code === 'sessie_elders') {
+      localStorage.removeItem('stage-auth')
+      localStorage.removeItem('token')
+      localStorage.removeItem('gebruiker')
+      if (!location.pathname.startsWith('/login')) location.href = '/login?reden=elders'
+    }
   }
   return res
 }
