@@ -37,6 +37,7 @@ const huisnummer = ref('')
 const postcode = ref('')
 const gemeente = ref('')
 const provincie = ref('')
+const titel = ref('')
 const opdracht = ref('')
 
 // Belgische provincies voor de dropdown
@@ -72,6 +73,7 @@ onMounted(async () => {
     postcode.value = a.bedrijf_postcode || ''
     gemeente.value = a.bedrijf_gemeente || ''
     provincie.value = a.bedrijf_provincie || ''
+    titel.value = a.stagetitel || ''
     opdracht.value = a.beschrijving || ''
     datumVan.value = (a.startdatum || '').slice(0, 10)
     datumTot.value = (a.einddatum || '').slice(0, 10)
@@ -110,6 +112,12 @@ function valideer() {
 
   if (!gemeente.value.trim()) fouten.gemeente = 'Gemeente is verplicht'
   if (!provincie.value) fouten.provincie = 'Provincie is verplicht'
+
+  if (!titel.value.trim()) {
+    fouten.titel = 'Stagetitel is verplicht'
+  } else if (titel.value.trim().length > 200) {
+    fouten.titel = 'Stagetitel mag maximaal 200 tekens bevatten'
+  }
 
   if (!opdracht.value.trim()) {
     fouten.opdracht = 'Omschrijving is verplicht'
@@ -160,6 +168,7 @@ function bouwAanvraag() {
       postcode: postcode.value,
       gemeente: gemeente.value,
       provincie: provincie.value,
+      titel: titel.value,
       opdracht: opdracht.value,
       datumVan: datumVan.value,
       datumTot: datumTot.value,
@@ -275,6 +284,11 @@ function naarDashboard() {
                 <option v-for="p in provincies" :key="p" :value="p">{{ p }}</option>
               </select>
               <span v-if="fouten.provincie" class="form-error">{{ fouten.provincie }}</span>
+            </div>
+            <div class="form-group form-group-full">
+              <label for="titel">Stagetitel</label>
+              <input id="titel" type="text" v-model="titel" maxlength="200" placeholder="Korte titel voor de stage (bv. Webapplicatie voor HR)">
+              <span v-if="fouten.titel" class="form-error">{{ fouten.titel }}</span>
             </div>
             <div class="form-group form-group-full">
               <label for="opdracht">Omschrijving opdracht</label>

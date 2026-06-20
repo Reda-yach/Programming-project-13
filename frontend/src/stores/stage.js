@@ -151,7 +151,7 @@ export const useStageStore = defineStore('stage', () => {
           bedrijf_id,
           mentor_id,
           docent_id: null,
-          stagetitel: gegevens.bedrijf.opdracht,
+          stagetitel: gegevens.bedrijf.titel,
           beschrijving: gegevens.bedrijf.opdracht,
           startdatum: gegevens.bedrijf.datumVan,
           einddatum: gegevens.bedrijf.datumTot,
@@ -221,7 +221,7 @@ export const useStageStore = defineStore('stage', () => {
         method: 'PUT',
         headers,
         body: JSON.stringify({
-          stagetitel: gegevens.bedrijf.opdracht,
+          stagetitel: gegevens.bedrijf.titel,
           beschrijving: gegevens.bedrijf.opdracht,
           startdatum: gegevens.bedrijf.datumVan,
           einddatum: gegevens.bedrijf.datumTot,
