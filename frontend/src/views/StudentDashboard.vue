@@ -26,7 +26,7 @@ const motivatie = computed(() => stageStore.motivatie)
 const stageActief = computed(() => stage.value?.status === 'bezig')
 
 const stageBezig = computed(() =>
-  stageStatus.value === 'goedgekeurd' &&
+  stageStore.volledigGetekend &&
   !!stage.value?.startdatum &&
   new Date() >= new Date(stage.value.startdatum)
 )
@@ -38,7 +38,7 @@ const logboekStatus = ref(null)
 const logboekDagenIngevuld = ref(0)
 
 async function laadLogboekStatus() {
-  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum) return
+  if (!stageStore.volledigGetekend || !stage.value?.startdatum) return
   const start = new Date(stage.value.startdatum)
   const nu = new Date()
   if (nu < start) return
@@ -85,7 +85,7 @@ function formatDatum(d) {
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 const evaluaties = computed(() => {
-  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum || !stage.value?.einddatum) {
+  if (!stageStore.volledigGetekend || !stage.value?.startdatum || !stage.value?.einddatum) {
     return {
       tussentijds: { beschikbaar: false, vanaf: null },
       eind: { beschikbaar: false, vanaf: null },
@@ -259,7 +259,7 @@ const eindIngediend = computed(() =>
           </div>
           <hr class="card-divider" />
 
-          <template v-if="stageStatus === 'goedgekeurd' && logboekWeek !== null">
+          <template v-if="stageStore.volledigGetekend && logboekWeek !== null">
             <div class="font-semibold" style="font-size:15px;margin-bottom:8px;">Week {{ logboekWeek }}</div>
             <div class="flex gap-8" style="margin-bottom:16px;">
               <div
@@ -287,7 +287,7 @@ const eindIngediend = computed(() =>
           <template v-else>
             <div class="font-semibold" style="font-size:16px;">Geen logboek beschikbaar</div>
             <p class="text-secondary text-sm" style="margin-top:4px;">
-              Het logboek wordt beschikbaar zodra je stage goedgekeurd is en gestart is.
+              Het logboek wordt beschikbaar zodra het contract door alle partijen is ondertekend en je stage gestart is.
             </p>
           </template>
         </div>

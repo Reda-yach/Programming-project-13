@@ -292,6 +292,15 @@ onMounted(laadAanvragen)
                   <span v-if="detail.mentor_functie" class="text-secondary"> ({{ detail.mentor_functie }})</span>
                 </div>
               </div>
+              <div>
+                <div class="text-secondary text-xs">Stagetitel</div>
+                <div class="font-medium">{{ detail.stagetitel || '—' }}</div>
+              </div>
+            </div>
+
+            <div v-if="detail.beschrijving" class="mt-16">
+              <div class="text-secondary text-xs">Omschrijving</div>
+              <div class="mt-4" style="white-space:pre-line;line-height:1.6;">{{ detail.beschrijving }}</div>
             </div>
           </div>
 
