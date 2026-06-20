@@ -266,6 +266,17 @@ app.post('/api/bedrijven', verifyToken, (req, res) => {
   );
 });
 
+// Alle bedrijven ophalen — voor dropdown bij mentor-aanmaak
+app.get('/api/bedrijven', verifyToken, requireRol('admin'), (req, res) => {
+  db.query(
+    'SELECT bedrijf_id, naam FROM bedrijf ORDER BY naam ASC',
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+});
+
 // ============================================================
 // MENTORS
 // ============================================================
@@ -371,7 +382,7 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
 // Nieuwe student aanmaken (alleen admin). Maakt gebruiker (rol student) + student-rij.
 // Standaardwachtwoord 'student123' — student reset dit via wachtwoord-vergeten.
 app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => {
-  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, academiejaar } = req.body;
+  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, opleiding_id, academiejaar } = req.body;
 
   if (!voornaam || !naam || !email || !studentnummer || !opleiding || !academiejaar) {
     return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
@@ -390,12 +401,10 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
           return res.status(500).json({ error: err.message });
         }
         db.query(
-          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES (?, ?, ?, ?)',
-          [gebruikerResult.insertId, studentnummer, opleiding, academiejaar],
+          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, opleiding_id, academiejaar) VALUES (?, ?, ?, ?, ?)',
+          [gebruikerResult.insertId, studentnummer, opleiding, opleiding_id || null, academiejaar],
           (err2, studentResult) => {
             if (err2) {
-              // ponytail: dubbel studentnummer laat de zojuist aangemaakte gebruiker-rij wees achter;
-              // wrap in een transactie als dat in de praktijk voorkomt.
               if (err2.code === 'ER_DUP_ENTRY') {
                 return res.status(409).json({ error: 'Dit studentnummer is al in gebruik.' });
               }
@@ -404,6 +413,101 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
             res.status(201).json({ message: 'Student aangemaakt!', student_id: studentResult.insertId });
           }
         );
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Nieuwe docent of commissielid aanmaken (admin only). Maakt gebruiker + docent-rij in een transactie.
+// Zowel rol='docent' als rol='commissie' krijgen een docent-rij zodat ze studenten en evaluaties kunnen zien.
+// Standaardwachtwoord 'docent123'.
+app.post('/api/docenten', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, titel, specialisatie, max_studenten, rol } = req.body;
+
+  if (!voornaam || !naam || !email) {
+    return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
+  }
+  if (rol !== 'docent' && rol !== 'commissie') {
+    return res.status(400).json({ error: 'Rol moet "docent" of "commissie" zijn.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('docent123', 10);
+    db.getConnection((errConn, conn) => {
+      if (errConn) return res.status(500).json({ error: errConn.message });
+
+      conn.beginTransaction(errTx => {
+        if (errTx) { conn.release(); return res.status(500).json({ error: errTx.message }); }
+
+        conn.query(
+          'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+          [voornaam, naam, email, telefoonnummer || null, hash, rol],
+          (err, gebruikerResult) => {
+            if (err) {
+              conn.rollback(() => conn.release());
+              if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+              }
+              return res.status(500).json({ error: err.message });
+            }
+
+            conn.query(
+              'INSERT INTO docent (gebruiker_id, titel, specialisatie, max_studenten) VALUES (?, ?, ?, ?)',
+              [gebruikerResult.insertId, titel || null, specialisatie || null, max_studenten || 5],
+              (err2, docentResult) => {
+                if (err2) {
+                  conn.rollback(() => conn.release());
+                  return res.status(500).json({ error: err2.message });
+                }
+
+                conn.commit(errCommit => {
+                  conn.release();
+                  if (errCommit) return res.status(500).json({ error: errCommit.message });
+                  res.status(201).json({
+                    message: 'Account aangemaakt!',
+                    docent_id: docentResult.insertId,
+                    standaardwachtwoord: 'docent123',
+                  });
+                });
+              }
+            );
+          }
+        );
+      });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Puur admin-account aanmaken (geen gekoppeld profiel).
+// Standaardwachtwoord 'admin123'.
+app.post('/api/gebruikers', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer } = req.body;
+
+  if (!voornaam || !naam || !email) {
+    return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('admin123', 10);
+    db.query(
+      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+      [voornaam, naam, email, telefoonnummer || null, hash, 'admin'],
+      (err, result) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({
+          message: 'Admin-account aangemaakt!',
+          gebruiker_id: result.insertId,
+          standaardwachtwoord: 'admin123',
+        });
       }
     );
   } catch (e) {
@@ -2915,112 +3019,16 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/students', verifyToken, require('./routes/studentdashboardroute'));
 
 // ============================================================
-// COMPETENTIESETS
+// OPLEIDINGEN
 // ============================================================
 
-// Alle actieve competentiesets ophalen
-app.get('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
+// Alle opleidingen ophalen — voor account-aanmaak en competentiebeheer
+app.get('/api/opleidingen', verifyToken, requireRol('admin'), (req, res) => {
   db.query(
-    'SELECT * FROM competentieset WHERE is_actief = TRUE ORDER BY naam ASC',
-    (err, sets) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (sets.length === 0) {
-        res.json([]);
-        return;
-      }
-
-      const setIds = sets.map(s => s.set_id);
-      db.query(
-        `SELECT c.*, cs.set_id
-         FROM competentie c
-         JOIN competentieset cs ON c.opleiding_id = cs.set_id
-         WHERE cs.is_actief = TRUE AND c.is_actief = TRUE AND cs.set_id IN (?)`,
-        [setIds],
-        (errComp, competenties) => {
-          if (errComp) {
-            res.status(500).json({ error: errComp.message });
-            return;
-          }
-
-          if (competenties.length === 0) {
-            res.json(sets.map(s => ({ ...s, competenties: [] })));
-            return;
-          }
-
-          const compIds = competenties.map(c => c.competentie_id);
-          db.query(
-            'SELECT * FROM competentie_rubriek WHERE competentie_id IN (?) ORDER BY punt DESC',
-            [compIds],
-            (errRub, rubrieken) => {
-              if (errRub) {
-                res.status(500).json({ error: errRub.message });
-                return;
-              }
-
-              const result = sets.map(s => ({
-                ...s,
-                competenties: competenties
-                  .filter(c => c.set_id === s.set_id)
-                  .map(c => ({
-                    id:           c.competentie_id,
-                    naam:         c.naam,
-                    omschrijving: c.omschrijving,
-                    gewicht:      c.gewicht,
-                    rubrieken:    rubrieken.filter(r => r.competentie_id === c.competentie_id),
-                  })),
-              }));
-
-              res.json(result);
-            }
-          );
-        }
-      );
-    }
-  );
-});
-
-// Nieuwe competentieset aanmaken
-app.post('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
-  const { naam, opleiding, jaar } = req.body;
-
-  if (!naam || !opleiding || !jaar) {
-    res.status(400).json({ error: 'Naam, opleiding en jaar zijn verplicht.' });
-    return;
-  }
-
-  db.query(
-    'INSERT INTO competentieset (naam, opleiding, jaar) VALUES (?, ?, ?)',
-    [naam.trim(), opleiding.trim(), jaar.trim()],
+    'SELECT opleiding_id, naam FROM opleiding ORDER BY naam ASC',
     (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json({ message: 'Competentieset aangemaakt!', id: results.insertId });
-    }
-  );
-});
-
-// Competentieset deactiveren (soft delete)
-app.delete('/api/competentiesets/:id', verifyToken, requireRol('admin'), (req, res) => {
-  const { id } = req.params;
-
-  db.query(
-    'UPDATE competentieset SET is_actief = FALSE WHERE set_id = ?',
-    [id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Competentieset niet gevonden.' });
-        return;
-      }
-      res.json({ message: 'Competentieset gedeactiveerd.' });
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
     }
   );
 });
