@@ -150,6 +150,37 @@ function toggleActief() {
   actief.value = !actief.value
 }
 
+// ── Wachtwoord opnieuw instellen ──────────────────────────────────────────────
+const nieuwWachtwoord = ref('')
+const wwBezig         = ref(false)
+const wwMelding       = ref('')
+
+async function stelWachtwoordIn() {
+  if (nieuwWachtwoord.value.trim().length < 8) {
+    wwMelding.value = '✗ Minstens 8 tekens.'
+    return
+  }
+  wwBezig.value   = true
+  wwMelding.value = ''
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${API}/gebruikers/${route.params.id}/wachtwoord`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ wachtwoord: nieuwWachtwoord.value.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Wijzigen mislukt')
+    wwMelding.value = '✓ Wachtwoord aangepast'
+    nieuwWachtwoord.value = ''
+    setTimeout(() => { wwMelding.value = '' }, 2500)
+  } catch (e) {
+    wwMelding.value = '✗ ' + e.message
+  } finally {
+    wwBezig.value = false
+  }
+}
+
 onMounted(laad)
 </script>
 
@@ -237,6 +268,24 @@ onMounted(laad)
                 ? 'Dit account kan inloggen en het systeem gebruiken.'
                 : 'Dit account heeft geen toegang tot het systeem.' }}
             </span>
+          </div>
+
+          <hr class="card-divider" />
+
+          <!-- Wachtwoord -->
+          <div class="form-section-title" style="border:none; padding:0;">Wachtwoord</div>
+          <div class="form-group">
+            <label>Nieuw wachtwoord</label>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input v-model="nieuwWachtwoord" type="text" placeholder="Minstens 8 tekens" style="flex:1; min-width:220px;" />
+              <button class="btn btn-secondary" :disabled="wwBezig || nieuwWachtwoord.trim().length < 8" @click="stelWachtwoordIn">
+                {{ wwBezig ? 'Bezig...' : 'Wachtwoord instellen' }}
+              </button>
+            </div>
+            <span v-if="wwMelding" class="text-sm" :style="{ color: wwMelding.startsWith('✓') ? 'var(--green)' : 'var(--red)' }">{{ wwMelding }}</span>
+            <p style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+              De gebruiker logt vanaf dan in met dit nieuwe wachtwoord.
+            </p>
           </div>
 
           <hr class="card-divider" />

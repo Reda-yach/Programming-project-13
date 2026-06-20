@@ -207,6 +207,55 @@ function toonBericht(tekst, type) {
   berichtType.value = type
   setTimeout(() => (bericht.value = ''), 3500)
 }
+
+// ─── Opleidingen toevoegen / verwijderen ─────────────────────────────────────
+const nieuweOpleiding = ref('')
+const opleidingBezig  = ref(false)
+
+async function voegOpleidingToe() {
+  const naam = nieuweOpleiding.value.trim()
+  if (!naam || opleidingBezig.value) return
+  opleidingBezig.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/opleidingen', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body:    JSON.stringify({ naam }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toonBericht(data.error || 'Toevoegen mislukt.', 'error'); return }
+    nieuweOpleiding.value = ''
+    await laadOpleidingen()
+    gekozenOpleidingId.value = data.opleiding_id
+    await laadCompetenties()
+    toonBericht('Opleiding toegevoegd.', 'success')
+  } catch {
+    toonBericht('Verbindingsfout.', 'error')
+  } finally {
+    opleidingBezig.value = false
+  }
+}
+
+async function verwijderOpleiding() {
+  if (!gekozenOpleidingId.value) return
+  const huidige = opleidingen.value.find(o => o.opleiding_id === gekozenOpleidingId.value)
+  if (!confirm(`Opleiding "${huidige?.naam || ''}" verwijderen?`)) return
+  try {
+    const res = await fetch(`http://localhost:3000/api/opleidingen/${gekozenOpleidingId.value}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${token()}` },
+    })
+    const data = await res.json()
+    if (!res.ok) { toonBericht(data.error || 'Verwijderen mislukt.', 'error'); return }
+    await laadOpleidingen()
+    gekozenOpleidingId.value = opleidingen.value[0]?.opleiding_id ?? null
+    if (gekozenOpleidingId.value) await laadCompetenties()
+    else competenties.value = []
+    toonBericht('Opleiding verwijderd.', 'success')
+  } catch {
+    toonBericht('Verbindingsfout.', 'error')
+  }
+}
 </script>
 
 <template>
@@ -230,18 +279,45 @@ function toonBericht(tekst, type) {
         {{ bericht }}
       </div>
 
-      <!-- Opleiding dropdown -->
-      <div class="opleiding-keuze">
-        <label class="opleiding-label">Opleiding</label>
-        <select
-          v-model="gekozenOpleidingId"
-          class="opleiding-select"
-          @change="wisselOpleiding"
-        >
-          <option v-for="o in opleidingen" :key="o.opleiding_id" :value="o.opleiding_id">
-            {{ o.naam }}
-          </option>
-        </select>
+      <!-- Opleiding kiezen + beheren -->
+      <div class="opleiding-beheer">
+        <div class="opleiding-keuze">
+          <label class="opleiding-label">Opleiding</label>
+          <select
+            v-model="gekozenOpleidingId"
+            class="opleiding-select"
+            @change="wisselOpleiding"
+          >
+            <option v-if="opleidingen.length === 0" :value="null" disabled>Geen opleidingen</option>
+            <option v-for="o in opleidingen" :key="o.opleiding_id" :value="o.opleiding_id">
+              {{ o.naam }}
+            </option>
+          </select>
+          <button
+            class="btn-icon btn-icon-danger"
+            title="Geselecteerde opleiding verwijderen"
+            :disabled="!gekozenOpleidingId"
+            @click="verwijderOpleiding"
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+
+        <div class="opleiding-toevoegen">
+          <input
+            v-model="nieuweOpleiding"
+            class="opleiding-input"
+            placeholder="Naam nieuwe opleiding"
+            @keyup.enter="voegOpleidingToe"
+          />
+          <button
+            class="btn btn-secondary btn-sm"
+            :disabled="opleidingBezig || !nieuweOpleiding.trim()"
+            @click="voegOpleidingToe"
+          >
+            + Opleiding toevoegen
+          </button>
+        </div>
       </div>
 
       <!-- Laden -->
@@ -408,6 +484,29 @@ function toonBericht(tekst, type) {
   min-width: 280px;
 }
 .opleiding-select:focus { outline: none; border-color: #000; }
+
+.opleiding-beheer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.opleiding-toevoegen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.opleiding-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  min-width: 200px;
+}
+.opleiding-input:focus { outline: none; border-color: #000; }
 
 /* ── Leeg / laden ────────────────────────────────────────────────────────── */
 .tekst-grijs { font-size: 13px; color: var(--text-secondary); }

@@ -223,6 +223,13 @@ app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) =
     [id],
     (err, results) => {
       if (err) {
+        // FK-constraint: het account heeft nog gekoppelde evaluaties/beslissingen/
+        // feedback (ON DELETE RESTRICT). Geef een duidelijke melding i.p.v. een 500.
+        if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
+          return res.status(409).json({
+            error: 'Dit account kan niet verwijderd worden omdat er nog evaluaties, beslissingen of feedback aan gekoppeld zijn. Zet het account liever op inactief.',
+          });
+        }
         res.status(500).json({ error: err.message });
         return;
       }
@@ -3045,6 +3052,55 @@ app.get('/api/opleidingen', verifyToken, requireRol('admin'), (req, res) => {
     }
   );
 });
+
+// Admin: nieuwe opleiding toevoegen.
+app.post('/api/opleidingen', verifyToken, requireRol('admin'), (req, res) => {
+  const naam = (req.body.naam || '').trim();
+  if (!naam) return res.status(400).json({ error: 'Naam is verplicht.' });
+  db.query('SELECT opleiding_id FROM opleiding WHERE LOWER(naam) = LOWER(?)', [naam], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length > 0) return res.status(409).json({ error: 'Deze opleiding bestaat al.' });
+    db.query('INSERT INTO opleiding (naam) VALUES (?)', [naam], (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.status(201).json({ message: 'Opleiding toegevoegd.', opleiding_id: result.insertId, naam });
+    });
+  });
+});
+
+// Admin: opleiding verwijderen (lukt niet als er nog competenties/studenten aan hangen).
+app.delete('/api/opleidingen/:id', verifyToken, requireRol('admin'), (req, res) => {
+  db.query('DELETE FROM opleiding WHERE opleiding_id = ?', [req.params.id], (err, result) => {
+    if (err) {
+      if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
+        return res.status(409).json({
+          error: 'Deze opleiding kan niet verwijderd worden omdat er nog competenties of studenten aan gekoppeld zijn.',
+        });
+      }
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Opleiding niet gevonden.' });
+    res.json({ message: 'Opleiding verwijderd.' });
+  });
+});
+
+// Admin: wachtwoord van een account opnieuw instellen.
+app.put('/api/gebruikers/:id/wachtwoord', verifyToken, requireRol('admin'), async (req, res) => {
+  const wachtwoord = (req.body.wachtwoord || '').trim();
+  if (wachtwoord.length < 8) {
+    return res.status(400).json({ error: 'Wachtwoord moet minstens 8 tekens bevatten.' });
+  }
+  try {
+    const hash = await bcrypt.hash(wachtwoord, 10);
+    db.query('UPDATE gebruiker SET wachtwoord_hash = ? WHERE gebruiker_id = ?', [hash, req.params.id], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
+      res.json({ message: 'Wachtwoord aangepast.' });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 process.on('uncaughtException', (err) => { console.error('UNCAUGHT:', err); });
 process.on('unhandledRejection', (err) => { console.error('UNHANDLED:', err); });
 
