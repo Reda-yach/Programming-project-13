@@ -2,18 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
-
-const navLinks = [
-  { label: 'Competenties', to: '/admin/competentiesets' },
-  { label: 'Stages',       to: '/admin/stages' },
-  { label: 'Accounts',     to: '/admin/accounts' },
-  { label: 'Aanvragen',    to: '/admin/aanvragen' },
-]
+import { navLinks } from './adminNav'
 
 const route  = useRoute()
 const router = useRouter()
 
-// ─── Opleidingen (competentiesets als proxy) ──────────────────────────────────
+// ─── Opleidingen (echte opleiding-tabel) ─────────────────────────────────────
 const opleidingen          = ref([])
 const gekozenOpleidingId   = ref(null)
 
@@ -24,7 +18,7 @@ const bericht      = ref('')
 const berichtType  = ref('')
 
 // ─── Rubriek edit state per competentie ──────────────────────────────────────
-// { [comp.id]: { score: null|number, commentaar: '', bezig, fout } }
+// { [comp.id]: { rubrieken: {5:'',3:'',1:'',0:''}, opgeslagen, bezig, fout } }
 const rubriekEdit = ref({})
 
 const PUNTEN      = [5, 3, 1, 0]
@@ -45,9 +39,9 @@ const teVerwijderen   = ref(null)
 onMounted(async () => {
   await laadOpleidingen()
   const queryId = Number(route.query.id)
-  gekozenOpleidingId.value = opleidingen.value.some(o => o.set_id === queryId)
+  gekozenOpleidingId.value = opleidingen.value.some(o => o.opleiding_id === queryId)
     ? queryId
-    : opleidingen.value[0]?.set_id ?? null
+    : opleidingen.value[0]?.opleiding_id ?? null
   if (gekozenOpleidingId.value) await laadCompetenties()
 })
 
@@ -56,7 +50,7 @@ function token() { return localStorage.getItem('token') }
 
 async function laadOpleidingen() {
   try {
-    const res = await fetch('http://localhost:3000/api/competentiesets', {
+    const res = await fetch('http://localhost:3000/api/opleidingen', {
       headers: { Authorization: `Bearer ${token()}` },
     })
     opleidingen.value = await res.json()
@@ -84,48 +78,49 @@ async function laadCompetenties() {
 }
 
 function initRubriekState(comp) {
-  const eerste = (comp.rubrieken || [])[0] || {}
+  const rubMap = {}
+  for (const punt of PUNTEN) rubMap[punt] = ''
+  for (const r of (comp.rubrieken || [])) {
+    if (r.punt != null) rubMap[Number(r.punt)] = r.beschrijving || ''
+  }
+  const heeftData = (comp.rubrieken || []).length > 0
   return {
-    score:      eerste.punt != null ? Number(eerste.punt) : null,
-    commentaar: eerste.beschrijving || '',
-    opgeslagen: eerste.punt != null,
+    rubrieken:  rubMap,
+    opgeslagen: heeftData,
     bezig:      false,
     fout:       '',
   }
 }
 
 async function wisselOpleiding() {
-  router.replace({ path: '/admin/competentiebeheer', query: { id: gekozenOpleidingId.value } })
+  router.replace({ path: '/admin/competenties', query: { id: gekozenOpleidingId.value } })
   await laadCompetenties()
 }
 
-// ─── Score opslaan ────────────────────────────────────────────────────────────
-async function slaScoreOp(comp) {
+// ─── Rubrieken opslaan (alle 4 niveaus tegelijk) ─────────────────────────────
+async function slaRubriekenOp(comp) {
   const id    = comp.id
   const state = rubriekEdit.value[id]
   if (!state) return
-  if (state.score === null) {
-    rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, fout: 'Kies eerst een score.' } }
-    return
-  }
-  const score      = state.score
-  const commentaar = state.commentaar
   rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: true, fout: '' } }
+  const rubrieken = PUNTEN
+    .filter(p => state.rubrieken[p].trim())
+    .map(p => ({ punt: p, beschrijving: state.rubrieken[p].trim() }))
   try {
     const res = await fetch(`http://localhost:3000/api/competenties/${id}/rubrieken`, {
       method:  'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body:    JSON.stringify({ rubrieken: [{ punt: score, beschrijving: commentaar }] }),
+      body:    JSON.stringify({ rubrieken }),
     })
     const data = await res.json()
     if (res.ok) {
-      rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: true, bezig: false, fout: '' } }
-      toonBericht('Score opgeslagen.', 'success')
+      rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, opgeslagen: true, bezig: false, fout: '' } }
+      toonBericht('Rubrieken opgeslagen.', 'success')
     } else {
-      rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: false, bezig: false, fout: data.error || 'Opslaan mislukt.' } }
+      rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: false, fout: data.error || 'Opslaan mislukt.' } }
     }
   } catch {
-    rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: false, bezig: false, fout: 'Verbindingsfout.' } }
+    rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: false, fout: 'Verbindingsfout.' } }
   }
 }
 
@@ -220,12 +215,10 @@ function toonBericht(tekst, type) {
 
     <main class="content">
 
-      <button class="terug-link" @click="router.push('/admin/competentiesets')">← Terug naar overzicht</button>
-
       <div class="pagina-hoofd">
         <div>
           <h1 class="page-title">Competentiebeheer</h1>
-          <p class="page-subtitle">Kies een opleiding, beheer de competenties en stel per competentie de rubriek in.</p>
+          <p class="page-subtitle">Kies een opleiding, beheer de competenties en stel per competentie de rubriek in voor alle 4 niveaus.</p>
         </div>
         <button class="btn btn-primary" @click="openToevoegen" :disabled="!gekozenOpleidingId">
           + Competentie toevoegen
@@ -245,8 +238,8 @@ function toonBericht(tekst, type) {
           class="opleiding-select"
           @change="wisselOpleiding"
         >
-          <option v-for="o in opleidingen" :key="o.set_id" :value="o.set_id">
-            {{ o.naam }} — {{ o.opleiding }} ({{ o.jaar }})
+          <option v-for="o in opleidingen" :key="o.opleiding_id" :value="o.opleiding_id">
+            {{ o.naam }}
           </option>
         </select>
       </div>
@@ -279,52 +272,36 @@ function toonBericht(tekst, type) {
           </div>
         </div>
 
-        <!-- Score sectie (altijd zichtbaar) -->
+        <!-- Rubriek sectie -->
         <div class="rubriek-sectie" v-if="rubriekEdit[comp.id]">
-          <p class="rubriek-titel">Score toekennen</p>
+          <p class="rubriek-titel">Rubriek per niveau</p>
 
           <!-- Opgeslagen view (read-only) -->
-          <div v-if="rubriekEdit[comp.id].opgeslagen" class="score-opgeslagen">
-            <div class="score-badge" :style="{ background: PUNT_KLEUR[rubriekEdit[comp.id].score] }">
-              <span class="score-cijfer">{{ rubriekEdit[comp.id].score }}</span>
-              <span class="score-label">{{ PUNT_LABELS[rubriekEdit[comp.id].score] }}</span>
+          <div v-if="rubriekEdit[comp.id].opgeslagen" class="rubrieken-opgeslagen">
+            <div v-for="punt in PUNTEN" :key="punt" class="rubriek-rij-saved">
+              <div class="rubriek-punt-badge" :style="{ background: PUNT_KLEUR[punt] }">
+                <span class="punt-cijfer">{{ punt }}</span>
+                <span class="punt-label">{{ PUNT_LABELS[punt] }}</span>
+              </div>
+              <div class="rubriek-desc-saved">
+                {{ rubriekEdit[comp.id].rubrieken[punt] || '—' }}
+              </div>
             </div>
-            <div v-if="rubriekEdit[comp.id].commentaar" class="commentaar-opgeslagen">
-              <p class="commentaar-label">Commentaar:</p>
-              <p class="commentaar-tekst">{{ rubriekEdit[comp.id].commentaar }}</p>
-            </div>
-            <button class="btn btn-sm btn-secondary" @click="startBewerken(comp)">Bewerken</button>
+            <button class="btn btn-sm btn-secondary" style="margin-top:10px" @click="startBewerken(comp)">Bewerken</button>
           </div>
 
           <!-- Edit view -->
-          <div v-else>
-            <!-- Score knoppen -->
-            <div class="score-kiezer">
-              <button
-                v-for="punt in PUNTEN"
-                :key="punt"
-                class="score-knop"
-                :class="{ actief: rubriekEdit[comp.id].score === punt }"
-                :style="rubriekEdit[comp.id].score === punt
-                  ? { background: PUNT_KLEUR[punt], color: '#fff', borderColor: PUNT_KLEUR[punt] }
-                  : {}"
-                @click="rubriekEdit[comp.id].score = punt"
-              >
-                <span class="score-cijfer">{{ punt }}</span>
-                <span class="score-label">{{ PUNT_LABELS[punt] }}</span>
-              </button>
-            </div>
-
-            <!-- Commentaar voor de gekozen score -->
-            <div class="commentaar-vak" v-if="rubriekEdit[comp.id].score !== null">
-              <label class="commentaar-label">
-                Commentaar bij score {{ rubriekEdit[comp.id].score }}
+          <div v-else class="rubrieken-edit">
+            <div v-for="punt in PUNTEN" :key="punt" class="rubriek-niveau">
+              <label class="niveau-label" :style="{ color: PUNT_KLEUR[punt] }">
+                <span class="niveau-punt">{{ punt }}</span>
+                {{ PUNT_LABELS[punt] }}
               </label>
               <textarea
-                v-model="rubriekEdit[comp.id].commentaar"
+                v-model="rubriekEdit[comp.id].rubrieken[punt]"
                 class="rubriek-textarea"
-                rows="3"
-                placeholder="Optioneel: voeg een toelichting toe…"
+                rows="2"
+                :placeholder="`Beschrijving voor niveau ${punt}…`"
               ></textarea>
             </div>
 
@@ -333,9 +310,9 @@ function toonBericht(tekst, type) {
               <button
                 class="btn btn-sm btn-primary"
                 :disabled="rubriekEdit[comp.id].bezig"
-                @click="slaScoreOp(comp)"
+                @click="slaRubriekenOp(comp)"
               >
-                {{ rubriekEdit[comp.id].bezig ? 'Bezig…' : 'Score opslaan' }}
+                {{ rubriekEdit[comp.id].bezig ? 'Bezig…' : 'Rubrieken opslaan' }}
               </button>
             </div>
           </div>
@@ -395,14 +372,6 @@ function toonBericht(tekst, type) {
 </template>
 
 <style scoped>
-/* ── Terug link ──────────────────────────────────────────────────────────── */
-.terug-link {
-  background: none; border: none; padding: 0;
-  font-size: 13px; color: var(--text-secondary); cursor: pointer;
-  font-family: inherit; margin-bottom: 4px; display: inline-block;
-}
-.terug-link:hover { color: var(--text-primary); text-decoration: underline; }
-
 /* ── Pagina hoofd ────────────────────────────────────────────────────────── */
 .pagina-hoofd {
   display: flex;
@@ -503,7 +472,7 @@ function toonBericht(tekst, type) {
   border: 1px solid var(--border);
 }
 
-/* ── Score sectie ────────────────────────────────────────────────────────── */
+/* ── Rubriek sectie ──────────────────────────────────────────────────────── */
 .rubriek-sectie {
   border-top: 1px solid var(--border);
   padding: 16px 20px;
@@ -520,111 +489,92 @@ function toonBericht(tekst, type) {
 }
 
 /* Opgeslagen state */
-.score-opgeslagen {
+.rubrieken-opgeslagen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rubriek-rij-saved {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 12px;
+  gap: 12px;
+  padding: 10px 12px;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
 
-.score-badge {
+.rubriek-punt-badge {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 16px;
+  gap: 2px;
+  padding: 8px 12px;
   border-radius: 6px;
   color: #fff;
   flex-shrink: 0;
+  min-width: 72px;
 }
 
-.score-badge .score-cijfer {
-  font-size: 28px;
+.punt-cijfer {
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
 }
 
-.score-badge .score-label {
-  font-size: 10px;
+.punt-label {
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.9;
+  text-align: center;
 }
 
-.commentaar-opgeslagen {
+.rubriek-desc-saved {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.commentaar-opgeslagen .commentaar-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.commentaar-tekst {
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.5;
-  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  padding-top: 4px;
 }
 
-/* Score knoppen (edit mode) */
-.score-kiezer {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.score-knop {
+/* Edit state */
+.rubrieken-edit {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 12px;
+}
+
+.rubriek-niveau {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  padding: 10px 20px;
-  border: 2px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.12s, background 0.12s, color 0.12s;
-  min-width: 90px;
-}
-.score-knop:hover:not(.actief) { border-color: #aaa; background: var(--gray50); }
-.score-knop.actief { font-weight: 700; }
-
-.score-knop .score-cijfer {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
-}
-.score-knop .score-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-/* Commentaar */
-.commentaar-vak {
-  margin-top: 14px;
+.niveau-label {
+  font-size: 12px;
+  font-weight: 700;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
 }
-.commentaar-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+
+.niveau-punt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: currentColor;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 .rubriek-textarea {
@@ -647,7 +597,7 @@ function toonBericht(tekst, type) {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 4px;
 }
 
 .rubriek-fout { font-size: 12px; color: var(--red); }

@@ -149,18 +149,15 @@ const router = createRouter({
       path: '/admin/competenties',
       name: 'admin-competenties',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
-    },
-    {
-      path: '/admin/competentiesets',
-      name: 'admin-competentiesets',
-      component: () => import('../views/Admincompetentiesets.vue'),
       meta: { requiresAdmin: true },
     },
     {
       path: '/admin/competentiebeheer',
-      name: 'admin-competentiebeheer',
-      component: () => import('../views/AdminCompetentiebeheer.vue'),
-      meta: { requiresAdmin: true },
+      redirect: '/admin/competenties',
+    },
+    {
+      path: '/admin/competentiesets',
+      redirect: '/admin/competenties',
     },
     {
       path: '/admin/stages',
