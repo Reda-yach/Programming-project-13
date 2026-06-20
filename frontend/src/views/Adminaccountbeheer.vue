@@ -92,6 +92,9 @@ onMounted(laad)
           <h1 class="page-title">Accountbeheer</h1>
           <p class="page-subtitle">Beheer gebruikers, rollen en toegang tot het systeem.</p>
         </div>
+        <button class="btn btn-primary" @click="router.push('/admin/accounts/nieuw')">
+          + Nieuw account
+        </button>
       </div>
 
       <!-- Loading / error -->

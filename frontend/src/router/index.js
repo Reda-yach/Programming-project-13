@@ -179,6 +179,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/admin/accounts/nieuw',
+      name: 'admin-account-nieuw',
+      component: () => import('../views/AdminAccountNieuw.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/admin/accounts/:id/bewerken',
       name: 'admin-account-bewerken',
       component: () => import('../views/Adminaccountbewerken.vue'),
