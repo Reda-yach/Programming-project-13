@@ -1,15 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+import { docentNavLinks } from './docentNav'
 
 const API = 'http://localhost:3000/api'
 
-const navLinks = ref([
-  { label: 'Studenten', to: '/docent-studenten' },
-  { label: 'Logboek', to: '/docent-logboek-overzicht' },
-  { label: 'Evaluaties', to: '/docent-evaluaties' },
-  { label: 'Aanvragen', to: '/docent-aanvragen' },
-])
+// 'Aanvragen' enkel voor commissie-docenten (zie docentNav.js).
+const navLinks = docentNavLinks()
 
 const studenten = ref([])
 const laden = ref(false)

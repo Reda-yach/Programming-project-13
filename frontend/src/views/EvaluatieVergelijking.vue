@@ -6,6 +6,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
+import { docentNavLinks } from './docentNav'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,12 +20,7 @@ const titel = fase === 'tussentijds' ? 'Tussentijdse evaluatie' : 'Eindevaluatie
 // via de route. Vandaar deze fallback.
 const isDocent = !!route.params.stageId
 const navLinks = isDocent
-  ? [
-      { label: 'Studenten', to: '/docent-studenten' },
-      { label: 'Logboek', to: '/docent-logboek-overzicht' },
-      { label: 'Evaluaties', to: '/docent-evaluaties' },
-      { label: 'Aanvragen', to: '/docent-aanvragen' },
-    ]
+  ? docentNavLinks() // 'Aanvragen' enkel voor commissie-docenten
   : [
       { label: 'Dashboard', to: '/student' },
       { label: 'Aanvraag', to: '/student/aanvraag' },

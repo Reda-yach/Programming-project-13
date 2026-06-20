@@ -2,16 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
+import { docentNavLinks } from './docentNav'
 
 const API = 'http://localhost:3000/api'
 const route = useRoute()
 
-const navLinks = ref([
-  { label: 'Studenten', to: '/docent-studenten' },
-  { label: 'Logboek', to: '/docent-logboek-overzicht', match: '/docent/logboek' },
-  { label: 'Evaluaties', to: '/docent-evaluaties' },
-  { label: 'Aanvragen', to: '/docent-aanvragen' },
-])
+// 'Aanvragen' enkel voor commissie-docenten (zie docentNav.js).
+const navLinks = docentNavLinks()
 
 const dagNamen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag']
 const dagKort = {

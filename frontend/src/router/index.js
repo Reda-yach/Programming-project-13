@@ -53,6 +53,8 @@ const router = createRouter({
     {
       path: '/docent-aanvragen',
       name: 'docent-aanvragen',
+      // Enkel docenten in de stagecommissie (commissielid) mogen aanvragen zien.
+      meta: { requiresCommissie: true },
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
@@ -80,6 +82,7 @@ const router = createRouter({
     {
       path: '/docent/aanvragen',
       name: 'docent-aanvragen-overzicht',
+      meta: { requiresCommissie: true },
       component: () => import('../views/DocentAanvragen.vue'),
     },
     {
@@ -227,6 +230,23 @@ router.beforeEach((to, _from, next) => {
       const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
       if (gebruiker.rol !== 'admin') {
         next({ name: 'login' })
+        return
+      }
+    } catch {
+      next({ name: 'login' })
+      return
+    }
+  }
+
+  // 3. Aanvragen-pagina van de docent → enkel de stagecommissie (rol
+  // 'commissie') of admin. Een gewone docent gaat terug naar zijn studenten.
+  if (to.meta.requiresCommissie) {
+    try {
+      const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+      const magBeoordelen =
+        gebruiker.rol === 'admin' || gebruiker.rol === 'commissie'
+      if (!magBeoordelen) {
+        next({ name: 'docent-studenten' })
         return
       }
     } catch {

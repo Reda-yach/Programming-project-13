@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import TopBar from '@/components/TopBar.vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 import SignaturePad from '@/components/SignaturePad.vue'
+import { docentNavLinks } from './docentNav'
 
 // Deze pagina wordt gedeeld door de docent (/docent-aanvragen) en de admin
 // (/admin/aanvragen). De inhoud is identiek; enkel de navigatie/topbar volgt
@@ -25,12 +26,7 @@ const navLinks = computed(() =>
         { label: 'Accounts', to: '/admin/accounts' },
         { label: 'Aanvragen', to: '/admin/aanvragen' },
       ]
-    : [
-        { label: 'Studenten', to: '/docent-studenten' },
-        { label: 'Logboek', to: '/docent-logboek-overzicht' },
-        { label: 'Evaluaties', to: '/docent-evaluaties' },
-        { label: 'Aanvragen', to: '/docent-aanvragen' },
-      ]
+    : docentNavLinks()
 )
 
 const token = localStorage.getItem('token')
