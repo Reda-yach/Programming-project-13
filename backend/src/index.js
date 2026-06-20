@@ -215,31 +215,50 @@ app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
   );
 });
 
-// Gebruiker verwijderen
-app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+// Gebruiker verwijderen (forceer): ruimt in een transactie ook alle gekoppelde
+// geschiedenis op die anders blokkeert (ON DELETE RESTRICT), en maakt
+// docent-toewijzingen los. Profiel-rijen (student/docent/mentor), notificaties
+// en reset-tokens cascaden mee bij het verwijderen van de gebruiker.
+app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), async (req, res) => {
   const { id } = req.params;
-  db.query(
-    'DELETE FROM gebruiker WHERE gebruiker_id = ?',
-    [id],
-    (err, results) => {
-      if (err) {
-        // FK-constraint: het account heeft nog gekoppelde evaluaties/beslissingen/
-        // feedback (ON DELETE RESTRICT). Geef een duidelijke melding i.p.v. een 500.
-        if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
-          return res.status(409).json({
-            error: 'Dit account kan niet verwijderd worden omdat er nog evaluaties, beslissingen of feedback aan gekoppeld zijn. Zet het account liever op inactief.',
-          });
-        }
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Gebruiker niet gevonden.' });
-        return;
-      }
-      res.json({ message: 'Gebruiker verwijderd.' });
+  let conn;
+  try {
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+
+    // 1) Records die rechtstreeks naar de gebruiker verwijzen (RESTRICT) weghalen.
+    await conn.query('DELETE FROM eindbeoordeling WHERE beoordelaar_id = ?', [id]);
+    await conn.query('DELETE FROM evaluatie WHERE beoordelaar_id = ?', [id]); // cascadet evaluatie_score + student_evaluatie
+    await conn.query('DELETE FROM commissie_beslissing WHERE commissielid_id = ?', [id]);
+    await conn.query('DELETE FROM logboek_feedback WHERE gebruiker_id = ?', [id]);
+
+    // 2) Stages losmaken van het docent-profiel zodat de docent-rij mee mag cascaden.
+    await conn.query(
+      'UPDATE stage SET docent_id = NULL WHERE docent_id IN (SELECT docent_id FROM docent WHERE gebruiker_id = ?)',
+      [id],
+    );
+
+    // 3) De gebruiker zelf (cascadet student/docent/mentor/notificatie/reset-token).
+    const [result] = await conn.query('DELETE FROM gebruiker WHERE gebruiker_id = ?', [id]);
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
     }
-  );
+
+    await conn.commit();
+    res.json({ message: 'Account en alle gekoppelde gegevens verwijderd.' });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    // Blijft er toch nog iets blokkeren (bv. een student/mentor met een actieve stage)?
+    if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({
+        error: 'Dit account kan niet volledig verwijderd worden omdat er nog een actieve stage aan hangt (als student of mentor). Zet het account liever op inactief.',
+      });
+    }
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
 });
 
 // ============================================================

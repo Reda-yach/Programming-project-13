@@ -134,7 +134,7 @@ const eindIngediend = computed(() =>
 
     <main class="content">
       <section>
-        <h1 class="page-title">Welkom terug, {{ student.voornaam }}</h1>
+        <h1 class="page-title">Welkom, {{ student.voornaam }}</h1>
       </section>
 
       <section class="card-grid-2">

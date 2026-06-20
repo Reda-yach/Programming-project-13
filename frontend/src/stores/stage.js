@@ -52,8 +52,11 @@ export const useStageStore = defineStore('stage', () => {
     if (!volledigGetekend.value) {
       return [dashboard, aanvraagTab, contractTab]
     }
+    // Aanvraag blijft zichtbaar: de student kan zijn (vergrendelde) ingevulde
+    // aanvraag altijd terugzien, ook nadat de stage actief is.
     const links = [
       dashboard,
+      aanvraagTab,
       { label: 'Logboek', to: '/student/logboek' },
       { label: 'Evaluatie', to: '/student/evaluatie' },
       contractTab,

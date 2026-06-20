@@ -22,6 +22,16 @@ const activeTo = computed(() => {
     .sort((a, b) => b.length - a.length)[0]
 })
 
+// Toon de rol van de ingelogde gebruiker (Student, Docent, Mentor, …).
+const rolLabel = computed(() => {
+  try {
+    const rol = JSON.parse(localStorage.getItem('gebruiker') || '{}').rol || ''
+    return rol ? rol.charAt(0).toUpperCase() + rol.slice(1) : 'Account'
+  } catch {
+    return 'Account'
+  }
+})
+
 function uitloggen() {
   localStorage.removeItem('token')
   localStorage.removeItem('gebruiker')
@@ -47,9 +57,17 @@ function uitloggen() {
       </RouterLink>
     </nav>
     <div class="topbar-right">
+      <span class="gebruiker-naam">{{ rolLabel }}</span>
       <button class="uitloggen" @click="uitloggen">Uitloggen</button>
     </div>
   </header>
 </template>
 
-<style scoped></style>
+<style scoped>
+.gebruiker-naam {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-right: 16px;
+}
+</style>

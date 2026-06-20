@@ -291,7 +291,7 @@ onMounted(laad)
           <hr class="card-divider" />
 
           <!-- Action row -->
-          <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
             <button class="btn btn-danger" :disabled="verwijder" @click="openVerwijderModal">
               {{ verwijder ? 'Bezig...' : 'Account verwijderen' }}
             </button>

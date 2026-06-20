@@ -269,9 +269,6 @@ async function verwijderOpleiding() {
           <h1 class="page-title">Competentiebeheer</h1>
           <p class="page-subtitle">Kies een opleiding, beheer de competenties en stel per competentie de rubriek in voor alle 4 niveaus.</p>
         </div>
-        <button class="btn btn-primary" @click="openToevoegen" :disabled="!gekozenOpleidingId">
-          + Competentie toevoegen
-        </button>
       </div>
 
       <!-- Feedbackbericht -->
@@ -320,6 +317,13 @@ async function verwijderOpleiding() {
         </div>
       </div>
 
+      <!-- Competentie toevoegen (onder de opleiding) -->
+      <div>
+        <button class="btn btn-primary" @click="openToevoegen" :disabled="!gekozenOpleidingId">
+          + Competentie toevoegen
+        </button>
+      </div>
+
       <!-- Laden -->
       <p v-if="laadBezig" class="tekst-grijs">Laden…</p>
 
@@ -338,8 +342,7 @@ async function verwijderOpleiding() {
             <span v-if="comp.omschrijving" class="comp-desc">{{ comp.omschrijving }}</span>
           </div>
           <div class="kaart-acties">
-            <span class="gewicht-badge">{{ comp.gewicht }}%</span>
-            <button class="btn-icon" title="Naam/omschrijving/gewicht bewerken" @click="openBewerken(comp)">
+            <button class="btn-icon" title="Naam/omschrijving bewerken" @click="openBewerken(comp)">
               <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
             <button class="btn-icon btn-icon-danger" title="Verwijderen" @click="openDelete(comp)">
@@ -411,11 +414,6 @@ async function verwijderOpleiding() {
         <div class="form-group" style="margin-top:14px">
           <label>Omschrijving</label>
           <textarea v-model="modalComp.omschrijving" class="form-input" rows="3" placeholder="Korte uitleg…"></textarea>
-        </div>
-
-        <div class="form-group" style="margin-top:14px">
-          <label>Gewicht (%)</label>
-          <input v-model.number="modalComp.gewicht" type="number" min="0" max="100" step="0.5" class="form-input" />
         </div>
 
         <p v-if="modalFout" class="form-error" style="margin-top:8px">{{ modalFout }}</p>
@@ -496,6 +494,7 @@ async function verwijderOpleiding() {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .opleiding-input {
   padding: 8px 12px;
@@ -504,7 +503,8 @@ async function verwijderOpleiding() {
   font-size: 13px;
   font-family: inherit;
   background: #fff;
-  min-width: 200px;
+  flex: 1;
+  min-width: 180px;
 }
 .opleiding-input:focus { outline: none; border-color: #000; }
 
@@ -557,18 +557,6 @@ async function verwijderOpleiding() {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-/* ── Gewicht badge ───────────────────────────────────────────────────────── */
-.gewicht-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  background: var(--gray50);
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  border: 1px solid var(--border);
 }
 
 /* ── Rubriek sectie ──────────────────────────────────────────────────────── */

@@ -79,7 +79,7 @@ if (!response.ok) {
         <span class="logo-text">Stage Monitor</span>
       </div>
 
-      <h1 class="login-title" id="login-heading">Welkom terug</h1>
+      <h1 class="login-title" id="login-heading">Welkom</h1>
       <p class="login-sub">Meld je aan bij Stage Monitor</p>
 
       <p v-if="melding" role="status" class="login-melding">

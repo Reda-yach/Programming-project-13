@@ -201,22 +201,22 @@ function statusBadge(status) {
         </div>
 
         <template v-else>
-          <!-- Week selectie -->
-          <div class="week-chips" style="margin-top:16px;margin-bottom:16px;">
-            <button
-              v-for="log in logboeken"
-              :key="log.week_nummer"
-              class="week-chip"
-              :class="{
-                active: geselecteerdeWeek === log.week_nummer,
-                'chip-green': log.status === 'goedgekeurd',
-                'chip-yellow': log.status === 'ingediend',
-              }"
-              @click="laadDetail(log.week_nummer)"
+          <!-- Week selectie (dropdown i.p.v. een knop per week) -->
+          <div class="week-selector" style="margin-top:16px;margin-bottom:16px;">
+            <label class="week-selector-label">Week</label>
+            <select
+              class="week-select"
+              :value="geselecteerdeWeek"
+              @change="laadDetail(Number($event.target.value))"
             >
-              Week {{ log.week_nummer }}
-              <span class="chip-status">{{ statusLabel(log.status) }}</span>
-            </button>
+              <option
+                v-for="log in logboeken"
+                :key="log.week_nummer"
+                :value="log.week_nummer"
+              >
+                Week {{ log.week_nummer }} — {{ statusLabel(log.status) }}
+              </option>
+            </select>
           </div>
 
           <!-- Week detail -->
@@ -304,51 +304,5 @@ function statusBadge(status) {
 </template>
 
 <style scoped>
-.week-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.week-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface, #fff);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.week-chip.active {
-  background: #000;
-  color: #fff;
-  border-color: #000;
-}
-
-.week-chip.chip-green:not(.active) {
-  border-color: var(--green, #16a34a);
-  color: var(--green, #16a34a);
-}
-
-.week-chip.chip-yellow:not(.active) {
-  border-color: var(--yellow, #ca8a04);
-  color: var(--yellow, #ca8a04);
-}
-
-.chip-status {
-  font-size: 10px;
-  font-weight: 400;
-  margin-top: 2px;
-  opacity: 0.8;
-}
-
-.week-chip.active .chip-status {
-  opacity: 0.7;
-  color: #fff;
-}
+/* Weekkeuze-stijl staat globaal in styles.css (gedeeld met de mentor). */
 </style>

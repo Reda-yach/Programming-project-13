@@ -258,7 +258,7 @@ onMounted(laadAanvragen)
           </span>
 
           <div class="card" style="margin-bottom:20px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 32px;">
+            <div class="form-grid-2">
               <div>
                 <div class="text-secondary text-xs">Studentnummer</div>
                 <div class="font-medium">{{ detail.studentnummer }}</div>
