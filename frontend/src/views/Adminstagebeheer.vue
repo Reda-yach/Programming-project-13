@@ -36,7 +36,7 @@ async function laadStages() {
   fout.value  = ''
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`${API}/stages?status=goedgekeurd`, {
+    const res = await fetch(`${API}/stages?status=goedgekeurd,bezig`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) {
@@ -92,7 +92,7 @@ onMounted(laadStages)
       <div class="flex items-center justify-between">
         <div>
           <h1 class="page-title">Stagebeheer</h1>
-          <p class="page-subtitle">Koppel docenten en mentors aan goedgekeurde stages.</p>
+          <p class="page-subtitle">Koppel docenten en mentors aan goedgekeurde en lopende stages.</p>
         </div>
         <div class="zoek-wrapper">
           <span class="zoek-icon">🔍</span>
@@ -127,7 +127,7 @@ onMounted(laadStages)
           <tbody>
             <tr v-if="gefilterdeStages.length === 0">
               <td colspan="8" style="text-align:center; color:var(--text-secondary);">
-                Geen goedgekeurde stages gevonden.
+                Geen goedgekeurde of lopende stages gevonden.
               </td>
             </tr>
             <tr v-for="stage in gefilterdeStages" :key="stage.stage_id">

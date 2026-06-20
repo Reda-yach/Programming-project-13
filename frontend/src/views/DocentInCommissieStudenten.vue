@@ -107,6 +107,18 @@ function formatDatum(d) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+function initialen(student) {
+  const v = (student.voornaam || '').trim()[0] || ''
+  const n = (student.student_naam || '').trim()[0] || ''
+  return (v + n).toUpperCase() || '?'
+}
+
+// Logboekstatus leesbaar maken (de DB-waarde is kort: draft/ingediend/goedgekeurd).
+function logboekLabel(status) {
+  const labels = { draft: 'In opmaak', ingediend: 'Ingediend', goedgekeurd: 'Bevestigd' }
+  return labels[status] || status || '—'
+}
 </script>
 
 <template>
@@ -122,104 +134,107 @@ function formatDatum(d) {
         <p class="text-secondary">Geen studenten toegewezen.</p>
       </div>
 
-      <div
-        v-for="student in studenten"
-        :key="student.stage_id"
-        class="card mt-16"
-      >
-        <div class="flex justify-between items-start">
-          <div style="flex:1;">
-            <div class="td-name">{{ student.voornaam }} {{ student.student_naam }}</div>
-            <div class="td-sub">{{ student.opleiding }} · {{ student.studentnummer }}</div>
-
-            <div class="flex gap-16 mt-12" style="flex-wrap:wrap;">
-              <div>
-                <p class="text-secondary text-xs">Bedrijf</p>
-                <p class="text-sm font-semibold">{{ student.bedrijf }}</p>
-              </div>
-              <div>
-                <p class="text-secondary text-xs">Stagetitel</p>
-                <p class="text-sm font-semibold">{{ student.stagetitel }}</p>
-              </div>
-              <div>
-                <p class="text-secondary text-xs">Periode</p>
-                <p class="text-sm font-semibold">
-                  {{ formatDatum(student.startdatum) }} – {{ formatDatum(student.einddatum) }}
-                </p>
-              </div>
+      <div class="studenten-grid">
+        <div
+          v-for="student in studenten"
+          :key="student.stage_id"
+          class="student-card"
+        >
+          <!-- Header: avatar + naam + status -->
+          <div class="sc-head">
+            <div class="sc-avatar">{{ initialen(student) }}</div>
+            <div class="sc-headinfo">
+              <div class="sc-name">{{ student.voornaam }} {{ student.student_naam }}</div>
+              <div class="sc-meta">{{ student.opleiding }} · {{ student.studentnummer }}</div>
             </div>
+            <span class="badge badge-pill" :class="statusBadge(student.status)">
+              {{ statusLabel(student.status) }}
+            </span>
+          </div>
 
-            <div class="flex gap-12 mt-12" style="align-items:center;">
-              <span class="badge badge-pill" :class="statusBadge(student.status)">
-                {{ statusLabel(student.status) }}
-              </span>
+          <!-- Gegevens -->
+          <div class="sc-grid">
+            <div class="sc-field">
+              <span class="sc-label">Bedrijf</span>
+              <span class="sc-value">{{ student.bedrijf || '—' }}</span>
+            </div>
+            <div class="sc-field">
+              <span class="sc-label">Stagetitel</span>
+              <span class="sc-value">{{ student.stagetitel || '—' }}</span>
+            </div>
+            <div class="sc-field">
+              <span class="sc-label">Periode</span>
+              <span class="sc-value">{{ formatDatum(student.startdatum) }} – {{ formatDatum(student.einddatum) }}</span>
+            </div>
+          </div>
+
+          <!-- Logboekstatus + acties -->
+          <div class="sc-foot">
+            <div class="sc-logboek">
               <template v-if="student.laatste_week !== null">
-                <span class="text-secondary text-xs">Logboek week {{ student.laatste_week }}:</span>
+                <span class="sc-label">Logboek week {{ student.laatste_week }}</span>
                 <span class="badge badge-pill" :class="logboekBadge(student.logboek_status)">
-                  {{ student.logboek_status }}
+                  {{ logboekLabel(student.logboek_status) }}
                 </span>
               </template>
               <span v-else class="text-secondary text-xs">Nog geen logboek ingediend</span>
             </div>
+            <div class="sc-actions">
+              <router-link :to="`/docent-logboek-detail/${student.stage_id}`" class="btn btn-secondary btn-sm">
+                Logboek →
+              </router-link>
+              <router-link :to="`/docent/evaluaties/${student.stage_id}`" class="btn btn-secondary btn-sm">
+                Evaluaties →
+              </router-link>
+            </div>
           </div>
 
-          <div class="flex gap-8" style="flex-shrink:0; margin-left:16px;">
-            <router-link
-              :to="`/docent-logboek-detail/${student.stage_id}`"
-              class="btn btn-secondary btn-sm"
-            >
-              Logboek →
-            </router-link>
-            <router-link
-              :to="`/docent/evaluaties/${student.stage_id}`"
-              class="btn btn-secondary btn-sm"
-            >
-              Evaluaties →
-            </router-link>
-          </div>
-        </div>
+          <!-- Contract -->
+          <div v-if="contracten[student.stage_id]" class="sc-contract">
+            <div class="sc-contract-title">Stagecontract</div>
+            <div class="sc-sign-row">
+              <span class="sc-sign">
+                <span class="sc-sign-role">Student</span>
+                <span class="sc-dot" :class="contracten[student.stage_id].getekend_student ? 'ok' : 'wacht'"></span>
+                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_student ? 'Ondertekend' : 'Wacht' }}</span>
+              </span>
+              <span class="sc-sign">
+                <span class="sc-sign-role">Mentor</span>
+                <span class="sc-dot" :class="contracten[student.stage_id].getekend_mentor ? 'ok' : 'wacht'"></span>
+                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht' }}</span>
+              </span>
+              <span class="sc-sign">
+                <span class="sc-sign-role">Docent</span>
+                <span class="sc-dot" :class="contracten[student.stage_id].getekend_docent ? 'ok' : 'wacht'"></span>
+                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht' }}</span>
+              </span>
 
-        <!-- Contract -->
-        <div v-if="contracten[student.stage_id]"
-          class="mt-12" style="border-top:1px solid var(--border);padding-top:12px;">
-          <p class="text-secondary text-xs font-semibold mb-8">Stagecontract</p>
-          <div class="flex gap-16 items-center" style="flex-wrap:wrap;">
-            <span class="text-sm">Student:
-              <span class="badge" :class="contracten[student.stage_id].getekend_student ? 'badge-green' : 'badge-gray'">
-                {{ contracten[student.stage_id].getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
+              <span v-if="berichtContract[student.stage_id]" class="sc-contract-msg">
+                {{ berichtContract[student.stage_id] }}
               </span>
-            </span>
-            <span class="text-sm">Mentor:
-              <span class="badge" :class="contracten[student.stage_id].getekend_mentor ? 'badge-green' : 'badge-gray'">
-                {{ contracten[student.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
-              </span>
-            </span>
-            <span class="text-sm">Docent:
-              <span class="badge" :class="contracten[student.stage_id].getekend_docent ? 'badge-green' : 'badge-gray'">
-                {{ contracten[student.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
-              </span>
-            </span>
-            <span v-if="berichtContract[student.stage_id]" class="text-sm" style="color:#16a34a;">
-              {{ berichtContract[student.stage_id] }}
-            </span>
-            <button
-              v-if="!contracten[student.stage_id].getekend_docent && tekenStageId !== student.stage_id"
-              class="btn btn-primary btn-sm"
-              @click="tekenStageId = student.stage_id; berichtContract[student.stage_id] = ''"
-            >
-              Contract ondertekenen
-            </button>
-            <span v-else-if="contracten[student.stage_id].getekend_docent" class="text-sm" style="color:#16a34a;">Jij hebt al ondertekend</span>
-          </div>
 
-          <!-- Tekenpad voor de docent/commissie -->
-          <div v-if="tekenStageId === student.stage_id" class="mt-12" style="max-width:420px;">
-            <SignaturePad ref="pad" />
-            <div class="flex gap-8 mt-8">
-              <button class="btn btn-primary btn-sm" @click="tekenContract(student.stage_id)">
-                Handtekening opslaan
+              <button
+                v-if="!contracten[student.stage_id].getekend_docent && tekenStageId !== student.stage_id"
+                class="btn btn-primary btn-sm"
+                style="margin-left:auto;"
+                @click="tekenStageId = student.stage_id; berichtContract[student.stage_id] = ''"
+              >
+                Contract ondertekenen
               </button>
-              <button class="btn btn-secondary btn-sm" @click="tekenStageId = null">Annuleren</button>
+              <span v-else-if="contracten[student.stage_id].getekend_docent" class="sc-contract-msg" style="margin-left:auto;">
+                Jij hebt al ondertekend
+              </span>
+            </div>
+
+            <!-- Tekenpad voor de docent/commissie -->
+            <div v-if="tekenStageId === student.stage_id" class="sc-pad">
+              <SignaturePad ref="pad" />
+              <div class="flex gap-8 mt-8">
+                <button class="btn btn-primary btn-sm" @click="tekenContract(student.stage_id)">
+                  Handtekening opslaan
+                </button>
+                <button class="btn btn-secondary btn-sm" @click="tekenStageId = null">Annuleren</button>
+              </div>
             </div>
           </div>
         </div>

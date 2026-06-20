@@ -541,8 +541,10 @@ app.get('/api/stages', verifyToken, (req, res) => {
   let params = [];
 
   if (status) {
-    where += ' AND s.status = ?';
-    params.push(status);
+    // Eén of meerdere statussen, komma-gescheiden (bv. ?status=goedgekeurd,bezig).
+    const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+    where += ' AND s.status IN (?)';
+    params.push(statuses);
   } else {
     where += " AND s.status IN ('in_behandeling', 'ingediend', 'aanpassing_gevraagd')";
   }
