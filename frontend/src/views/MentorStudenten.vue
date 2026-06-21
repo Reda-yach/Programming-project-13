@@ -4,14 +4,9 @@ import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import SignaturePad from '../components/SignaturePad.vue'
 import OvereenkomstDocument from '../components/OvereenkomstDocument.vue'
+import { navLinks } from './mentorNav'
 
 const router = useRouter()
-
-const navLinks = ref([
-  { label: 'Studenten', to: '/mentor' },
-  { label: 'Logboeken', to: '/mentor/logboeken' },
-  { label: 'Evaluatie', to: '/mentor/evaluatie' },
-])
 
 const stagiairs = ref([])
 const contracten = ref({})

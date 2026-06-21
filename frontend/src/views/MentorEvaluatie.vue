@@ -2,15 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import { navLinks } from './mentorNav'
 
 const route = useRoute()
 const API = 'http://localhost:3000/api'
-
-const navLinks = ref([
-  { label: 'Studenten', to: '/mentor' },
-  { label: 'Logboeken', to: '/mentor/logboeken' },
-  { label: 'Evaluatie', to: '/mentor/evaluatie' },
-])
 
 const SCORE_NIVEAUS = [5, 3, 1, 0]
 

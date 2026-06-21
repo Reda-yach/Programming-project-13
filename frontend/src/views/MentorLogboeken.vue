@@ -1,12 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
-
-const navLinks = ref([
-  { label: 'Studenten', to: '/mentor' },
-  { label: 'Logboeken', to: '/mentor/logboeken' },
-  { label: 'Evaluatie', to: '/mentor/evaluatie' },
-])
+import { navLinks } from './mentorNav'
 
 const logboeken = ref([])
 const geselecteerd = ref(null)
