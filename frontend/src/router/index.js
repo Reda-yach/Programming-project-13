@@ -111,11 +111,6 @@ const router = createRouter({
       component: () => import('../views/MentorEvaluatie.vue'),
     },
     {
-      path: '/mentor/probleem',
-      name: 'mentor-probleem',
-      component: () => import('../views/MentorProbleemmelding.vue'),
-    },
-    {
       path: '/student/contract',
       name: 'student-contract',
       component: () => import('../views/StudentContract.vue'),

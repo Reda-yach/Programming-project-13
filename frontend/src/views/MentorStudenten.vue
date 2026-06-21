@@ -11,7 +11,6 @@ const navLinks = ref([
   { label: 'Studenten', to: '/mentor' },
   { label: 'Logboeken', to: '/mentor/logboeken' },
   { label: 'Evaluatie', to: '/mentor/evaluatie' },
-  { label: 'Probleem', to: '/mentor/probleem' },
 ])
 
 const stagiairs = ref([])
