@@ -4,11 +4,11 @@ const db = require('../db');
 
 // verifyToken lokale kopie (zelfde als in stage.js)
 
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireRol } = require('../middleware/auth');
 const { mailBijNotificatie } = require('../services/mail');
 
-// Alle openstaande aanvragen ophalen
-router.get('/openstaand', verifyToken, (req, res) => {
+// Alle openstaande aanvragen ophalen — alleen commissie/docent/admin
+router.get('/openstaand', verifyToken, requireRol('commissie', 'docent', 'admin'), (req, res) => {
   db.query(`
     SELECT
       s.stage_id,
@@ -31,8 +31,8 @@ router.get('/openstaand', verifyToken, (req, res) => {
     res.json(results);
   });
 });
-// Stage goedkeuren
-router.put('/:id/goedkeuren', verifyToken, (req, res) => {
+// Stage goedkeuren — alleen commissie/admin
+router.put('/:id/goedkeuren', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
   const { id } = req.params;
 
   // Controleer of stage bestaat
