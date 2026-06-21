@@ -225,7 +225,7 @@ function naarEvaluatie(s, fase) {
                     {{ evaluatieIngediend(s.stage_id, 'tussentijds') ? 'Bekijken →' : 'Evalueren →' }}
                   </button>
                   <div class="text-secondary text-xs mt-4">
-                    {{ evaluatieIngediend(s.stage_id, 'tussentijds') ? 'Ingediend ✓' : 'Wachtend op evaluatie van jou' }}
+                    {{ evaluatieIngediend(s.stage_id, 'tussentijds') ? 'Ingediend ✓' : 'Nog niet ingediend' }}
                   </div>
                 </template>
                 <template v-else>
@@ -243,7 +243,7 @@ function naarEvaluatie(s, fase) {
                     {{ evaluatieIngediend(s.stage_id, 'finaal') ? 'Bekijken →' : 'Evalueren →' }}
                   </button>
                   <div class="text-secondary text-xs mt-4">
-                    {{ evaluatieIngediend(s.stage_id, 'finaal') ? 'Ingediend ✓' : 'Wachtend op evaluatie van jou' }}
+                    {{ evaluatieIngediend(s.stage_id, 'finaal') ? 'Ingediend ✓' : 'Nog niet ingediend' }}
                   </div>
                 </template>
                 <template v-else>
