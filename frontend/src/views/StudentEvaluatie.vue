@@ -9,20 +9,6 @@ const router = useRouter()
 const token = localStorage.getItem('token')
 const API = 'http://localhost:3000/api'
 
-const navLinks = computed(() =>
-  stageStore.status === 'goedgekeurd'
-    ? [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-        { label: 'Logboek', to: '/student/logboek' },
-        { label: 'Evaluatie', to: '/student/evaluatie' },
-      ]
-    : [
-        { label: 'Dashboard', to: '/student' },
-        { label: 'Aanvraag', to: '/student/aanvraag' },
-      ]
-)
-
 const evaluaties = ref([])
 const laden = ref(false)
 
@@ -116,13 +102,13 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
     <main class="content">
 
-      <template v-if="stageStore.status !== 'goedgekeurd'">
+      <template v-if="!stageStore.volledigGetekend">
         <h1 class="page-title">Evaluatie</h1>
         <p class="text-secondary" style="margin-top:8px;">
-          Evaluaties zijn beschikbaar zodra je stage-aanvraag is goedgekeurd.
+          Evaluaties zijn beschikbaar zodra het stagecontract door alle partijen (stagecommissie, mentor en jezelf) is ondertekend.
         </p>
       </template>
 

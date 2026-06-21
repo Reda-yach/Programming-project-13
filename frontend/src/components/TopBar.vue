@@ -24,13 +24,11 @@ const activeTo = computed(() => {
     .sort((a, b) => b.length - a.length)[0]
 })
 
-const gebruikerNaam = computed(() => {
+// Toon de rol van de ingelogde gebruiker (Student, Docent, Mentor, …).
+const rolLabel = computed(() => {
   try {
-    const g = JSON.parse(localStorage.getItem('gebruiker') || '{}')
-    if (g.voornaam && g.naam) return `${g.voornaam} ${g.naam}`
-    if (g.voornaam) return g.voornaam
-    if (g.naam) return g.naam
-    return g.rol ? g.rol.charAt(0).toUpperCase() + g.rol.slice(1) : 'Account'
+    const rol = JSON.parse(localStorage.getItem('gebruiker') || '{}').rol || ''
+    return rol ? rol.charAt(0).toUpperCase() + rol.slice(1) : 'Account'
   } catch {
     return 'Account'
   }
@@ -62,7 +60,7 @@ function uitloggen() {
     </nav>
 
     <div class="topbar-right">
-      <span class="gebruiker-naam">{{ gebruikerNaam }} ▾</span>
+      <span class="gebruiker-naam">{{ rolLabel }}</span>
       <button class="uitloggen" type="button" @click="uitloggen">Uitloggen</button>
     </div>
   </header>

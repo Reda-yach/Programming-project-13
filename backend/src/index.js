@@ -59,7 +59,18 @@ app.post('/api/login', (req, res) => {
       // Nieuwe sessie: overschrijft de vorige, zodat oudere tokens (andere
       // browser/apparaat) ongeldig worden — verifyToken vergelijkt hierop.
       const sid = crypto.randomBytes(16).toString('hex');
-      db.query('UPDATE gebruiker SET sessie_id = ? WHERE gebruiker_id = ?', [sid, gebruiker.gebruiker_id]);
+      // Wacht tot de nieuwe sessie écht is weggeschreven vóór we het token
+      // teruggeven. Anders kan het dashboard (op een trage DB) z'n eerste call
+      // doen vóór sessie_id gezet is → verifyToken ziet een mismatch → onterechte 401.
+      try {
+        await db.promise().query(
+          'UPDATE gebruiker SET sessie_id = ? WHERE gebruiker_id = ?',
+          [sid, gebruiker.gebruiker_id]
+        );
+      } catch (sessieErr) {
+        res.status(500).json({ error: sessieErr.message });
+        return;
+      }
 
       const token = jwt.sign(
         {
@@ -199,24 +210,50 @@ app.put('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
   );
 });
 
-// Gebruiker verwijderen
-app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), (req, res) => {
+// Gebruiker verwijderen (forceer): ruimt in een transactie ook alle gekoppelde
+// geschiedenis op die anders blokkeert (ON DELETE RESTRICT), en maakt
+// docent-toewijzingen los. Profiel-rijen (student/docent/mentor), notificaties
+// en reset-tokens cascaden mee bij het verwijderen van de gebruiker.
+app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), async (req, res) => {
   const { id } = req.params;
-  db.query(
-    'DELETE FROM gebruiker WHERE gebruiker_id = ?',
-    [id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Gebruiker niet gevonden.' });
-        return;
-      }
-      res.json({ message: 'Gebruiker verwijderd.' });
+  let conn;
+  try {
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+
+    // 1) Records die rechtstreeks naar de gebruiker verwijzen (RESTRICT) weghalen.
+    await conn.query('DELETE FROM eindbeoordeling WHERE beoordelaar_id = ?', [id]);
+    await conn.query('DELETE FROM evaluatie WHERE beoordelaar_id = ?', [id]); // cascadet evaluatie_score + student_evaluatie
+    await conn.query('DELETE FROM commissie_beslissing WHERE commissielid_id = ?', [id]);
+    await conn.query('DELETE FROM logboek_feedback WHERE gebruiker_id = ?', [id]);
+
+    // 2) Stages losmaken van het docent-profiel zodat de docent-rij mee mag cascaden.
+    await conn.query(
+      'UPDATE stage SET docent_id = NULL WHERE docent_id IN (SELECT docent_id FROM docent WHERE gebruiker_id = ?)',
+      [id],
+    );
+
+    // 3) De gebruiker zelf (cascadet student/docent/mentor/notificatie/reset-token).
+    const [result] = await conn.query('DELETE FROM gebruiker WHERE gebruiker_id = ?', [id]);
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
     }
-  );
+
+    await conn.commit();
+    res.json({ message: 'Account en alle gekoppelde gegevens verwijderd.' });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    // Blijft er toch nog iets blokkeren (bv. een student/mentor met een actieve stage)?
+    if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({
+        error: 'Dit account kan niet volledig verwijderd worden omdat er nog een actieve stage aan hangt (als student of mentor). Zet het account liever op inactief.',
+      });
+    }
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
 });
 
 // ============================================================
@@ -257,6 +294,17 @@ app.post('/api/bedrijven', verifyToken, (req, res) => {
         return;
       }
       res.json({ message: 'Bedrijf aangemaakt!', id: results.insertId });
+    }
+  );
+});
+
+// Alle bedrijven ophalen — voor dropdown bij mentor-aanmaak
+app.get('/api/bedrijven', verifyToken, requireRol('admin'), (req, res) => {
+  db.query(
+    'SELECT bedrijf_id, naam FROM bedrijf ORDER BY naam ASC',
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
     }
   );
 });
@@ -366,7 +414,7 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
 // Nieuwe student aanmaken (alleen admin). Maakt gebruiker (rol student) + student-rij.
 // Standaardwachtwoord 'student123' — student reset dit via wachtwoord-vergeten.
 app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => {
-  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, academiejaar } = req.body;
+  const { voornaam, naam, email, telefoonnummer, studentnummer, opleiding, opleiding_id, academiejaar } = req.body;
 
   if (!voornaam || !naam || !email || !studentnummer || !opleiding || !academiejaar) {
     return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
@@ -385,12 +433,10 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
           return res.status(500).json({ error: err.message });
         }
         db.query(
-          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, academiejaar) VALUES (?, ?, ?, ?)',
-          [gebruikerResult.insertId, studentnummer, opleiding, academiejaar],
+          'INSERT INTO student (gebruiker_id, studentnummer, opleiding, opleiding_id, academiejaar) VALUES (?, ?, ?, ?, ?)',
+          [gebruikerResult.insertId, studentnummer, opleiding, opleiding_id || null, academiejaar],
           (err2, studentResult) => {
             if (err2) {
-              // ponytail: dubbel studentnummer laat de zojuist aangemaakte gebruiker-rij wees achter;
-              // wrap in een transactie als dat in de praktijk voorkomt.
               if (err2.code === 'ER_DUP_ENTRY') {
                 return res.status(409).json({ error: 'Dit studentnummer is al in gebruik.' });
               }
@@ -399,6 +445,101 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
             res.status(201).json({ message: 'Student aangemaakt!', student_id: studentResult.insertId });
           }
         );
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Nieuwe docent of commissielid aanmaken (admin only). Maakt gebruiker + docent-rij in een transactie.
+// Zowel rol='docent' als rol='commissie' krijgen een docent-rij zodat ze studenten en evaluaties kunnen zien.
+// Standaardwachtwoord 'docent123'.
+app.post('/api/docenten', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, titel, specialisatie, max_studenten, rol } = req.body;
+
+  if (!voornaam || !naam || !email) {
+    return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
+  }
+  if (rol !== 'docent' && rol !== 'commissie') {
+    return res.status(400).json({ error: 'Rol moet "docent" of "commissie" zijn.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('docent123', 10);
+    db.getConnection((errConn, conn) => {
+      if (errConn) return res.status(500).json({ error: errConn.message });
+
+      conn.beginTransaction(errTx => {
+        if (errTx) { conn.release(); return res.status(500).json({ error: errTx.message }); }
+
+        conn.query(
+          'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+          [voornaam, naam, email, telefoonnummer || null, hash, rol],
+          (err, gebruikerResult) => {
+            if (err) {
+              conn.rollback(() => conn.release());
+              if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+              }
+              return res.status(500).json({ error: err.message });
+            }
+
+            conn.query(
+              'INSERT INTO docent (gebruiker_id, titel, specialisatie, max_studenten) VALUES (?, ?, ?, ?)',
+              [gebruikerResult.insertId, titel || null, specialisatie || null, max_studenten || 5],
+              (err2, docentResult) => {
+                if (err2) {
+                  conn.rollback(() => conn.release());
+                  return res.status(500).json({ error: err2.message });
+                }
+
+                conn.commit(errCommit => {
+                  conn.release();
+                  if (errCommit) return res.status(500).json({ error: errCommit.message });
+                  res.status(201).json({
+                    message: 'Account aangemaakt!',
+                    docent_id: docentResult.insertId,
+                    standaardwachtwoord: 'docent123',
+                  });
+                });
+              }
+            );
+          }
+        );
+      });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Puur admin-account aanmaken (geen gekoppeld profiel).
+// Standaardwachtwoord 'admin123'.
+app.post('/api/gebruikers', verifyToken, requireRol('admin'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer } = req.body;
+
+  if (!voornaam || !naam || !email) {
+    return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
+  }
+
+  try {
+    const hash = await bcrypt.hash('admin123', 10);
+    db.query(
+      'INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, ?, ?)',
+      [voornaam, naam, email, telefoonnummer || null, hash, 'admin'],
+      (err, result) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Er bestaat al een gebruiker met dit e-mailadres.' });
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({
+          message: 'Admin-account aangemaakt!',
+          gebruiker_id: result.insertId,
+          standaardwachtwoord: 'admin123',
+        });
       }
     );
   } catch (e) {
@@ -421,8 +562,10 @@ app.get('/api/stages', verifyToken, (req, res) => {
   let params = [];
 
   if (status) {
-    where += ' AND s.status = ?';
-    params.push(status);
+    // Eén of meerdere statussen, komma-gescheiden (bv. ?status=goedgekeurd,bezig).
+    const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+    where += ' AND s.status IN (?)';
+    params.push(statuses);
   } else {
     where += " AND s.status IN ('in_behandeling', 'ingediend', 'aanpassing_gevraagd')";
   }
@@ -2929,115 +3072,68 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/students', verifyToken, require('./routes/studentdashboardroute'));
 
 // ============================================================
-// COMPETENTIESETS
+// OPLEIDINGEN
 // ============================================================
 
-// Alle actieve competentiesets ophalen
-app.get('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
+// Alle opleidingen ophalen — voor account-aanmaak en competentiebeheer
+app.get('/api/opleidingen', verifyToken, requireRol('admin'), (req, res) => {
   db.query(
-    'SELECT * FROM competentieset WHERE is_actief = TRUE ORDER BY naam ASC',
-    (err, sets) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (sets.length === 0) {
-        res.json([]);
-        return;
-      }
-
-      const setIds = sets.map(s => s.set_id);
-      db.query(
-        `SELECT c.*, cs.set_id
-         FROM competentie c
-         JOIN competentieset cs ON c.opleiding_id = cs.set_id
-         WHERE cs.is_actief = TRUE AND c.is_actief = TRUE AND cs.set_id IN (?)`,
-        [setIds],
-        (errComp, competenties) => {
-          if (errComp) {
-            res.status(500).json({ error: errComp.message });
-            return;
-          }
-
-          if (competenties.length === 0) {
-            res.json(sets.map(s => ({ ...s, competenties: [] })));
-            return;
-          }
-
-          const compIds = competenties.map(c => c.competentie_id);
-          db.query(
-            'SELECT * FROM competentie_rubriek WHERE competentie_id IN (?) ORDER BY punt DESC',
-            [compIds],
-            (errRub, rubrieken) => {
-              if (errRub) {
-                res.status(500).json({ error: errRub.message });
-                return;
-              }
-
-              const result = sets.map(s => ({
-                ...s,
-                competenties: competenties
-                  .filter(c => c.set_id === s.set_id)
-                  .map(c => ({
-                    id:           c.competentie_id,
-                    naam:         c.naam,
-                    omschrijving: c.omschrijving,
-                    gewicht:      c.gewicht,
-                    rubrieken:    rubrieken.filter(r => r.competentie_id === c.competentie_id),
-                  })),
-              }));
-
-              res.json(result);
-            }
-          );
-        }
-      );
+    'SELECT opleiding_id, naam FROM opleiding ORDER BY naam ASC',
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
     }
   );
 });
 
-// Nieuwe competentieset aanmaken
-app.post('/api/competentiesets', verifyToken, requireRol('admin'), (req, res) => {
-  const { naam, opleiding, jaar } = req.body;
+// Admin: nieuwe opleiding toevoegen.
+app.post('/api/opleidingen', verifyToken, requireRol('admin'), (req, res) => {
+  const naam = (req.body.naam || '').trim();
+  if (!naam) return res.status(400).json({ error: 'Naam is verplicht.' });
+  db.query('SELECT opleiding_id FROM opleiding WHERE LOWER(naam) = LOWER(?)', [naam], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (rows.length > 0) return res.status(409).json({ error: 'Deze opleiding bestaat al.' });
+    db.query('INSERT INTO opleiding (naam) VALUES (?)', [naam], (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.status(201).json({ message: 'Opleiding toegevoegd.', opleiding_id: result.insertId, naam });
+    });
+  });
+});
 
-  if (!naam || !opleiding || !jaar) {
-    res.status(400).json({ error: 'Naam, opleiding en jaar zijn verplicht.' });
-    return;
+// Admin: opleiding verwijderen (lukt niet als er nog competenties/studenten aan hangen).
+app.delete('/api/opleidingen/:id', verifyToken, requireRol('admin'), (req, res) => {
+  db.query('DELETE FROM opleiding WHERE opleiding_id = ?', [req.params.id], (err, result) => {
+    if (err) {
+      if (err.errno === 1451 || err.code === 'ER_ROW_IS_REFERENCED_2') {
+        return res.status(409).json({
+          error: 'Deze opleiding kan niet verwijderd worden omdat er nog competenties of studenten aan gekoppeld zijn.',
+        });
+      }
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Opleiding niet gevonden.' });
+    res.json({ message: 'Opleiding verwijderd.' });
+  });
+});
+
+// Admin: wachtwoord van een account opnieuw instellen.
+app.put('/api/gebruikers/:id/wachtwoord', verifyToken, requireRol('admin'), async (req, res) => {
+  const wachtwoord = (req.body.wachtwoord || '').trim();
+  if (wachtwoord.length < 8) {
+    return res.status(400).json({ error: 'Wachtwoord moet minstens 8 tekens bevatten.' });
   }
-
-  db.query(
-    'INSERT INTO competentieset (naam, opleiding, jaar) VALUES (?, ?, ?)',
-    [naam.trim(), opleiding.trim(), jaar.trim()],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json({ message: 'Competentieset aangemaakt!', id: results.insertId });
-    }
-  );
+  try {
+    const hash = await bcrypt.hash(wachtwoord, 10);
+    db.query('UPDATE gebruiker SET wachtwoord_hash = ? WHERE gebruiker_id = ?', [hash, req.params.id], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
+      res.json({ message: 'Wachtwoord aangepast.' });
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// Competentieset deactiveren (soft delete)
-app.delete('/api/competentiesets/:id', verifyToken, requireRol('admin'), (req, res) => {
-  const { id } = req.params;
-
-  db.query(
-    'UPDATE competentieset SET is_actief = FALSE WHERE set_id = ?',
-    [id],
-    (err, results) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      if (results.affectedRows === 0) {
-        res.status(404).json({ error: 'Competentieset niet gevonden.' });
-        return;
-      }
-      res.json({ message: 'Competentieset gedeactiveerd.' });
-    }
-  );
-});
 process.on('uncaughtException', (err) => { console.error('UNCAUGHT:', err); });
 process.on('unhandledRejection', (err) => { console.error('UNHANDLED:', err); });
 

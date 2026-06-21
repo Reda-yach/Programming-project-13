@@ -2,17 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import { docentNavLinks } from './docentNav'
 
 const route = useRoute()
 const stageId = route.params.stageId
 const API = 'http://localhost:3000/api'
 
-const navLinks = ref([
-  { label: 'Studenten', to: '/docent-studenten' },
-  { label: 'Logboek', to: '/docent-logboek-overzicht' },
-  { label: 'Evaluaties', to: '/docent-evaluaties', match: '/docent/evaluaties' },
-  { label: 'Aanvragen', to: '/docent-aanvragen' },
-])
+// 'Aanvragen' enkel voor commissie-docenten (zie docentNav.js).
+const navLinks = docentNavLinks()
 
 const stage = ref(null)
 const evaluaties = ref([])

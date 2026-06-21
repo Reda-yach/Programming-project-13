@@ -7,14 +7,6 @@ import { useStageStore } from '../stores/stage'
 
 const stageStore = useStageStore()
 
-const navLinks = ref([
-  { label: 'Dashboard', to: '/student' },
-  { label: 'Aanvraag', to: '/student/aanvraag' },
-  { label: 'Contract', to: '/student/contract' },
-  { label: 'Logboek', to: '/student/logboek' },
-  { label: 'Evaluatie', to: '/student/evaluatie' },
-])
-
 const contract = ref(null)
 const laadFout = ref('')
 const bericht = ref('')
@@ -80,7 +72,7 @@ async function tekenContract() {
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
       <h1 class="page-title">Stageovereenkomst</h1>

@@ -81,7 +81,9 @@ export const useAuthStore = defineStore('auth', () => {
       docent: '/docent',
       mentor: '/mentor',
       admin: '/admin/competenties',
-      commissie: '/commissie',
+      // De stagecommissie gebruikt dezelfde schermen als de docent (mét de
+      // extra Aanvragen-tab), dus landt ook op de docent-studentenlijst.
+      commissie: '/docent-studenten',
     }
 
     return map[role] || '/login'

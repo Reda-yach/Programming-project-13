@@ -53,6 +53,8 @@ const router = createRouter({
     {
       path: '/docent-aanvragen',
       name: 'docent-aanvragen',
+      // Enkel docenten in de stagecommissie (commissielid) mogen aanvragen zien.
+      meta: { requiresCommissie: true },
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
@@ -80,6 +82,7 @@ const router = createRouter({
     {
       path: '/docent/aanvragen',
       name: 'docent-aanvragen-overzicht',
+      meta: { requiresCommissie: true },
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
@@ -146,18 +149,15 @@ const router = createRouter({
       path: '/admin/competenties',
       name: 'admin-competenties',
       component: () => import('../views/AdminCompetentiebeheer.vue'),
-    },
-    {
-      path: '/admin/competentiesets',
-      name: 'admin-competentiesets',
-      component: () => import('../views/Admincompetentiesets.vue'),
       meta: { requiresAdmin: true },
     },
     {
       path: '/admin/competentiebeheer',
-      name: 'admin-competentiebeheer',
-      component: () => import('../views/AdminCompetentiebeheer.vue'),
-      meta: { requiresAdmin: true },
+      redirect: '/admin/competenties',
+    },
+    {
+      path: '/admin/competentiesets',
+      redirect: '/admin/competenties',
     },
     {
       path: '/admin/stages',
@@ -179,6 +179,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/admin/accounts/nieuw',
+      name: 'admin-account-nieuw',
+      component: () => import('../views/AdminAccountNieuw.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/admin/accounts/:id/bewerken',
       name: 'admin-account-bewerken',
       component: () => import('../views/Adminaccountbewerken.vue'),
@@ -188,7 +194,9 @@ const router = createRouter({
     {
       path: '/admin/aanvragen',
       name: 'admin-aanvragen',
-      component: () => import('../views/CommissieDashboard.vue'),
+      // Deelt de split-layout aanvragenpagina met de docent; de view is
+      // rol-bewust (admin-navigatie + admin-topbar).
+      component: () => import('../views/DocentInCommissieAanvragen.vue'),
       meta: { requiresAdmin: true },
     },
     {
@@ -220,6 +228,23 @@ router.beforeEach((to, _from, next) => {
       const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
       if (gebruiker.rol !== 'admin') {
         next({ name: 'login' })
+        return
+      }
+    } catch {
+      next({ name: 'login' })
+      return
+    }
+  }
+
+  // 3. Aanvragen-pagina van de docent → enkel de stagecommissie (rol
+  // 'commissie') of admin. Een gewone docent gaat terug naar zijn studenten.
+  if (to.meta.requiresCommissie) {
+    try {
+      const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
+      const magBeoordelen =
+        gebruiker.rol === 'admin' || gebruiker.rol === 'commissie'
+      if (!magBeoordelen) {
+        next({ name: 'docent-studenten' })
         return
       }
     } catch {

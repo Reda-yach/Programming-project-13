@@ -160,7 +160,7 @@ function naarEvaluatie(s, fase) {
     <main class="content">
       <h1 class="page-title">Studenten</h1>
       <p class="text-secondary text-sm mt-8">
-        Welkom terug, {{ gebruiker?.voornaam }}. Bekijk hier uw overzicht voor vandaag.
+        Welkom, {{ gebruiker?.voornaam }}. Bekijk hier uw overzicht voor vandaag.
       </p>
 
       <!-- Samenvattingskaarten -->

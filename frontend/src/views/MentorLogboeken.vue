@@ -16,6 +16,10 @@ const feedback = ref('')
 const bestaandeFeedback = ref([])
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 
+const detail = ref(null) // volledig logboek (incl. dag-entries) van de gekozen week
+const dagNamen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag']
+const dagKort = { maandag: 'Maandag', dinsdag: 'Dinsdag', woensdag: 'Woensdag', donderdag: 'Donderdag', vrijdag: 'Vrijdag' }
+
 onMounted(async () => {
   await laadLogboeken()
 })
@@ -28,15 +32,48 @@ async function laadLogboeken() {
   logboeken.value = await res.json()
 }
 
-async function selecteer(logboek) {
+const studentLogs = ref([])
+
+function statusLabel(status) {
+  const labels = { draft: 'In opmaak', ingediend: 'Ingediend', goedgekeurd: 'Bevestigd' }
+  return labels[status] || status
+}
+
+// Een student kiezen: bewaar al zijn weken (gesorteerd) en toon de meest recente.
+async function selecteerStudent(logs) {
+  studentLogs.value = [...logs].sort((a, b) => a.week_nummer - b.week_nummer)
+  await kiesLogboek(logs[0])
+}
+
+async function kiesLogboek(logboek) {
   geselecteerd.value = logboek
   bericht.value = ''
   feedback.value = ''
+  detail.value = null
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`http://localhost:3000/api/logboeken/${logboek.logboek_id}/volledig`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) detail.value = await res.json()
+  } catch { /* detail blijft null */ }
   await laadFeedback(logboek.logboek_id)
+}
+
+// De dag-entry (Ma–Vr) van de gekozen week, of null als die dag niet ingevuld is.
+function dagVoorDetail(dagNaam) {
+  return detail.value?.dagen?.find(d => d.dag === dagNaam) || null
+}
+
+// Wisselen tussen de weken van de gekozen student (dropdown).
+function kiesWeek(weekNummer) {
+  const log = studentLogs.value.find(l => l.week_nummer === Number(weekNummer))
+  if (log) kiesLogboek(log)
 }
 
 function terugNaarLijst() {
   geselecteerd.value = null
+  studentLogs.value = []
   bericht.value = ''
   feedback.value = ''
   bestaandeFeedback.value = []
@@ -51,7 +88,7 @@ async function laadFeedback(logboekId) {
 }
 
 async function slaFeedbackOp() {
-  if (!feedback.value.trim()) return
+  if (!feedback.value.trim()) return true // niets in te dienen → ga gewoon door
   const token = localStorage.getItem('token')
   const res = await fetch(`http://localhost:3000/api/logboeken/${geselecteerd.value.logboek_id}/feedback`, {
     method: 'POST',
@@ -67,7 +104,16 @@ async function slaFeedbackOp() {
   if (res.ok) {
     feedback.value = ''
     await laadFeedback(geselecteerd.value.logboek_id)
+    return true
   }
+  return false
+}
+
+// Eén actie: eventuele feedback opslaan én de week bevestigen.
+async function bevestigMetFeedback() {
+  const ok = await slaFeedbackOp()
+  if (!ok) return
+  await aftekenen()
 }
 
 async function aftekenen() {
@@ -122,7 +168,7 @@ function studenten() {
           <p class="text-secondary text-sm">
             Meest recente entry: Week {{ logs[0].week_nummer }} — {{ logs[0].ingediend_op?.split('T')[0] }} — {{ logs.length }} entries
           </p>
-          <button class="btn btn-primary mt-16" @click="selecteer(logs[0])">
+          <button class="btn btn-primary mt-16" @click="selecteerStudent(logs)">
             Logboeken inkijken →
           </button>
         </div>
@@ -150,41 +196,51 @@ function studenten() {
           </span>
         </div>
 
-        <p class="text-secondary text-sm mt-4">
-          {{ geselecteerd.bedrijf }} — Week {{ geselecteerd.week_nummer }}
-        </p>
+        <p class="text-secondary text-sm mt-4">{{ geselecteerd.bedrijf }}</p>
 
-        <div class="card mt-16">
-          <h2 class="form-section-title">Beschrijving van uitgevoerde taken</h2>
-          <p class="mt-8" style="white-space: pre-line;">{{ geselecteerd.activiteiten || 'Niet ingevuld' }}</p>
+        <!-- Weekkeuze: scrollen tussen de weken van deze student -->
+        <div class="week-selector" style="margin-top:12px;">
+          <label class="week-selector-label">Week</label>
+          <select class="week-select" :value="geselecteerd.week_nummer" @change="kiesWeek($event.target.value)">
+            <option v-for="log in studentLogs" :key="log.logboek_id" :value="log.week_nummer">
+              Week {{ log.week_nummer }} — {{ statusLabel(log.status) }}
+            </option>
+          </select>
         </div>
 
-        <div class="card mt-16">
-          <h2 class="form-section-title">Reflectie</h2>
-          <p class="mt-8" style="white-space: pre-line;">{{ geselecteerd.reflectie || 'Niet ingevuld' }}</p>
+        <!-- Dag-voor-dag invoer van de student (Ma–Vr) -->
+        <div v-for="dagNaam in dagNamen" :key="dagNaam" class="card mt-16">
+          <div class="flex justify-between items-center" style="margin-bottom:10px;">
+            <span class="font-semibold">{{ dagKort[dagNaam] }}</span>
+            <span
+              class="badge badge-pill"
+              :class="dagVoorDetail(dagNaam) ? 'badge-green' : ''"
+              style="font-size:11px;"
+            >
+              {{ dagVoorDetail(dagNaam) ? 'Ingevuld' : 'Leeg' }}
+            </span>
+          </div>
+
+          <template v-if="dagVoorDetail(dagNaam)">
+            <div class="text-sm" style="margin-bottom:8px;">
+              <span class="text-secondary">Uitgevoerde taken</span>
+              <div style="margin-top:4px;white-space:pre-wrap;">{{ dagVoorDetail(dagNaam).activiteiten || '—' }}</div>
+            </div>
+            <div class="text-sm" style="margin-bottom:8px;">
+              <span class="text-secondary">Reflectie</span>
+              <div style="margin-top:4px;white-space:pre-wrap;">{{ dagVoorDetail(dagNaam).reflectie || '—' }}</div>
+            </div>
+            <div class="text-sm">
+              <span class="text-secondary">Problemen / leerpunten</span>
+              <div style="margin-top:4px;white-space:pre-wrap;">{{ dagVoorDetail(dagNaam).leerpunten || '—' }}</div>
+            </div>
+          </template>
+          <div v-else class="text-secondary text-sm">Geen invoer voor deze dag.</div>
         </div>
 
+        <!-- Feedback + week bevestigen, gecombineerd in één actie -->
         <div class="card mt-16">
-          <h2 class="form-section-title">Problemen / Leerpunten</h2>
-          <p class="mt-8" style="white-space: pre-line;">{{ geselecteerd.leerpunten || 'Niet ingevuld' }}</p>
-        </div>
-
-        <div class="card mt-16">
-          <h2 class="form-section-title">Week bevestigen</h2>
-          <p v-if="bericht" class="text-sm mt-8 badge-green">{{ bericht }}</p>
-          <button
-            v-if="geselecteerd.status !== 'goedgekeurd'"
-            class="btn btn-primary mt-16"
-            @click="aftekenen"
-            :disabled="bezig"
-          >
-            Week bevestigen
-          </button>
-          <span v-else class="badge badge-green mt-16">✓ Logboek bevestigd</span>
-        </div>
-
-        <div class="card mt-16">
-          <h2 class="form-section-title">Feedback Mentor</h2>
+          <h2 class="form-section-title">Feedback &amp; week bevestigen</h2>
 
           <div v-if="bestaandeFeedback.length === 0" class="mt-8">
             <p class="text-secondary text-sm">Nog geen feedback gegeven.</p>
@@ -201,7 +257,7 @@ function studenten() {
           </div>
 
           <div class="form-group mt-16">
-            <label>Uw feedback als mentor</label>
+            <label>Uw feedback als mentor (optioneel)</label>
             <textarea
               v-model="feedback"
               rows="4"
@@ -210,13 +266,25 @@ function studenten() {
             ></textarea>
           </div>
 
-          <button
-            class="btn btn-primary mt-12"
-            @click="slaFeedbackOp"
-            :disabled="!feedback.trim()"
-          >
-            Feedback opslaan
-          </button>
+          <p v-if="bericht" class="text-sm mt-8 badge-green">{{ bericht }}</p>
+
+          <div class="flex gap-8 mt-12" style="flex-wrap:wrap;">
+            <button
+              v-if="geselecteerd.status !== 'goedgekeurd'"
+              class="btn btn-primary"
+              @click="bevestigMetFeedback"
+              :disabled="bezig"
+            >
+              {{ bezig ? 'Bezig…' : (feedback.trim() ? 'Feedback opslaan & week bevestigen' : 'Week bevestigen') }}
+            </button>
+
+            <template v-else>
+              <span class="badge badge-green">✓ Logboek bevestigd</span>
+              <button class="btn btn-secondary" @click="slaFeedbackOp" :disabled="!feedback.trim()">
+                Feedback opslaan
+              </button>
+            </template>
+          </div>
         </div>
 
       </div>

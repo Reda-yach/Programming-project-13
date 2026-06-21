@@ -26,38 +26,19 @@ const motivatie = computed(() => stageStore.motivatie)
 const stageActief = computed(() => stage.value?.status === 'bezig')
 
 const stageBezig = computed(() =>
-  stageStatus.value === 'goedgekeurd' &&
+  stageStore.volledigGetekend &&
   !!stage.value?.startdatum &&
   new Date() >= new Date(stage.value.startdatum)
 )
 
-const navLinks = computed(() => {
-  if (stageStatus.value !== 'goedgekeurd') {
-    return [
-      { label: 'Dashboard', to: '/student' },
-      { label: 'Aanvraag', to: '/student/aanvraag' },
-    ]
-  }
-  const links = [
-    { label: 'Dashboard', to: '/student' },
-    { label: 'Aanvraag', to: '/student/aanvraag' },
-    { label: 'Contract', to: '/student/contract' },
-    { label: 'Logboek', to: '/student/logboek' },
-    { label: 'Evaluatie', to: '/student/evaluatie' },
-  ]
-  // Eindoverzicht pas zichtbaar als docent én mentor hun finale evaluatie indienden
-  if (stage.value?.eindoverzicht_vrij) {
-    links.push({ label: 'Eindoverzicht', to: '/student/eindoverzicht' })
-  }
-  return links
-})
+// Navigatie komt centraal uit de store (zelfde tabs op elk studentscherm).
 
 const logboekWeek = ref(null)
 const logboekStatus = ref(null)
 const logboekDagenIngevuld = ref(0)
 
 async function laadLogboekStatus() {
-  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum) return
+  if (!stageStore.volledigGetekend || !stage.value?.startdatum) return
   const start = new Date(stage.value.startdatum)
   const nu = new Date()
   if (nu < start) return
@@ -104,7 +85,7 @@ function formatDatum(d) {
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 const evaluaties = computed(() => {
-  if (stageStatus.value !== 'goedgekeurd' || !stage.value?.startdatum || !stage.value?.einddatum) {
+  if (!stageStore.volledigGetekend || !stage.value?.startdatum || !stage.value?.einddatum) {
     return {
       tussentijds: { beschikbaar: false, vanaf: null },
       eind: { beschikbaar: false, vanaf: null },
@@ -149,11 +130,11 @@ const eindIngediend = computed(() =>
 
 <template>
   <div class="page">
-    <TopBar :links="navLinks" />
+    <TopBar :links="stageStore.studentNavLinks" />
 
     <main class="content">
       <section>
-        <h1 class="page-title">Welkom terug, {{ student.voornaam }}</h1>
+        <h1 class="page-title">Welkom, {{ student.voornaam }}</h1>
       </section>
 
       <section class="card-grid-2">
@@ -193,6 +174,24 @@ const eindIngediend = computed(() =>
                   Stageperiode: {{ formatDatum(stage?.startdatum) }} – {{ formatDatum(stage?.einddatum) }}
                 </div>
               </div>
+            </div>
+
+            <!-- Tussenfase: goedgekeurd, maar nog niet door alle drie getekend.
+                 De stage is nog niet actief; enkel het contract is beschikbaar. -->
+            <div
+              v-if="!stageStore.volledigGetekend"
+              class="card"
+              style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:4px;"
+            >
+              <p class="font-semibold" style="color:#92400e;">Onderteken je stagecontract</p>
+              <p class="text-secondary text-sm mt-4" style="line-height:1.6;">
+                Je aanvraag is goedgekeurd. Zodra de stagecommissie, je mentor én jij het
+                contract hebben ondertekend, wordt je stage actief en gaan je logboek en
+                evaluatie open.
+              </p>
+              <RouterLink to="/student/contract" class="btn btn-primary mt-12">
+                Naar contract
+              </RouterLink>
             </div>
           </template>
 
@@ -260,7 +259,7 @@ const eindIngediend = computed(() =>
           </div>
           <hr class="card-divider" />
 
-          <template v-if="stageStatus === 'goedgekeurd' && logboekWeek !== null">
+          <template v-if="stageStore.volledigGetekend && logboekWeek !== null">
             <div class="font-semibold" style="font-size:15px;margin-bottom:8px;">Week {{ logboekWeek }}</div>
             <div class="flex gap-8" style="margin-bottom:16px;">
               <div
@@ -288,7 +287,7 @@ const eindIngediend = computed(() =>
           <template v-else>
             <div class="font-semibold" style="font-size:16px;">Geen logboek beschikbaar</div>
             <p class="text-secondary text-sm" style="margin-top:4px;">
-              Het logboek wordt beschikbaar zodra je stage goedgekeurd is en gestart is.
+              Het logboek wordt beschikbaar zodra het contract door alle partijen is ondertekend en je stage gestart is.
             </p>
           </template>
         </div>

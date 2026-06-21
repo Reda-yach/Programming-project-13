@@ -2,18 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
-
-const navLinks = [
-  { label: 'Competenties', to: '/admin/competentiesets' },
-  { label: 'Stages',       to: '/admin/stages' },
-  { label: 'Accounts',     to: '/admin/accounts' },
-  { label: 'Aanvragen',    to: '/admin/aanvragen' },
-]
+import { navLinks } from './adminNav'
 
 const route  = useRoute()
 const router = useRouter()
 
-// ─── Opleidingen (competentiesets als proxy) ──────────────────────────────────
+// ─── Opleidingen (echte opleiding-tabel) ─────────────────────────────────────
 const opleidingen          = ref([])
 const gekozenOpleidingId   = ref(null)
 
@@ -24,7 +18,7 @@ const bericht      = ref('')
 const berichtType  = ref('')
 
 // ─── Rubriek edit state per competentie ──────────────────────────────────────
-// { [comp.id]: { score: null|number, commentaar: '', bezig, fout } }
+// { [comp.id]: { rubrieken: {5:'',3:'',1:'',0:''}, opgeslagen, bezig, fout } }
 const rubriekEdit = ref({})
 
 const PUNTEN      = [5, 3, 1, 0]
@@ -45,9 +39,9 @@ const teVerwijderen   = ref(null)
 onMounted(async () => {
   await laadOpleidingen()
   const queryId = Number(route.query.id)
-  gekozenOpleidingId.value = opleidingen.value.some(o => o.set_id === queryId)
+  gekozenOpleidingId.value = opleidingen.value.some(o => o.opleiding_id === queryId)
     ? queryId
-    : opleidingen.value[0]?.set_id ?? null
+    : opleidingen.value[0]?.opleiding_id ?? null
   if (gekozenOpleidingId.value) await laadCompetenties()
 })
 
@@ -56,7 +50,7 @@ function token() { return localStorage.getItem('token') }
 
 async function laadOpleidingen() {
   try {
-    const res = await fetch('http://localhost:3000/api/competentiesets', {
+    const res = await fetch('http://localhost:3000/api/opleidingen', {
       headers: { Authorization: `Bearer ${token()}` },
     })
     opleidingen.value = await res.json()
@@ -84,48 +78,49 @@ async function laadCompetenties() {
 }
 
 function initRubriekState(comp) {
-  const eerste = (comp.rubrieken || [])[0] || {}
+  const rubMap = {}
+  for (const punt of PUNTEN) rubMap[punt] = ''
+  for (const r of (comp.rubrieken || [])) {
+    if (r.punt != null) rubMap[Number(r.punt)] = r.beschrijving || ''
+  }
+  const heeftData = (comp.rubrieken || []).length > 0
   return {
-    score:      eerste.punt != null ? Number(eerste.punt) : null,
-    commentaar: eerste.beschrijving || '',
-    opgeslagen: eerste.punt != null,
+    rubrieken:  rubMap,
+    opgeslagen: heeftData,
     bezig:      false,
     fout:       '',
   }
 }
 
 async function wisselOpleiding() {
-  router.replace({ path: '/admin/competentiebeheer', query: { id: gekozenOpleidingId.value } })
+  router.replace({ path: '/admin/competenties', query: { id: gekozenOpleidingId.value } })
   await laadCompetenties()
 }
 
-// ─── Score opslaan ────────────────────────────────────────────────────────────
-async function slaScoreOp(comp) {
+// ─── Rubrieken opslaan (alle 4 niveaus tegelijk) ─────────────────────────────
+async function slaRubriekenOp(comp) {
   const id    = comp.id
   const state = rubriekEdit.value[id]
   if (!state) return
-  if (state.score === null) {
-    rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, fout: 'Kies eerst een score.' } }
-    return
-  }
-  const score      = state.score
-  const commentaar = state.commentaar
   rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: true, fout: '' } }
+  const rubrieken = PUNTEN
+    .filter(p => state.rubrieken[p].trim())
+    .map(p => ({ punt: p, beschrijving: state.rubrieken[p].trim() }))
   try {
     const res = await fetch(`http://localhost:3000/api/competenties/${id}/rubrieken`, {
       method:  'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-      body:    JSON.stringify({ rubrieken: [{ punt: score, beschrijving: commentaar }] }),
+      body:    JSON.stringify({ rubrieken }),
     })
     const data = await res.json()
     if (res.ok) {
-      rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: true, bezig: false, fout: '' } }
-      toonBericht('Score opgeslagen.', 'success')
+      rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, opgeslagen: true, bezig: false, fout: '' } }
+      toonBericht('Rubrieken opgeslagen.', 'success')
     } else {
-      rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: false, bezig: false, fout: data.error || 'Opslaan mislukt.' } }
+      rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: false, fout: data.error || 'Opslaan mislukt.' } }
     }
   } catch {
-    rubriekEdit.value = { ...rubriekEdit.value, [id]: { score, commentaar, opgeslagen: false, bezig: false, fout: 'Verbindingsfout.' } }
+    rubriekEdit.value = { ...rubriekEdit.value, [id]: { ...state, bezig: false, fout: 'Verbindingsfout.' } }
   }
 }
 
@@ -212,6 +207,55 @@ function toonBericht(tekst, type) {
   berichtType.value = type
   setTimeout(() => (bericht.value = ''), 3500)
 }
+
+// ─── Opleidingen toevoegen / verwijderen ─────────────────────────────────────
+const nieuweOpleiding = ref('')
+const opleidingBezig  = ref(false)
+
+async function voegOpleidingToe() {
+  const naam = nieuweOpleiding.value.trim()
+  if (!naam || opleidingBezig.value) return
+  opleidingBezig.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/opleidingen', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body:    JSON.stringify({ naam }),
+    })
+    const data = await res.json()
+    if (!res.ok) { toonBericht(data.error || 'Toevoegen mislukt.', 'error'); return }
+    nieuweOpleiding.value = ''
+    await laadOpleidingen()
+    gekozenOpleidingId.value = data.opleiding_id
+    await laadCompetenties()
+    toonBericht('Opleiding toegevoegd.', 'success')
+  } catch {
+    toonBericht('Verbindingsfout.', 'error')
+  } finally {
+    opleidingBezig.value = false
+  }
+}
+
+async function verwijderOpleiding() {
+  if (!gekozenOpleidingId.value) return
+  const huidige = opleidingen.value.find(o => o.opleiding_id === gekozenOpleidingId.value)
+  if (!confirm(`Opleiding "${huidige?.naam || ''}" verwijderen?`)) return
+  try {
+    const res = await fetch(`http://localhost:3000/api/opleidingen/${gekozenOpleidingId.value}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${token()}` },
+    })
+    const data = await res.json()
+    if (!res.ok) { toonBericht(data.error || 'Verwijderen mislukt.', 'error'); return }
+    await laadOpleidingen()
+    gekozenOpleidingId.value = opleidingen.value[0]?.opleiding_id ?? null
+    if (gekozenOpleidingId.value) await laadCompetenties()
+    else competenties.value = []
+    toonBericht('Opleiding verwijderd.', 'success')
+  } catch {
+    toonBericht('Verbindingsfout.', 'error')
+  }
+}
 </script>
 
 <template>
@@ -220,16 +264,11 @@ function toonBericht(tekst, type) {
 
     <main class="content">
 
-      <button class="terug-link" @click="router.push('/admin/competentiesets')">← Terug naar overzicht</button>
-
       <div class="pagina-hoofd">
         <div>
           <h1 class="page-title">Competentiebeheer</h1>
-          <p class="page-subtitle">Kies een opleiding, beheer de competenties en stel per competentie de rubriek in.</p>
+          <p class="page-subtitle">Kies een opleiding, beheer de competenties en stel per competentie de rubriek in voor alle 4 niveaus.</p>
         </div>
-        <button class="btn btn-primary" @click="openToevoegen" :disabled="!gekozenOpleidingId">
-          + Competentie toevoegen
-        </button>
       </div>
 
       <!-- Feedbackbericht -->
@@ -237,18 +276,52 @@ function toonBericht(tekst, type) {
         {{ bericht }}
       </div>
 
-      <!-- Opleiding dropdown -->
-      <div class="opleiding-keuze">
-        <label class="opleiding-label">Opleiding</label>
-        <select
-          v-model="gekozenOpleidingId"
-          class="opleiding-select"
-          @change="wisselOpleiding"
-        >
-          <option v-for="o in opleidingen" :key="o.set_id" :value="o.set_id">
-            {{ o.naam }} — {{ o.opleiding }} ({{ o.jaar }})
-          </option>
-        </select>
+      <!-- Opleiding kiezen + beheren -->
+      <div class="opleiding-beheer">
+        <div class="opleiding-keuze">
+          <label class="opleiding-label">Opleiding</label>
+          <select
+            v-model="gekozenOpleidingId"
+            class="opleiding-select"
+            @change="wisselOpleiding"
+          >
+            <option v-if="opleidingen.length === 0" :value="null" disabled>Geen opleidingen</option>
+            <option v-for="o in opleidingen" :key="o.opleiding_id" :value="o.opleiding_id">
+              {{ o.naam }}
+            </option>
+          </select>
+          <button
+            class="btn-icon btn-icon-danger"
+            title="Geselecteerde opleiding verwijderen"
+            :disabled="!gekozenOpleidingId"
+            @click="verwijderOpleiding"
+          >
+            <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+
+        <div class="opleiding-toevoegen">
+          <input
+            v-model="nieuweOpleiding"
+            class="opleiding-input"
+            placeholder="Naam nieuwe opleiding"
+            @keyup.enter="voegOpleidingToe"
+          />
+          <button
+            class="btn btn-secondary btn-sm"
+            :disabled="opleidingBezig || !nieuweOpleiding.trim()"
+            @click="voegOpleidingToe"
+          >
+            + Opleiding toevoegen
+          </button>
+        </div>
+      </div>
+
+      <!-- Competentie toevoegen (onder de opleiding) -->
+      <div>
+        <button class="btn btn-primary" @click="openToevoegen" :disabled="!gekozenOpleidingId">
+          + Competentie toevoegen
+        </button>
       </div>
 
       <!-- Laden -->
@@ -269,8 +342,7 @@ function toonBericht(tekst, type) {
             <span v-if="comp.omschrijving" class="comp-desc">{{ comp.omschrijving }}</span>
           </div>
           <div class="kaart-acties">
-            <span class="gewicht-badge">{{ comp.gewicht }}%</span>
-            <button class="btn-icon" title="Naam/omschrijving/gewicht bewerken" @click="openBewerken(comp)">
+            <button class="btn-icon" title="Naam/omschrijving bewerken" @click="openBewerken(comp)">
               <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
             <button class="btn-icon btn-icon-danger" title="Verwijderen" @click="openDelete(comp)">
@@ -279,52 +351,36 @@ function toonBericht(tekst, type) {
           </div>
         </div>
 
-        <!-- Score sectie (altijd zichtbaar) -->
+        <!-- Rubriek sectie -->
         <div class="rubriek-sectie" v-if="rubriekEdit[comp.id]">
-          <p class="rubriek-titel">Score toekennen</p>
+          <p class="rubriek-titel">Rubriek per niveau</p>
 
           <!-- Opgeslagen view (read-only) -->
-          <div v-if="rubriekEdit[comp.id].opgeslagen" class="score-opgeslagen">
-            <div class="score-badge" :style="{ background: PUNT_KLEUR[rubriekEdit[comp.id].score] }">
-              <span class="score-cijfer">{{ rubriekEdit[comp.id].score }}</span>
-              <span class="score-label">{{ PUNT_LABELS[rubriekEdit[comp.id].score] }}</span>
+          <div v-if="rubriekEdit[comp.id].opgeslagen" class="rubrieken-opgeslagen">
+            <div v-for="punt in PUNTEN" :key="punt" class="rubriek-rij-saved">
+              <div class="rubriek-punt-badge" :style="{ background: PUNT_KLEUR[punt] }">
+                <span class="punt-cijfer">{{ punt }}</span>
+                <span class="punt-label">{{ PUNT_LABELS[punt] }}</span>
+              </div>
+              <div class="rubriek-desc-saved">
+                {{ rubriekEdit[comp.id].rubrieken[punt] || '—' }}
+              </div>
             </div>
-            <div v-if="rubriekEdit[comp.id].commentaar" class="commentaar-opgeslagen">
-              <p class="commentaar-label">Commentaar:</p>
-              <p class="commentaar-tekst">{{ rubriekEdit[comp.id].commentaar }}</p>
-            </div>
-            <button class="btn btn-sm btn-secondary" @click="startBewerken(comp)">Bewerken</button>
+            <button class="btn btn-sm btn-secondary" style="margin-top:10px" @click="startBewerken(comp)">Bewerken</button>
           </div>
 
           <!-- Edit view -->
-          <div v-else>
-            <!-- Score knoppen -->
-            <div class="score-kiezer">
-              <button
-                v-for="punt in PUNTEN"
-                :key="punt"
-                class="score-knop"
-                :class="{ actief: rubriekEdit[comp.id].score === punt }"
-                :style="rubriekEdit[comp.id].score === punt
-                  ? { background: PUNT_KLEUR[punt], color: '#fff', borderColor: PUNT_KLEUR[punt] }
-                  : {}"
-                @click="rubriekEdit[comp.id].score = punt"
-              >
-                <span class="score-cijfer">{{ punt }}</span>
-                <span class="score-label">{{ PUNT_LABELS[punt] }}</span>
-              </button>
-            </div>
-
-            <!-- Commentaar voor de gekozen score -->
-            <div class="commentaar-vak" v-if="rubriekEdit[comp.id].score !== null">
-              <label class="commentaar-label">
-                Commentaar bij score {{ rubriekEdit[comp.id].score }}
+          <div v-else class="rubrieken-edit">
+            <div v-for="punt in PUNTEN" :key="punt" class="rubriek-niveau">
+              <label class="niveau-label" :style="{ color: PUNT_KLEUR[punt] }">
+                <span class="niveau-punt">{{ punt }}</span>
+                {{ PUNT_LABELS[punt] }}
               </label>
               <textarea
-                v-model="rubriekEdit[comp.id].commentaar"
+                v-model="rubriekEdit[comp.id].rubrieken[punt]"
                 class="rubriek-textarea"
-                rows="3"
-                placeholder="Optioneel: voeg een toelichting toe…"
+                rows="2"
+                :placeholder="`Beschrijving voor niveau ${punt}…`"
               ></textarea>
             </div>
 
@@ -333,9 +389,9 @@ function toonBericht(tekst, type) {
               <button
                 class="btn btn-sm btn-primary"
                 :disabled="rubriekEdit[comp.id].bezig"
-                @click="slaScoreOp(comp)"
+                @click="slaRubriekenOp(comp)"
               >
-                {{ rubriekEdit[comp.id].bezig ? 'Bezig…' : 'Score opslaan' }}
+                {{ rubriekEdit[comp.id].bezig ? 'Bezig…' : 'Rubrieken opslaan' }}
               </button>
             </div>
           </div>
@@ -358,11 +414,6 @@ function toonBericht(tekst, type) {
         <div class="form-group" style="margin-top:14px">
           <label>Omschrijving</label>
           <textarea v-model="modalComp.omschrijving" class="form-input" rows="3" placeholder="Korte uitleg…"></textarea>
-        </div>
-
-        <div class="form-group" style="margin-top:14px">
-          <label>Gewicht (%)</label>
-          <input v-model.number="modalComp.gewicht" type="number" min="0" max="100" step="0.5" class="form-input" />
         </div>
 
         <p v-if="modalFout" class="form-error" style="margin-top:8px">{{ modalFout }}</p>
@@ -395,14 +446,6 @@ function toonBericht(tekst, type) {
 </template>
 
 <style scoped>
-/* ── Terug link ──────────────────────────────────────────────────────────── */
-.terug-link {
-  background: none; border: none; padding: 0;
-  font-size: 13px; color: var(--text-secondary); cursor: pointer;
-  font-family: inherit; margin-bottom: 4px; display: inline-block;
-}
-.terug-link:hover { color: var(--text-primary); text-decoration: underline; }
-
 /* ── Pagina hoofd ────────────────────────────────────────────────────────── */
 .pagina-hoofd {
   display: flex;
@@ -439,6 +482,31 @@ function toonBericht(tekst, type) {
   min-width: 280px;
 }
 .opleiding-select:focus { outline: none; border-color: #000; }
+
+.opleiding-beheer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.opleiding-toevoegen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.opleiding-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  flex: 1;
+  min-width: 180px;
+}
+.opleiding-input:focus { outline: none; border-color: #000; }
 
 /* ── Leeg / laden ────────────────────────────────────────────────────────── */
 .tekst-grijs { font-size: 13px; color: var(--text-secondary); }
@@ -491,19 +559,7 @@ function toonBericht(tekst, type) {
   flex-shrink: 0;
 }
 
-/* ── Gewicht badge ───────────────────────────────────────────────────────── */
-.gewicht-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  background: var(--gray50);
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-}
-
-/* ── Score sectie ────────────────────────────────────────────────────────── */
+/* ── Rubriek sectie ──────────────────────────────────────────────────────── */
 .rubriek-sectie {
   border-top: 1px solid var(--border);
   padding: 16px 20px;
@@ -520,111 +576,92 @@ function toonBericht(tekst, type) {
 }
 
 /* Opgeslagen state */
-.score-opgeslagen {
+.rubrieken-opgeslagen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rubriek-rij-saved {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 12px;
+  gap: 12px;
+  padding: 10px 12px;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
 
-.score-badge {
+.rubriek-punt-badge {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 16px;
+  gap: 2px;
+  padding: 8px 12px;
   border-radius: 6px;
   color: #fff;
   flex-shrink: 0;
+  min-width: 72px;
 }
 
-.score-badge .score-cijfer {
-  font-size: 28px;
+.punt-cijfer {
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
 }
 
-.score-badge .score-label {
-  font-size: 10px;
+.punt-label {
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.9;
+  text-align: center;
 }
 
-.commentaar-opgeslagen {
+.rubriek-desc-saved {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.commentaar-opgeslagen .commentaar-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.commentaar-tekst {
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.5;
-  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  padding-top: 4px;
 }
 
-/* Score knoppen (edit mode) */
-.score-kiezer {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.score-knop {
+/* Edit state */
+.rubrieken-edit {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 12px;
+}
+
+.rubriek-niveau {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  padding: 10px 20px;
-  border: 2px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.12s, background 0.12s, color 0.12s;
-  min-width: 90px;
-}
-.score-knop:hover:not(.actief) { border-color: #aaa; background: var(--gray50); }
-.score-knop.actief { font-weight: 700; }
-
-.score-knop .score-cijfer {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
-}
-.score-knop .score-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-/* Commentaar */
-.commentaar-vak {
-  margin-top: 14px;
+.niveau-label {
+  font-size: 12px;
+  font-weight: 700;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
 }
-.commentaar-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+
+.niveau-punt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: currentColor;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 .rubriek-textarea {
@@ -647,7 +684,7 @@ function toonBericht(tekst, type) {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 4px;
 }
 
 .rubriek-fout { font-size: 12px; color: var(--red); }
