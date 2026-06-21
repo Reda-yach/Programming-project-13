@@ -8,6 +8,7 @@ require('dotenv').config();
 const db = require('./db');
 const { verifyToken, requireRol } = require('./middleware/auth');
 const { mailBijNotificatie } = require('./services/mail');
+const { geldigTelefoon, geldigStudentnummer } = require('./utils/validatie');
 
 const app = express();
 
@@ -450,6 +451,10 @@ app.get('/api/bedrijven/:id/mentors', verifyToken, (req, res) => {
 app.post('/api/mentors', verifyToken, async (req, res) => {
   const { voornaam, naam, email, telefoonnummer, functietitel, bedrijf_id } = req.body;
 
+  if (!geldigTelefoon(telefoonnummer)) {
+    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+  }
+
   try {
     // Kijk of er al een gebruiker met dit e-mailadres bestaat
     db.query(
@@ -528,6 +533,12 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
   if (!voornaam || !naam || !email || !studentnummer || !opleiding || !academiejaar) {
     return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
   }
+  if (!geldigStudentnummer(studentnummer)) {
+    return res.status(400).json({ error: 'Studentnummer mag enkel letters en cijfers bevatten (6–20 tekens), zonder spaties.' });
+  }
+  if (!geldigTelefoon(telefoonnummer)) {
+    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+  }
 
   try {
     const hash = await bcrypt.hash('student123', 10);
@@ -572,6 +583,9 @@ app.post('/api/docenten', verifyToken, requireRol('admin'), async (req, res) => 
   }
   if (rol !== 'docent' && rol !== 'commissie') {
     return res.status(400).json({ error: 'Rol moet "docent" of "commissie" zijn.' });
+  }
+  if (!geldigTelefoon(telefoonnummer)) {
+    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
   }
 
   try {
@@ -630,6 +644,9 @@ app.post('/api/gebruikers', verifyToken, requireRol('admin'), async (req, res) =
 
   if (!voornaam || !naam || !email) {
     return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
+  }
+  if (!geldigTelefoon(telefoonnummer)) {
+    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
   }
 
   try {

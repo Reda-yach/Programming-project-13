@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './adminNav'
@@ -52,6 +52,35 @@ const bezig    = ref(false)
 const fout     = ref('')
 const succes   = ref('')
 const nieuwWachtwoord = ref('')
+
+// ─── Validatie (zelfde regels als de backend) ─────────────────────────────────
+const fouten = reactive({})
+
+// Telefoon is optioneel; indien ingevuld: enkel cijfers/spaties/+/-/() en min. 8 cijfers.
+function geldigTelefoon(tel) {
+  if (!tel || !tel.trim()) return true
+  const w = tel.trim()
+  if (!/^[0-9\s+\-()]+$/.test(w)) return false
+  return (w.match(/[0-9]/g) || []).length >= 8
+}
+
+// Studentnummer: letters en cijfers, 6–20 tekens, geen spaties of speciale tekens.
+function geldigStudentnummer(nr) {
+  return /^[A-Za-z0-9]{6,20}$/.test((nr || '').trim())
+}
+
+function valideer() {
+  Object.keys(fouten).forEach((k) => delete fouten[k])
+
+  if (!geldigTelefoon(form.value.telefoonnummer)) {
+    fouten.telefoonnummer = 'Enkel cijfers, spaties, +, - en () — minstens 8 cijfers.'
+  }
+  if (form.value.rol === 'student' && !geldigStudentnummer(form.value.studentnummer)) {
+    fouten.studentnummer = 'Enkel letters en cijfers, 6–20 tekens, geen spaties.'
+  }
+
+  return Object.keys(fouten).length === 0
+}
 
 // ─── Dropdown data ────────────────────────────────────────────────────────────
 const opleidingen = ref([])
@@ -119,6 +148,9 @@ async function opslaan() {
   fout.value   = ''
   succes.value = ''
   nieuwWachtwoord.value = ''
+
+  if (!valideer()) return
+
   bezig.value  = true
 
   try {
@@ -210,6 +242,7 @@ const isMentor    = computed(() => form.value.rol === 'mentor')
             <div class="form-group">
               <label class="form-label">Telefoonnummer</label>
               <input v-model="form.telefoonnummer" class="form-input" placeholder="+32 4xx xx xx xx" />
+              <span v-if="fouten.telefoonnummer" class="veld-fout">{{ fouten.telefoonnummer }}</span>
             </div>
           </div>
           <div class="form-group">
@@ -227,6 +260,7 @@ const isMentor    = computed(() => form.value.rol === 'mentor')
             <div class="form-group">
               <label class="form-label">Studentnummer <span class="verplicht">*</span></label>
               <input v-model="form.studentnummer" class="form-input" placeholder="bijv. r0123456" required />
+              <span v-if="fouten.studentnummer" class="veld-fout">{{ fouten.studentnummer }}</span>
             </div>
             <div class="form-group">
               <label class="form-label">Academiejaar <span class="verplicht">*</span></label>
@@ -388,6 +422,13 @@ const isMentor    = computed(() => form.value.rol === 'mentor')
   color: var(--text-secondary);
   margin: 4px 0 0 0;
   line-height: 1.4;
+}
+
+.veld-fout {
+  display: block;
+  font-size: 12px;
+  color: var(--red);
+  margin-top: 4px;
 }
 
 /* ── Acties ──────────────────────────────────────────────────────────────── */
