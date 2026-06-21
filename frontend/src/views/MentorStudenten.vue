@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import SignaturePad from '../components/SignaturePad.vue'
 import OvereenkomstDocument from '../components/OvereenkomstDocument.vue'
+import ContactPaneel from '../components/ContactPaneel.vue'
 import { navLinks } from './mentorNav'
 
 const router = useRouter()
@@ -18,6 +19,9 @@ const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 const modalStage = ref(null) // het stagiair-object waarvan de overeenkomst open staat
 const modalModus = ref('bekijk') // 'teken' of 'bekijk'
 const modalBericht = ref('')
+
+// Modal-status voor het contacteren van de docent.
+const contactStage = ref(null)
 const tekenBezig = ref(false)
 const pad = ref(null)
 
@@ -77,6 +81,13 @@ function openOvereenkomst(stagiair, modus) {
 function sluitModal() {
   modalStage.value = null
   modalBericht.value = ''
+}
+
+function openContact(stagiair) {
+  contactStage.value = stagiair
+}
+function sluitContact() {
+  contactStage.value = null
 }
 
 async function tekenContract() {
@@ -201,6 +212,7 @@ function naarEvaluatie(s, fase) {
               <td>
                 <div class="font-semibold">{{ s.voornaam }} {{ s.student_naam }}</div>
                 <div class="text-secondary text-xs mt-4">{{ s.opleiding }} · {{ s.bedrijf }}</div>
+                <a class="tabel-link" @click="openContact(s)">Contact docent</a>
               </td>
 
               <!-- Logboek -->
@@ -302,6 +314,21 @@ function naarEvaluatie(s, fase) {
               {{ tekenBezig ? 'Bezig...' : 'Contract ondertekenen' }}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: contact met de docent -->
+    <div v-if="contactStage" class="modal-overlay" @click.self="sluitContact">
+      <div class="modal-venster">
+        <div class="modal-kop">
+          <h2 style="font-size:18px;font-weight:700;">
+            Contact docent — {{ contactStage.voornaam }} {{ contactStage.student_naam }}
+          </h2>
+          <button class="modal-sluit" @click="sluitContact">✕</button>
+        </div>
+        <div class="modal-body">
+          <ContactPaneel :stage-id="contactStage.stage_id" />
         </div>
       </div>
     </div>

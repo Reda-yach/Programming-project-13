@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import ContactPaneel from '../components/ContactPaneel.vue'
 import { docentNavLinks } from './docentNav'
 
 const route = useRoute()
@@ -98,6 +99,15 @@ const fases = [
         >
           Zelfevaluatie + mentorbeoordeling bekijken →
         </router-link>
+      </section>
+
+      <!-- Contact met de mentor van deze stage -->
+      <section class="card mt-16">
+        <h2 class="form-section-title">Contact met de mentor</h2>
+        <ContactPaneel v-if="stage?.mentor_id" :stage-id="stageId" />
+        <p v-else class="text-secondary text-sm mt-8">
+          Deze stage heeft nog geen toegewezen mentor om te contacteren.
+        </p>
       </section>
 
     </main>
