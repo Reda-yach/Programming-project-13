@@ -44,4 +44,16 @@ function requireRol(...rollen) {
   };
 }
 
-module.exports = { verifyToken, requireRol };
+// Commissierechten: admin, docent met commissielid=true, of rol='commissie'.
+function requireCommissie(req, res, next) {
+  if (!req.gebruiker) {
+    return res.status(401).json({ error: 'Niet ingelogd' });
+  }
+  const { rol, commissielid } = req.gebruiker;
+  if (rol === 'admin' || rol === 'commissie' || commissielid === true) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Geen toegang. Commissierechten vereist.' });
+}
+
+module.exports = { verifyToken, requireRol, requireCommissie };

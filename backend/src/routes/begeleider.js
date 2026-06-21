@@ -4,7 +4,7 @@ const db = require('../db');
 
 // verifyToken lokale kopie (zelfde als in stage.js)
 
-const { verifyToken, requireRol } = require('../middleware/auth');
+const { verifyToken, requireRol, requireCommissie } = require('../middleware/auth');
 const { mailBijNotificatie } = require('../services/mail');
 
 // Alle openstaande aanvragen ophalen — alleen commissie/docent/admin
@@ -31,8 +31,8 @@ router.get('/openstaand', verifyToken, requireRol('commissie', 'docent', 'admin'
     res.json(results);
   });
 });
-// Stage goedkeuren — alleen commissie/admin
-router.put('/:id/goedkeuren', verifyToken, requireRol('commissie', 'admin'), (req, res) => {
+// Stage goedkeuren — commissie/admin of docent met commissielid=true
+router.put('/:id/goedkeuren', verifyToken, requireCommissie, (req, res) => {
   const { id } = req.params;
 
   // Controleer of stage bestaat
@@ -89,8 +89,10 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
   const stageId = parseInt(req.params.id, 10);
   const { beslissing, motivatie, docent_id } = req.body;
 
-  // Alleen commissie/docent/admin mogen beslissen.
-  if (!['commissie', 'docent', 'admin'].includes(req.gebruiker.rol)) {
+  // Commissie, admin of docent met commissielid-vlag mogen beslissen.
+  const { rol, commissielid } = req.gebruiker;
+  const magBeoordelen = rol === 'admin' || rol === 'commissie' || commissielid === true;
+  if (!magBeoordelen) {
     return res.status(403).json({ error: 'Geen rechten om een aanvraag te beoordelen.' });
   }
 
@@ -147,6 +149,18 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
       });
     }
 
+    // Goedkeuring geblokkeerd zolang het bedrijf nog niet goedgekeurd is.
+    if (beslissing === 'goedgekeurd') {
+      const [bedrijfCheck] = await conn.execute(
+        `SELECT b.status FROM stage s JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id WHERE s.stage_id = ?`,
+        [stageId]
+      );
+      if (bedrijfCheck.length && bedrijfCheck[0].status === 'voorgesteld') {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Het bedrijf moet eerst goedgekeurd worden door de admin voordat de stage goedgekeurd kan worden.' });
+      }
+    }
+
     // 1. Besluit vastleggen (vormt tegelijk de historie van beslissingen).
     await conn.execute(
       `INSERT INTO commissie_beslissing (stage_id, commissielid_id, beslissing, motivatie)
@@ -165,7 +179,7 @@ router.put('/:id/beslissing', verifyToken, async (req, res) => {
     //     ondertekend kan worden (de commissie tekent direct na goedkeuren).
     if (beslissing === 'goedgekeurd') {
       await conn.execute(
-        `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+        `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_bedrijf, getekend_docent)
          VALUES (?, FALSE, FALSE, FALSE)`,
         [stageId],
       );

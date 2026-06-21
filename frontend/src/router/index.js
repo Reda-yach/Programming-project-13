@@ -192,12 +192,34 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/admin/bedrijven',
+      name: 'admin-bedrijven',
+      component: () => import('../views/AdminBedrijvenBeheer.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/admin/aanvragen',
       name: 'admin-aanvragen',
       // Deelt de split-layout aanvragenpagina met de docent; de view is
       // rol-bewust (admin-navigatie + admin-topbar).
       component: () => import('../views/DocentInCommissieAanvragen.vue'),
       meta: { requiresAdmin: true },
+    },
+    // ── Bedrijf-portaal ───────────────────────────────────────────────────────
+    {
+      path: '/bedrijf',
+      name: 'bedrijf-dashboard',
+      component: () => import('../views/BedrijfDashboard.vue'),
+    },
+    {
+      path: '/bedrijf/contract',
+      name: 'bedrijf-contract',
+      component: () => import('../views/BedrijfContract.vue'),
+    },
+    {
+      path: '/bedrijf/mentor-voorstel',
+      name: 'bedrijf-mentor-voorstel',
+      component: () => import('../views/BedrijfMentorVoorstel.vue'),
     },
     {
       path: '/wachtwoord-vergeten',
@@ -236,13 +258,14 @@ router.beforeEach((to, _from, next) => {
     }
   }
 
-  // 3. Aanvragen-pagina van de docent → enkel de stagecommissie (rol
-  // 'commissie') of admin. Een gewone docent gaat terug naar zijn studenten.
+  // 3. Aanvragen-pagina → commissie/admin of docent met commissielid-vlag.
   if (to.meta.requiresCommissie) {
     try {
       const gebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
       const magBeoordelen =
-        gebruiker.rol === 'admin' || gebruiker.rol === 'commissie'
+        gebruiker.rol === 'admin' ||
+        gebruiker.rol === 'commissie' ||
+        gebruiker.commissielid === true
       if (!magBeoordelen) {
         next({ name: 'docent-studenten' })
         return
