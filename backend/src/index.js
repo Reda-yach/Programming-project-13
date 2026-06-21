@@ -2665,6 +2665,123 @@ app.put('/api/evaluaties/:id/indienen', verifyToken, (req, res) => {
 });
 
 // ============================================================
+// CONTACT DOCENT <-> MENTOR
+// ============================================================
+
+// Helper: gebruiker_id van de docent én de mentor van een stage ophalen.
+function stagePartijen(stageId) {
+  return db.promise().query(
+    `SELECT d.gebruiker_id AS docent_gebruiker_id,
+            m.gebruiker_id AS mentor_gebruiker_id
+       FROM stage s
+       LEFT JOIN docent d ON s.docent_id = d.docent_id
+       LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+      WHERE s.stage_id = ?`,
+    [stageId],
+  );
+}
+
+// Nieuw contactbericht sturen (docent -> mentor of mentor -> docent van die stage).
+app.post('/api/stages/:id/contact', verifyToken, requireRol('docent', 'mentor'), async (req, res) => {
+  const stageId = req.params.id;
+  const { bericht } = req.body;
+  if (!bericht || !bericht.trim()) {
+    return res.status(400).json({ error: 'Bericht mag niet leeg zijn.' });
+  }
+
+  try {
+    const [rows] = await stagePartijen(stageId);
+    if (rows.length === 0) return res.status(404).json({ error: 'Stage niet gevonden.' });
+    const { docent_gebruiker_id, mentor_gebruiker_id } = rows[0];
+
+    let afzender_id;
+    let ontvanger_id;
+    if (req.gebruiker.rol === 'docent') {
+      if (req.gebruiker.id !== docent_gebruiker_id) {
+        return res.status(403).json({ error: 'Je bent niet de begeleidende docent van deze stage.' });
+      }
+      if (!mentor_gebruiker_id) {
+        return res.status(400).json({ error: 'Deze stage heeft nog geen mentor om te contacteren.' });
+      }
+      afzender_id = docent_gebruiker_id;
+      ontvanger_id = mentor_gebruiker_id;
+    } else {
+      if (req.gebruiker.id !== mentor_gebruiker_id) {
+        return res.status(403).json({ error: 'Je bent niet de mentor van deze stage.' });
+      }
+      if (!docent_gebruiker_id) {
+        return res.status(400).json({ error: 'Deze stage heeft nog geen begeleidende docent om te contacteren.' });
+      }
+      afzender_id = mentor_gebruiker_id;
+      ontvanger_id = docent_gebruiker_id;
+    }
+
+    const [result] = await db.promise().query(
+      `INSERT INTO contactbericht (stage_id, afzender_id, ontvanger_id, bericht) VALUES (?, ?, ?, ?)`,
+      [stageId, afzender_id, ontvanger_id, bericht.trim()],
+    );
+
+    // Ontvanger verwittigen.
+    mailBijNotificatie(ontvanger_id, 'Je hebt een nieuw bericht ontvangen over een stage.');
+    await db.promise().query(
+      `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'info')`,
+      [ontvanger_id, 'Je hebt een nieuw bericht ontvangen over een stage.'],
+    );
+
+    res.status(201).json({ message: 'Bericht verstuurd!', bericht_id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Berichten van een stage ophalen (enkel de docent/mentor van die stage).
+app.get('/api/stages/:id/contact', verifyToken, requireRol('docent', 'mentor'), async (req, res) => {
+  const stageId = req.params.id;
+  try {
+    const [rows] = await stagePartijen(stageId);
+    if (rows.length === 0) return res.status(404).json({ error: 'Stage niet gevonden.' });
+    const { docent_gebruiker_id, mentor_gebruiker_id } = rows[0];
+
+    const magZien =
+      (req.gebruiker.rol === 'docent' && req.gebruiker.id === docent_gebruiker_id) ||
+      (req.gebruiker.rol === 'mentor' && req.gebruiker.id === mentor_gebruiker_id);
+    if (!magZien) {
+      return res.status(403).json({ error: 'Je hebt geen toegang tot de berichten van deze stage.' });
+    }
+
+    const [berichten] = await db.promise().query(
+      `SELECT cb.bericht_id, cb.bericht, cb.gelezen, cb.aangemaakt_op,
+              cb.afzender_id, cb.ontvanger_id,
+              g.voornaam AS afzender_voornaam, g.naam AS afzender_naam, g.rol AS afzender_rol
+         FROM contactbericht cb
+         JOIN gebruiker g ON cb.afzender_id = g.gebruiker_id
+        WHERE cb.stage_id = ?
+        ORDER BY cb.aangemaakt_op ASC`,
+      [stageId],
+    );
+    res.json(berichten);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Bericht als gelezen markeren (enkel de ontvanger).
+app.put('/api/contactberichten/:id/gelezen', verifyToken, async (req, res) => {
+  try {
+    const [result] = await db.promise().query(
+      `UPDATE contactbericht SET gelezen = TRUE WHERE bericht_id = ? AND ontvanger_id = ?`,
+      [req.params.id, req.gebruiker.id],
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Bericht niet gevonden of geen toegang.' });
+    }
+    res.json({ message: 'Bericht gemarkeerd als gelezen.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // DOCENT STUDENTEN
 // ============================================================
 
