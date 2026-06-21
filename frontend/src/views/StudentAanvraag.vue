@@ -11,12 +11,6 @@ const alIngediend = computed(() =>
   stageStore.status === 'in_behandeling' || stageStore.status === 'goedgekeurd'
 )
 
-const stageBezig = computed(() =>
-  stageStore.status === 'goedgekeurd' &&
-  !!stageStore.aanvraag?.startdatum &&
-  new Date() >= new Date(stageStore.aanvraag.startdatum)
-)
-
 const opgeslagenGebruiker = JSON.parse(localStorage.getItem('gebruiker') || '{}')
 
 const student = ref({
@@ -28,102 +22,83 @@ const student = ref({
   telefoon: opgeslagenGebruiker?.telefoonnummer || '',
 })
 
-// Formuliervelden bedrijf
-const bedrijf = ref('')
-const sector = ref('')
-// Adres opgesplitst in aparte velden
-const straatnaam = ref('')
-const huisnummer = ref('')
-const postcode = ref('')
-const gemeente = ref('')
-const provincie = ref('')
-const titel = ref('')
-const opdracht = ref('')
+// Bedrijfselectie
+const beschikbareBedrijven = ref([])
+const gekozenBedrijfId = ref('')
+const toonVoorstelForm = ref(false)
 
-// Belgische provincies voor de dropdown
-const provincies = [
-  'Antwerpen', 'Limburg', 'Oost-Vlaanderen', 'Vlaams-Brabant', 'West-Vlaanderen',
-  'Henegouwen', 'Luik', 'Luxemburg', 'Namen', 'Waals-Brabant',
-]
+// Voorstel-velden (nieuw bedrijf)
+const voorstelNaam = ref('')
+const voorstelEmail = ref('')
+const voorstelTel = ref('')
+
+// Stage-velden
+const stagetitel = ref('')
+const opdracht = ref('')
 const datumVan = ref('')
 const datumTot = ref('')
 
-// Formuliervelden mentor (naam opgesplitst in voornaam + achternaam)
-const mentorVoornaam = ref('')
-const mentorAchternaam = ref('')
-const mentorFunctie = ref('')
-const mentorEmail = ref('')
-const mentorTel = ref('')
-
-// Foutmeldingen per veld
 const fouten = reactive({})
-
-// Modal-zichtbaarheid
 const toonBevestiging = ref(false)
+const bezig = ref(false)
+const serverFout = ref('')
+
+async function laadBedrijven() {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch('http://localhost:3000/api/bedrijven', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) beschikbareBedrijven.value = await res.json()
+  } catch {
+    // stil falen — dropdown blijft leeg
+  }
+}
 
 onMounted(async () => {
   await stageStore.laad()
+  await laadBedrijven()
+
   const vulIn = ['in_behandeling', 'goedgekeurd', 'aanpassing_gevraagd']
   if (vulIn.includes(stageStore.status) && stageStore.aanvraag) {
     const a = stageStore.aanvraag
-    bedrijf.value = a.bedrijf || ''
-    sector.value = a.bedrijf_sector || ''
-    straatnaam.value = a.bedrijf_straatnaam || ''
-    huisnummer.value = a.bedrijf_huisnummer || ''
-    postcode.value = a.bedrijf_postcode || ''
-    gemeente.value = a.bedrijf_gemeente || ''
-    provincie.value = a.bedrijf_provincie || ''
-    titel.value = a.stagetitel || ''
+    gekozenBedrijfId.value = a.bedrijf_id ? String(a.bedrijf_id) : ''
+    stagetitel.value = a.stagetitel || ''
     opdracht.value = a.beschrijving || ''
     datumVan.value = (a.startdatum || '').slice(0, 10)
     datumTot.value = (a.einddatum || '').slice(0, 10)
-    mentorVoornaam.value = a.mentor_voornaam || ''
-    mentorAchternaam.value = a.mentor_naam || ''
-    mentorFunctie.value = a.mentor_functie || ''
-    mentorEmail.value = a.mentor_email || ''
-    mentorTel.value = a.mentor_telefoon || ''
   }
 })
+
+function selecteerBedrijf(val) {
+  if (val === 'voorstel') {
+    toonVoorstelForm.value = true
+    gekozenBedrijfId.value = ''
+  } else {
+    toonVoorstelForm.value = false
+    gekozenBedrijfId.value = val
+  }
+}
 
 function valideer() {
   Object.keys(fouten).forEach((k) => delete fouten[k])
 
-  if (!bedrijf.value.trim()) fouten.bedrijf = 'Bedrijfsnaam is verplicht'
-  if (!sector.value.trim()) fouten.sector = 'Sector is verplicht'
-
-  // Adres: straatnaam en gemeente zijn tekst, huisnummer en postcode moeten getallen zijn
-  if (!straatnaam.value.trim()) fouten.straatnaam = 'Straatnaam is verplicht'
-
-  if (!huisnummer.value && huisnummer.value !== 0) {
-    fouten.huisnummer = 'Huisnummer is verplicht'
-  } else if (isNaN(huisnummer.value)) {
-    fouten.huisnummer = 'Huisnummer moet een getal zijn'
-  } else if (Number(huisnummer.value) <= 0) {
-    fouten.huisnummer = 'Huisnummer moet groter zijn dan 0'
+  if (!gekozenBedrijfId.value && !toonVoorstelForm.value) {
+    fouten.bedrijf = 'Kies een bedrijf of stel er één voor.'
   }
 
-  if (!postcode.value && postcode.value !== 0) {
-    fouten.postcode = 'Postcode is verplicht'
-  } else if (isNaN(postcode.value)) {
-    fouten.postcode = 'Postcode moet een getal zijn'
-  } else if (String(postcode.value).length !== 4) {
-    fouten.postcode = 'Een Belgische postcode bestaat uit 4 cijfers'
+  if (toonVoorstelForm.value) {
+    if (!voorstelNaam.value.trim()) fouten.voorstelNaam = 'Bedrijfsnaam is verplicht'
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!voorstelEmail.value.trim()) fouten.voorstelEmail = 'Contact-e-mail is verplicht'
+    else if (!emailRegex.test(voorstelEmail.value)) fouten.voorstelEmail = 'Ongeldig e-mailadres'
   }
 
-  if (!gemeente.value.trim()) fouten.gemeente = 'Gemeente is verplicht'
-  if (!provincie.value) fouten.provincie = 'Provincie is verplicht'
+  if (!stagetitel.value.trim()) fouten.stagetitel = 'Stagetitel is verplicht'
+  else if (stagetitel.value.trim().length > 200) fouten.stagetitel = 'Stagetitel mag maximaal 200 tekens bevatten'
 
-  if (!titel.value.trim()) {
-    fouten.titel = 'Stagetitel is verplicht'
-  } else if (titel.value.trim().length > 200) {
-    fouten.titel = 'Stagetitel mag maximaal 200 tekens bevatten'
-  }
-
-  if (!opdracht.value.trim()) {
-    fouten.opdracht = 'Omschrijving is verplicht'
-  } else if (opdracht.value.trim().length < 20) {
-    fouten.opdracht = 'Geef een uitgebreidere omschrijving (minstens 20 tekens)'
-  }
+  if (!opdracht.value.trim()) fouten.opdracht = 'Omschrijving is verplicht'
+  else if (opdracht.value.trim().length < 20) fouten.opdracht = 'Geef een uitgebreidere omschrijving (minstens 20 tekens)'
 
   if (!datumVan.value) fouten.datumVan = 'Startdatum is verplicht'
   if (!datumTot.value) fouten.datumTot = 'Einddatum is verplicht'
@@ -131,68 +106,63 @@ function valideer() {
     fouten.datumTot = 'Einddatum moet na de startdatum liggen'
   }
 
-  if (!mentorVoornaam.value.trim()) fouten.mentorVoornaam = 'Voornaam mentor is verplicht'
-  if (!mentorAchternaam.value.trim()) fouten.mentorAchternaam = 'Achternaam mentor is verplicht'
-  if (!mentorFunctie.value.trim()) fouten.mentorFunctie = 'Functie is verplicht'
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!mentorEmail.value.trim()) {
-    fouten.mentorEmail = 'E-mail mentor is verplicht'
-  } else if (!emailRegex.test(mentorEmail.value)) {
-    fouten.mentorEmail = 'Ongeldig e-mailadres'
-  }
-
-  // Telefoonnummer: verplicht + moet op een geldig nummer lijken.
-  // Toegestaan: cijfers, spaties, +, -, haakjes. Minstens 8 cijfers.
-  const telRegex = /^[0-9\s+\-()]+$/
-  const aantalCijfers = (mentorTel.value.match(/[0-9]/g) || []).length
-  if (!mentorTel.value.trim()) {
-    fouten.mentorTel = 'Telefoonnummer mentor is verplicht'
-  } else if (!telRegex.test(mentorTel.value)) {
-    fouten.mentorTel = 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten'
-  } else if (aantalCijfers < 8) {
-    fouten.mentorTel = 'Telefoonnummer lijkt te kort'
-  }
-
   return Object.keys(fouten).length === 0
-}
-
-function bouwAanvraag() {
-  return {
-    student: student.value,
-    bedrijf: {
-      bedrijf: bedrijf.value,
-      sector: sector.value,
-      straatnaam: straatnaam.value,
-      huisnummer: huisnummer.value,
-      postcode: postcode.value,
-      gemeente: gemeente.value,
-      provincie: provincie.value,
-      titel: titel.value,
-      opdracht: opdracht.value,
-      datumVan: datumVan.value,
-      datumTot: datumTot.value,
-    },
-    mentor: {
-      voornaam: mentorVoornaam.value,
-      achternaam: mentorAchternaam.value,
-      functie: mentorFunctie.value,
-      email: mentorEmail.value,
-      tel: mentorTel.value,
-    },
-  }
 }
 
 async function handleIndienen() {
   if (alIngediend.value) return
   if (!valideer()) return
-  const ok = stageStore.status === 'aanpassing_gevraagd'
-    ? await stageStore.pasAan(bouwAanvraag())
-    : await stageStore.dienIn(bouwAanvraag())
-  if (ok) {
+
+  bezig.value = true
+  serverFout.value = ''
+  const token = localStorage.getItem('token')
+
+  try {
+    let bedrijfIdOmTeGebruiken = gekozenBedrijfId.value
+
+    // Stap 1: nieuw bedrijf voorstellen als de student er één opgaf
+    if (toonVoorstelForm.value) {
+      const voorstelRes = await fetch('http://localhost:3000/api/bedrijven/voorstel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          naam: voorstelNaam.value.trim(),
+          contact_email: voorstelEmail.value.trim(),
+          contact_telefoonnummer: voorstelTel.value.trim() || null,
+        }),
+      })
+      const voorstelData = await voorstelRes.json()
+      if (!voorstelRes.ok) {
+        serverFout.value = voorstelData.error || 'Bedrijfsvoorstel mislukt.'
+        return
+      }
+      bedrijfIdOmTeGebruiken = voorstelData.bedrijf_id
+    }
+
+    // Stap 2: stage-aanvraag indienen
+    const aanvraagRes = await fetch('http://localhost:3000/api/aanvraag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        bedrijf_id: bedrijfIdOmTeGebruiken,
+        stagetitel: stagetitel.value.trim(),
+        beschrijving: opdracht.value.trim(),
+        startdatum: datumVan.value,
+        einddatum: datumTot.value,
+      }),
+    })
+    const aanvraagData = await aanvraagRes.json()
+    if (!aanvraagRes.ok) {
+      serverFout.value = aanvraagData.error || 'Indienen mislukt.'
+      return
+    }
+
+    await stageStore.laad()
     toonBevestiging.value = true
-  } else {
-    alert(stageStore.fout || 'Indienen mislukt')
+  } catch {
+    serverFout.value = 'Er ging iets mis. Probeer opnieuw.'
+  } finally {
+    bezig.value = false
   }
 }
 
@@ -209,182 +179,144 @@ function naarDashboard() {
       <h1 class="page-title">Stage-aanvraag indienen</h1>
 
       <form @submit.prevent="handleIndienen">
-        <!-- Na indienen alles vergrendelen: fieldset[disabled] blokkeert ook number-spinners en datumpicker -->
         <fieldset class="form-lock" :disabled="alIngediend">
 
-        <!-- Gegevens student -->
-        <section class="form-section">
-          <h2 class="form-section-title">Gegevens student</h2>
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="naam">Naam</label>
-              <input type="text" id="naam" :value="student.naam" readonly>
+          <!-- Gegevens student -->
+          <section class="form-section">
+            <h2 class="form-section-title">Gegevens student</h2>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Naam</label>
+                <input type="text" :value="student.naam" readonly>
+              </div>
+              <div class="form-group">
+                <label>Voornaam</label>
+                <input type="text" :value="student.voornaam" readonly>
+              </div>
+              <div class="form-group">
+                <label>Studentnummer</label>
+                <input type="text" :value="student.studentnr" readonly>
+              </div>
+              <div class="form-group">
+                <label>Opleiding</label>
+                <input type="text" :value="student.opleiding" readonly>
+              </div>
+              <div class="form-group">
+                <label>E-mail</label>
+                <input type="email" :value="student.email" readonly>
+              </div>
+              <div class="form-group">
+                <label>Telefoon</label>
+                <input type="tel" :value="student.telefoon" readonly>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="voornaam">Voornaam</label>
-              <input type="text" id="voornaam" :value="student.voornaam" readonly>
-            </div>
-            <div class="form-group">
-              <label for="studentnr">Studentnummer</label>
-              <input type="text" id="studentnr" :value="student.studentnr" readonly>
-            </div>
-            <div class="form-group">
-              <label for="opleiding">Opleiding</label>
-              <input type="text" id="opleiding" :value="student.opleiding" readonly>
-            </div>
-            <div class="form-group">
-              <label for="email">E-mail</label>
-              <input type="email" id="email" :value="student.email" readonly>
-            </div>
-            <div class="form-group">
-              <label for="telefoon">Telefoon</label>
-              <input type="tel" id="telefoon" :value="student.telefoon" readonly>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        <!-- Gegevens bedrijf -->
-        <section class="form-section mt-24">
-          <h2 class="form-section-title">Gegevens bedrijf</h2>
-          <div class="form-grid-2">
+          <!-- Bedrijfselectie -->
+          <section class="form-section mt-24">
+            <h2 class="form-section-title">Stagebedrijf</h2>
             <div class="form-group">
-              <label for="bedrijf">Bedrijfsnaam</label>
-              <input type="text" id="bedrijf" v-model="bedrijf" placeholder="Naam van het bedrijf">
+              <label for="bedrijf-select">Selecteer een bedrijf</label>
+              <select id="bedrijf-select" @change="selecteerBedrijf($event.target.value)" :value="toonVoorstelForm ? 'voorstel' : gekozenBedrijfId">
+                <option value="" disabled>— Kies een bedrijf —</option>
+                <option v-for="b in beschikbareBedrijven" :key="b.bedrijf_id" :value="String(b.bedrijf_id)">
+                  {{ b.naam }}
+                </option>
+                <option value="voorstel">Mijn bedrijf staat er niet → voorstel toevoegen</option>
+              </select>
               <span v-if="fouten.bedrijf" class="form-error">{{ fouten.bedrijf }}</span>
             </div>
-            <div class="form-group">
-              <label for="sector">Sector</label>
-              <input type="text" id="sector" v-model="sector" placeholder="bv. ICT &amp; Consultancy">
-              <span v-if="fouten.sector" class="form-error">{{ fouten.sector }}</span>
-            </div>
-            <div class="form-group">
-              <label for="straatnaam">Straatnaam</label>
-              <input type="text" id="straatnaam" v-model="straatnaam" placeholder="bv. Nijverheidskaai">
-              <span v-if="fouten.straatnaam" class="form-error">{{ fouten.straatnaam }}</span>
-            </div>
-            <div class="form-group">
-              <label for="huisnummer">Huisnummer</label>
-              <input type="number" id="huisnummer" v-model="huisnummer" min="1" placeholder="bv. 170">
-              <span v-if="fouten.huisnummer" class="form-error">{{ fouten.huisnummer }}</span>
-            </div>
-            <div class="form-group">
-              <label for="postcode">Postcode</label>
-              <input type="number" id="postcode" v-model="postcode" placeholder="bv. 1070">
-              <span v-if="fouten.postcode" class="form-error">{{ fouten.postcode }}</span>
-            </div>
-            <div class="form-group">
-              <label for="gemeente">Gemeente</label>
-              <input type="text" id="gemeente" v-model="gemeente" placeholder="bv. Anderlecht">
-              <span v-if="fouten.gemeente" class="form-error">{{ fouten.gemeente }}</span>
-            </div>
-            <div class="form-group">
-              <label for="provincie">Provincie</label>
-              <select id="provincie" v-model="provincie">
-                <option value="" disabled>Kies een provincie</option>
-                <option v-for="p in provincies" :key="p" :value="p">{{ p }}</option>
-              </select>
-              <span v-if="fouten.provincie" class="form-error">{{ fouten.provincie }}</span>
-            </div>
-            <div class="form-group form-group-full">
-              <label for="titel">Stagetitel</label>
-              <input id="titel" type="text" v-model="titel" maxlength="200" placeholder="Korte titel voor de stage (bv. Webapplicatie voor HR)">
-              <span v-if="fouten.titel" class="form-error">{{ fouten.titel }}</span>
-            </div>
-            <div class="form-group form-group-full">
-              <label for="opdracht">Omschrijving opdracht</label>
-              <textarea id="opdracht" v-model="opdracht" rows="5" placeholder="Beschrijf de stageopdracht (minstens 20 tekens)"></textarea>
-              <span v-if="fouten.opdracht" class="form-error">{{ fouten.opdracht }}</span>
-            </div>
-            <div class="form-group">
-              <label for="datum-van">Stageperiode van</label>
-              <input type="date" id="datum-van" v-model="datumVan">
-              <span v-if="fouten.datumVan" class="form-error">{{ fouten.datumVan }}</span>
-            </div>
-            <div class="form-group">
-              <label for="datum-tot">Stageperiode tot</label>
-              <input type="date" id="datum-tot" v-model="datumTot">
-              <span v-if="fouten.datumTot" class="form-error">{{ fouten.datumTot }}</span>
-            </div>
-          </div>
-        </section>
 
-        <!-- Gegevens stagementor -->
-        <section class="form-section mt-24">
-          <h2 class="form-section-title">Gegevens stagementor</h2>
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="mentor-voornaam">Voornaam mentor</label>
-              <input type="text" id="mentor-voornaam" v-model="mentorVoornaam" placeholder="Voornaam mentor">
-              <span v-if="fouten.mentorVoornaam" class="form-error">{{ fouten.mentorVoornaam }}</span>
+            <!-- Nieuw bedrijf voorstellen -->
+            <div v-if="toonVoorstelForm" class="card mt-16" style="border:1px solid var(--border);">
+              <p class="text-secondary text-sm mb-12">Vul de gegevens in van het bedrijf waar je stage wil lopen. De admin keurt het bedrijf goed voordat je aanvraag definitief goedgekeurd kan worden.</p>
+              <div class="form-grid-2">
+                <div class="form-group form-group-full">
+                  <label>Bedrijfsnaam <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelNaam" placeholder="Naam van het bedrijf">
+                  <span v-if="fouten.voorstelNaam" class="form-error">{{ fouten.voorstelNaam }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Contact-e-mail <span style="color:#dc2626">*</span></label>
+                  <input type="email" v-model="voorstelEmail" placeholder="contact@bedrijf.be">
+                  <span v-if="fouten.voorstelEmail" class="form-error">{{ fouten.voorstelEmail }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Telefoon bedrijf</label>
+                  <input type="tel" v-model="voorstelTel" placeholder="+32 ...">
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="mentor-achternaam">Achternaam mentor</label>
-              <input type="text" id="mentor-achternaam" v-model="mentorAchternaam" placeholder="Achternaam mentor">
-              <span v-if="fouten.mentorAchternaam" class="form-error">{{ fouten.mentorAchternaam }}</span>
+          </section>
+
+          <!-- Stage-details -->
+          <section class="form-section mt-24">
+            <h2 class="form-section-title">Stagegegevens</h2>
+            <div class="form-grid-2">
+              <div class="form-group form-group-full">
+                <label for="stagetitel">Stagetitel</label>
+                <input id="stagetitel" type="text" v-model="stagetitel" maxlength="200" placeholder="Korte titel voor de stage (bv. Webapplicatie voor HR)">
+                <span v-if="fouten.stagetitel" class="form-error">{{ fouten.stagetitel }}</span>
+              </div>
+              <div class="form-group form-group-full">
+                <label for="opdracht">Omschrijving opdracht</label>
+                <textarea id="opdracht" v-model="opdracht" rows="5" placeholder="Beschrijf de stageopdracht (minstens 20 tekens)"></textarea>
+                <span v-if="fouten.opdracht" class="form-error">{{ fouten.opdracht }}</span>
+              </div>
+              <div class="form-group">
+                <label for="datum-van">Stageperiode van</label>
+                <input type="date" id="datum-van" v-model="datumVan">
+                <span v-if="fouten.datumVan" class="form-error">{{ fouten.datumVan }}</span>
+              </div>
+              <div class="form-group">
+                <label for="datum-tot">Stageperiode tot</label>
+                <input type="date" id="datum-tot" v-model="datumTot">
+                <span v-if="fouten.datumTot" class="form-error">{{ fouten.datumTot }}</span>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="mentor-functie">Functie</label>
-              <input type="text" id="mentor-functie" v-model="mentorFunctie" placeholder="bv. Senior Developer">
-              <span v-if="fouten.mentorFunctie" class="form-error">{{ fouten.mentorFunctie }}</span>
-            </div>
-            <div class="form-group">
-              <label for="mentor-email">E-mail mentor</label>
-              <input type="email" id="mentor-email" v-model="mentorEmail" placeholder="mentor@bedrijf.be">
-              <span v-if="fouten.mentorEmail" class="form-error">{{ fouten.mentorEmail }}</span>
-            </div>
-            <div class="form-group">
-              <label for="mentor-tel">Telefoon mentor</label>
-              <input type="tel" id="mentor-tel" v-model="mentorTel" placeholder="+32 ...">
-              <span v-if="fouten.mentorTel" class="form-error">{{ fouten.mentorTel }}</span>
-            </div>
-          </div>
-        </section>
+          </section>
 
         </fieldset>
 
-        <!-- Indienen-knop alleen tonen als er nog niet is ingediend -->
-        <div v-if="!alIngediend" class="mt-24">
-          <button type="submit" class="btn btn-primary">
-            {{ stageStore.status === 'aanpassing_gevraagd' ? 'Opnieuw indienen' : 'Indienen' }}
-          </button>
+        <div v-if="serverFout" class="card mt-16" style="border:1px solid #fca5a5;background:#fef2f2;">
+          <p style="color:#dc2626;">{{ serverFout }}</p>
         </div>
 
+        <div v-if="!alIngediend" class="mt-24">
+          <button type="submit" class="btn btn-primary" :disabled="bezig">
+            {{ bezig ? 'Bezig...' : (stageStore.status === 'aanpassing_gevraagd' ? 'Opnieuw indienen' : 'Indienen') }}
+          </button>
+        </div>
       </form>
     </main>
 
-    <!-- Bevestigingsscherm (modal overlay) -->
+    <!-- Bevestigingsmodal -->
     <div v-if="toonBevestiging" class="modal-page" style="position:fixed;inset:0;z-index:200;">
       <div class="modal-card">
         <div class="modal-icon">✓</div>
         <h2 class="modal-title">Aanvraag ingediend!</h2>
         <p class="modal-sub">
-          Je stage-aanvraag voor <strong>{{ bedrijf || 'het bedrijf' }}</strong> is succesvol ingediend.
-          Je begeleider krijgt een melding en neemt de aanvraag in behandeling.
+          Je stage-aanvraag is succesvol ingediend.
+          De stagecommissie neemt de aanvraag in behandeling.
         </p>
         <div class="modal-actions">
           <button class="btn btn-primary" @click="naarDashboard">Naar dashboard</button>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
 <style scoped>
-/* Laat het omschrijvingsveld over de volledige breedte van het raster lopen */
 .form-group-full {
   grid-column: 1 / -1;
 }
-
-/* fieldset enkel als vergrendel-wrapper, geen eigen rand/opvulling */
 .form-lock {
   border: 0;
   margin: 0;
   padding: 0;
   min-width: 0;
 }
-
-/* Vergrendeld = leesbaar grijs (browser-dimming overschrijven) i.p.v. vervaagd */
 .form-lock:disabled input,
 .form-lock:disabled select,
 .form-lock:disabled textarea {
