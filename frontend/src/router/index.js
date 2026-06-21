@@ -80,7 +80,7 @@ const router = createRouter({
     {
       path: '/docent/aanvragen',
       name: 'docent-aanvragen-overzicht',
-      component: () => import('../views/DocentAanvragen.vue'),
+      component: () => import('../views/DocentInCommissieAanvragen.vue'),
     },
     {
       path: '/docent/evaluaties/:stageId',
@@ -190,11 +190,6 @@ const router = createRouter({
       name: 'admin-aanvragen',
       component: () => import('../views/CommissieDashboard.vue'),
       meta: { requiresAdmin: true },
-    },
-    {
-      path: '/commissie',
-      name: 'commissie-dashboard',
-      component: () => import('../views/CommissieDashboard.vue'),
     },
     {
       path: '/wachtwoord-vergeten',
