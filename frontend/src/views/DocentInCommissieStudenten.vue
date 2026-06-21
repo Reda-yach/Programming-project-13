@@ -41,7 +41,7 @@ async function tekenContract(stageId) {
     const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rol: 'docent', handtekening }),
+      body: JSON.stringify({ handtekening }),
     })
     const data = await res.json()
     berichtContract.value[stageId] = data.message || data.error

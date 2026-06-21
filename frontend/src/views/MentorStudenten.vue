@@ -99,7 +99,7 @@ async function tekenContract() {
     const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rol: 'mentor', handtekening }),
+      body: JSON.stringify({ handtekening }),
     })
     const data = await res.json()
     if (!res.ok) {

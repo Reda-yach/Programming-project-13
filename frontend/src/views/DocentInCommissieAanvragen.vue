@@ -163,7 +163,7 @@ async function bevestigGoedkeuring() {
     const tekenRes = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rol: 'docent', handtekening }),
+      body: JSON.stringify({ handtekening }),
     })
     if (!tekenRes.ok) {
       foutBeslissing.value = (await tekenRes.json()).error ?? 'Goedgekeurd, maar ondertekenen mislukte.'

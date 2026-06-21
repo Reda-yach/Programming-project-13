@@ -179,7 +179,7 @@ async function bevestigGoedkeuring() {
     const tekenRes = await fetch(`${API}/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ rol: 'docent', handtekening }),
+      body: JSON.stringify({ handtekening }),
     })
     if (!tekenRes.ok) {
       const tekenData = await tekenRes.json()
