@@ -15,7 +15,7 @@ function formatDatum(d) {
 const partijen = [
   { rol: 'docent', label: 'Stagecommissie' },
   { rol: 'student', label: 'Student' },
-  { rol: 'mentor', label: 'Stagementor' },
+  { rol: 'bedrijf', label: 'Bedrijf' },
 ]
 </script>
 
@@ -47,11 +47,9 @@ const partijen = [
         </p>
       </div>
       <div>
-        <p class="text-secondary text-xs">Stagementor</p>
-        <p class="font-semibold">{{ contract.mentor_voornaam }} {{ contract.mentor_naam }}</p>
-        <p class="text-secondary text-xs mt-4">
-          <span v-if="contract.mentor_functie">{{ contract.mentor_functie }} · </span>{{ contract.mentor_email }}
-        </p>
+        <p class="text-secondary text-xs">Contactpersoon bedrijf</p>
+        <p class="font-semibold">{{ contract.bedrijf }}</p>
+        <p class="text-secondary text-xs mt-4">{{ contract.contact_email || '—' }}</p>
       </div>
     </section>
 
@@ -86,7 +84,7 @@ const partijen = [
       </div>
 
       <div
-        v-if="contract.getekend_student && contract.getekend_mentor && contract.getekend_docent"
+        v-if="contract.getekend_student && contract.getekend_bedrijf && contract.getekend_docent"
         class="card mt-16"
         style="background:#f0fdf4;border:1px solid #bbf7d0;"
       >
