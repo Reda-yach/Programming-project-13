@@ -51,6 +51,10 @@ const mentorTotaal = computed(() =>
 )
 const maxScore = computed(() => competenties.value.length * 5)
 
+// De docent mag de finale score pas geven nadat de mentor zijn
+// eindevaluatie heeft ingediend.
+const mentorEindIngediend = computed(() => !!evaluatieMeta.value.mentor?.ingediend)
+
 async function laad() {
   laden.value = true
   fout.value = ''
@@ -200,7 +204,7 @@ onMounted(laad)
 
           <!-- Docent: bewerkbaar zolang er nog géén finale score is. Eenmaal
                gegeven is de score vergrendeld en verdwijnt het formulier. -->
-          <template v-if="isDocent && !eindbeoordeling">
+          <template v-if="isDocent && !eindbeoordeling && mentorEindIngediend">
             <p class="text-secondary text-sm mt-4 mb-12">
               Geef op basis van de zelfevaluatie en de mentorbeoordeling een finale score (op 20).
               Let op: dit kan maar één keer.
@@ -228,6 +232,13 @@ onMounted(laad)
               </button>
               <span v-if="eindBericht" class="text-sm" style="color:#dc2626;">{{ eindBericht }}</span>
             </div>
+          </template>
+
+          <!-- Docent, maar de mentor heeft zijn eindevaluatie nog niet ingediend → geblokkeerd -->
+          <template v-else-if="isDocent && !eindbeoordeling && !mentorEindIngediend">
+            <p class="text-secondary text-sm">
+              🔒 De mentor moet eerst zijn eindevaluatie indienen. Daarna kun je de finale score geven.
+            </p>
           </template>
 
           <!-- Read-only: zodra de score gegeven is (docent én student zien dit) -->

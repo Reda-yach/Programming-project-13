@@ -1596,38 +1596,55 @@ app.put('/api/stages/:id/eindbeoordeling', verifyToken, requireRol('docent', 'ad
     return res.status(400).json({ error: 'Score moet tussen 0 en 20 liggen.' });
   }
 
-  // De finale beoordeling kan maar één keer gegeven worden: bestaat ze al,
-  // dan is ze vergrendeld en mag ze niet meer aangepast worden.
-  db.query('SELECT eindbeoordeling_id FROM eindbeoordeling WHERE stage_id = ?', [id], (errC, rowsC) => {
-    if (errC) return res.status(500).json({ error: errC.message });
-    if (rowsC.length > 0) {
-      return res.status(409).json({ error: 'De finale beoordeling is al gegeven en kan niet meer aangepast worden.' });
-    }
+  // De docent mag de finale score pas geven nadat de mentor zijn
+  // eindevaluatie heeft ingediend.
+  db.query(
+    `SELECT e.evaluatie_id
+       FROM student_evaluatie se
+       JOIN evaluatie e ON se.evaluatie_id = e.evaluatie_id
+      WHERE se.stage_id = ? AND e.type = 'mentor' AND e.fase = 'finaal' AND e.ingediend = 1
+      LIMIT 1`,
+    [id],
+    (errM, mentorRows) => {
+      if (errM) return res.status(500).json({ error: errM.message });
+      if (mentorRows.length === 0) {
+        return res.status(400).json({ error: 'De mentor moet eerst zijn eindevaluatie indienen voor je een finale beoordeling kan geven.' });
+      }
 
-    db.query(
-      `INSERT INTO eindbeoordeling (stage_id, beoordelaar_id, score, motivatie) VALUES (?, ?, ?, ?)`,
-      [id, beoordelaar_id, scoreNum, motivatie || null],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+      // De finale beoordeling kan maar één keer gegeven worden: bestaat ze al,
+      // dan is ze vergrendeld en mag ze niet meer aangepast worden.
+      db.query('SELECT eindbeoordeling_id FROM eindbeoordeling WHERE stage_id = ?', [id], (errC, rowsC) => {
+        if (errC) return res.status(500).json({ error: errC.message });
+        if (rowsC.length > 0) {
+          return res.status(409).json({ error: 'De finale beoordeling is al gegeven en kan niet meer aangepast worden.' });
+        }
 
-        // Student verwittigen dat de finale beoordeling klaarstaat.
         db.query(
-          `SELECT st.gebruiker_id FROM stage s JOIN student st ON s.student_id = st.student_id WHERE s.stage_id = ?`,
-          [id],
-          (err2, rows) => {
-            if (!err2 && rows.length) {
-              db.query(
-                `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'goed')`,
-                [rows[0].gebruiker_id, 'Je hebt een finale beoordeling ontvangen. Bekijk je eindoverzicht.'],
-                () => {},
-              );
-            }
-            res.json({ message: 'Eindbeoordeling opgeslagen!' });
+          `INSERT INTO eindbeoordeling (stage_id, beoordelaar_id, score, motivatie) VALUES (?, ?, ?, ?)`,
+          [id, beoordelaar_id, scoreNum, motivatie || null],
+          (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Student verwittigen dat de finale beoordeling klaarstaat.
+            db.query(
+              `SELECT st.gebruiker_id FROM stage s JOIN student st ON s.student_id = st.student_id WHERE s.stage_id = ?`,
+              [id],
+              (err2, rows) => {
+                if (!err2 && rows.length) {
+                  db.query(
+                    `INSERT INTO notificatie (gebruiker_id, bericht, type) VALUES (?, ?, 'goed')`,
+                    [rows[0].gebruiker_id, 'Je hebt een finale beoordeling ontvangen. Bekijk je eindoverzicht.'],
+                    () => {},
+                  );
+                }
+                res.json({ message: 'Eindbeoordeling opgeslagen!' });
+              },
+            );
           },
         );
-      },
-    );
-  });
+      });
+    },
+  );
 });
 
 // Alle evaluaties voor een stage ophalen (overzicht per fase/type)
