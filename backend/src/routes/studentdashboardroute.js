@@ -80,8 +80,8 @@ router.get('/students/:id/dashboard', async (req, res) => {
          g_mentor.naam     AS mentor_naam
        FROM stage st
        JOIN bedrijf b ON st.bedrijf_id = b.bedrijf_id
-       JOIN mentor m ON st.mentor_id = m.mentor_id
-       JOIN gebruiker g_mentor ON m.gebruiker_id = g_mentor.gebruiker_id
+       LEFT JOIN mentor m ON st.mentor_id = m.mentor_id
+       LEFT JOIN gebruiker g_mentor ON m.gebruiker_id = g_mentor.gebruiker_id
        WHERE st.student_id = ?
        ORDER BY st.ingediend_op DESC
        LIMIT 1`,

@@ -77,6 +77,7 @@ app.post('/api/login', (req, res) => {
           id: gebruiker.gebruiker_id,
           email: gebruiker.email,
           rol: gebruiker.rol,
+          commissielid: Boolean(gebruiker.commissielid),
           sid
         },
         process.env.JWT_SECRET,
@@ -93,7 +94,8 @@ app.post('/api/login', (req, res) => {
           naam: gebruiker.naam,
           email: gebruiker.email,
           telefoonnummer: gebruiker.telefoonnummer,
-          rol: gebruiker.rol
+          rol: gebruiker.rol,
+          commissielid: Boolean(gebruiker.commissielid)
         }
       };
 
@@ -298,15 +300,122 @@ app.post('/api/bedrijven', verifyToken, (req, res) => {
   );
 });
 
-// Alle bedrijven ophalen — voor dropdown bij mentor-aanmaak
-app.get('/api/bedrijven', verifyToken, requireRol('admin'), (req, res) => {
+// Alle goedgekeurde bedrijven ophalen (student: voor dropdown aanvraag; admin: alles)
+app.get('/api/bedrijven', verifyToken, (req, res) => {
+  const isAdmin = req.gebruiker.rol === 'admin';
+  const where = isAdmin ? '' : "WHERE status = 'goedgekeurd'";
   db.query(
-    'SELECT bedrijf_id, naam FROM bedrijf ORDER BY naam ASC',
+    `SELECT bedrijf_id, naam, status FROM bedrijf ${where} ORDER BY naam ASC`,
     (err, results) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(results);
     }
   );
+});
+
+// Student stelt een nieuw bedrijf voor (status='voorgesteld')
+app.post('/api/bedrijven/voorstel', verifyToken, requireRol('student'), async (req, res) => {
+  const { naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer } = req.body;
+
+  if (!naam || !naam.trim()) {
+    return res.status(400).json({ error: 'Bedrijfsnaam is verplicht.' });
+  }
+  if (!contact_email || !contact_email.trim()) {
+    return res.status(400).json({ error: 'Contact-e-mail is verplicht.' });
+  }
+
+  try {
+    // Controleer of de student al een openstaand voorstel of actieve aanvraag heeft
+    const [studentRows] = await db.promise().query(
+      'SELECT student_id FROM student WHERE gebruiker_id = ?',
+      [req.gebruiker.id]
+    );
+    if (!studentRows.length) return res.status(404).json({ error: 'Student niet gevonden.' });
+
+    const student_id = studentRows[0].student_id;
+    const [openRows] = await db.promise().query(
+      `SELECT stage_id FROM stage
+       WHERE student_id = ? AND status IN ('ingediend','in_behandeling','aanpassing_gevraagd')
+       LIMIT 1`,
+      [student_id]
+    );
+    if (openRows.length) {
+      return res.status(409).json({ error: 'Je hebt al een openstaande aanvraag. Dien eerst je aanvraag in voordat je een nieuw bedrijf voorstelt.' });
+    }
+
+    const [result] = await db.promise().query(
+      `INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'voorgesteld')`,
+      [naam.trim(), straatnaam || null, huisnummer || null, postcode || null, gemeente || null, provincie || null, sector || null, contact_email.trim(), contact_telefoonnummer || null]
+    );
+    res.status(201).json({ message: 'Bedrijf voorgesteld!', bedrijf_id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: overzicht van voorgestelde bedrijven
+app.get('/api/bedrijven/voorstellen', verifyToken, requireRol('admin'), (req, res) => {
+  db.query(
+    `SELECT bedrijf_id, naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer, status
+     FROM bedrijf WHERE status = 'voorgesteld' ORDER BY bedrijf_id ASC`,
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+});
+
+// Admin: bedrijf goedkeuren → maakt een bedrijf-account aan en koppelt het
+app.put('/api/bedrijven/:id/goedkeuren', verifyToken, requireRol('admin'), async (req, res) => {
+  const { id } = req.params;
+  let conn;
+  try {
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+
+    const [bedrijfRows] = await conn.query('SELECT * FROM bedrijf WHERE bedrijf_id = ?', [id]);
+    if (!bedrijfRows.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Bedrijf niet gevonden.' });
+    }
+    const b = bedrijfRows[0];
+    if (b.status === 'goedgekeurd') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Bedrijf is al goedgekeurd.' });
+    }
+
+    // Maak een gebruikersaccount aan voor het bedrijf
+    const email = b.contact_email;
+    if (!email) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Bedrijf heeft geen contact-e-mail, kan geen account aanmaken.' });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash('bedrijf123', 10);
+    const [gebruikerResult] = await conn.query(
+      `INSERT INTO gebruiker (voornaam, naam, email, wachtwoord_hash, rol) VALUES (?, ?, ?, ?, 'bedrijf')`,
+      [b.naam, b.naam, email, hash]
+    );
+    const gebruiker_id = gebruikerResult.insertId;
+
+    await conn.query(
+      `UPDATE bedrijf SET status = 'goedgekeurd', gebruiker_id = ? WHERE bedrijf_id = ?`,
+      [gebruiker_id, id]
+    );
+
+    await conn.commit();
+    res.json({ message: 'Bedrijf goedgekeurd en account aangemaakt!', gebruiker_id, standaardwachtwoord: 'bedrijf123' });
+  } catch (e) {
+    if (conn) await conn.rollback();
+    if (e.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Er bestaat al een account met dit e-mailadres.' });
+    }
+    res.status(500).json({ error: e.message });
+  } finally {
+    if (conn) conn.release();
+  }
 });
 
 // ============================================================
@@ -737,8 +846,8 @@ app.get('/api/mijn-stage', verifyToken, (req, res) => {
           ) AS eindoverzicht_vrij
         FROM stage s
         JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-        JOIN mentor m ON s.mentor_id = m.mentor_id
-        JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+        LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+        LEFT JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
         WHERE s.student_id = ?
         ORDER BY s.ingediend_op DESC
         LIMIT 1
@@ -870,7 +979,7 @@ app.post('/api/stages/:id/beslissing', verifyToken, (req, res) => {
               // Bij goedkeuring: contract aanmaken + 2 notificaties
               if (waarde === 'goedgekeurd') {
                 db.query(
-                  `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_mentor, getekend_docent)
+                  `INSERT IGNORE INTO stagecontract (stage_id, getekend_student, getekend_bedrijf, getekend_docent)
                    VALUES (?, FALSE, FALSE, FALSE)`,
                   [id],
                   () => {
@@ -1746,18 +1855,15 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
       b.gemeente AS bedrijf_gemeente,
       b.provincie AS bedrijf_provincie,
       b.sector AS bedrijf_sector,
-      gm.voornaam AS mentor_voornaam,
-      gm.naam AS mentor_naam,
-      gm.email AS mentor_email,
-      m.functietitel AS mentor_functie,
+      b.contact_email,
       sc.getekend_student,
-      sc.getekend_mentor,
+      sc.getekend_bedrijf,
       sc.getekend_docent,
       sc.handtekening_student,
-      sc.handtekening_mentor,
+      sc.handtekening_bedrijf,
       sc.handtekening_docent,
       sc.getekend_student_op,
-      sc.getekend_mentor_op,
+      sc.getekend_bedrijf_op,
       sc.getekend_docent_op,
       sc.getekend_op
     FROM stagecontract sc
@@ -1765,8 +1871,8 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
     JOIN student st ON s.student_id = st.student_id
     JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
     JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-    JOIN mentor m ON s.mentor_id = m.mentor_id
-    JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+    LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+    LEFT JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
     WHERE sc.stage_id = ?
   `, [stage_id], (err, results) => {
     if (err) {
@@ -1781,70 +1887,85 @@ app.get('/api/contracten/:stage_id', verifyToken, (req, res) => {
   });
 });
 
-// Contract tekenen (student, mentor of docent-in-commissie).
-// Body: { rol, handtekening } waarbij handtekening een base64 PNG data-URL is.
-// Vrije volgorde: er is geen verplichte ondertekenvolgorde.
-app.put('/api/contracten/:stage_id/tekenen', verifyToken, (req, res) => {
+// Contract tekenen — rol wordt bepaald vanuit het JWT-token, NIET uit de body.
+// Partijen: student (eigen stage), bedrijf (stage.bedrijf_id → bedrijf.gebruiker_id),
+//           commissielid/admin (teken als 'docent'-kolom).
+app.put('/api/contracten/:stage_id/tekenen', verifyToken, async (req, res) => {
   const { stage_id } = req.params;
-  const { rol, handtekening } = req.body;
-
-  const toegestaneRollen = ['student', 'mentor', 'docent'];
-  if (!toegestaneRollen.includes(rol)) {
-    res.status(400).json({ error: `Ongeldige rol. Kies uit: ${toegestaneRollen.join(', ')}` });
-    return;
-  }
+  const { handtekening } = req.body;
 
   if (!handtekening || typeof handtekening !== 'string' || !handtekening.startsWith('data:image')) {
-    res.status(400).json({ error: 'Een handtekening is verplicht om te tekenen.' });
-    return;
+    return res.status(400).json({ error: 'Een handtekening is verplicht om te tekenen.' });
   }
 
-  // rol is gevalideerd tegen een vaste allowlist, dus veilig in de kolomnaam.
-  const kolomGetekend = `getekend_${rol}`;
-  const kolomHandtekening = `handtekening_${rol}`;
-  const kolomOp = `getekend_${rol}_op`;
+  const { id: gebruikerId, rol, commissielid } = req.gebruiker;
 
-  db.query(`
-    UPDATE stagecontract
-    SET ${kolomGetekend} = TRUE, ${kolomHandtekening} = ?, ${kolomOp} = NOW()
-    WHERE stage_id = ?
-  `, [handtekening, stage_id], (err, results) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    if (results.affectedRows === 0) {
-      res.status(404).json({ error: 'Contract niet gevonden' });
-      return;
+  try {
+    // Haal de stage op om autorisatie te controleren
+    const [stageRows] = await db.promise().query(
+      `SELECT s.stage_id, s.bedrijf_id, s.mentor_id, s.startdatum, s.status,
+              st.gebruiker_id AS student_gebruiker_id,
+              b.gebruiker_id AS bedrijf_gebruiker_id
+       FROM stage s
+       JOIN student st ON s.student_id = st.student_id
+       JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
+       WHERE s.stage_id = ?`,
+      [stage_id]
+    );
+    if (!stageRows.length) return res.status(404).json({ error: 'Stage niet gevonden.' });
+    const stage = stageRows[0];
+
+    // Bepaal welke kolom deze gebruiker mag tekenen
+    let kolomprefix;
+    if (rol === 'student' && gebruikerId === stage.student_gebruiker_id) {
+      kolomprefix = 'student';
+    } else if (rol === 'bedrijf' && gebruikerId === stage.bedrijf_gebruiker_id) {
+      kolomprefix = 'bedrijf';
+    } else if (rol === 'admin' || rol === 'commissie' || commissielid === true) {
+      kolomprefix = 'docent';
+    } else {
+      return res.status(403).json({ error: 'Je bent niet gemachtigd om dit contract te ondertekenen.' });
     }
 
-    // Controleer of iedereen getekend heeft → dan getekend_op invullen
-    db.query(`
-      SELECT getekend_student, getekend_mentor, getekend_docent
-      FROM stagecontract WHERE stage_id = ?
-    `, [stage_id], (err2, rows) => {
-      if (err2 || rows.length === 0) {
-        res.json({ message: `Contract getekend door ${rol}!` });
-        return;
+    const kolomGetekend = `getekend_${kolomprefix}`;
+    const kolomHandtekening = `handtekening_${kolomprefix}`;
+    const kolomOp = `getekend_${kolomprefix}_op`;
+
+    const [updateResult] = await db.promise().query(
+      `UPDATE stagecontract SET ${kolomGetekend} = TRUE, ${kolomHandtekening} = ?, ${kolomOp} = NOW()
+       WHERE stage_id = ?`,
+      [handtekening, stage_id]
+    );
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({ error: 'Contract niet gevonden.' });
+    }
+
+    // Controleer of iedereen getekend heeft
+    const [contractRows] = await db.promise().query(
+      'SELECT getekend_student, getekend_bedrijf, getekend_docent FROM stagecontract WHERE stage_id = ?',
+      [stage_id]
+    );
+    const c = contractRows[0];
+    if (c.getekend_student && c.getekend_bedrijf && c.getekend_docent) {
+      await db.promise().query('UPDATE stagecontract SET getekend_op = NOW() WHERE stage_id = ?', [stage_id]);
+
+      // Stage wordt 'bezig' als mentor toegewezen is én startdatum bereikt/verstreken is
+      const mentorToegewezen = Boolean(stage.mentor_id);
+      const startdatumBereikt = stage.startdatum && new Date(stage.startdatum) <= new Date();
+      if (mentorToegewezen && startdatumBereikt) {
+        await db.promise().query(
+          `UPDATE stage SET status = 'bezig' WHERE stage_id = ? AND status = 'goedgekeurd'`,
+          [stage_id]
+        );
+        return res.json({ message: 'Contract door iedereen getekend! De stage is nu actief.' });
       }
-      const c = rows[0];
-      if (c.getekend_student && c.getekend_mentor && c.getekend_docent) {
-        // Pas als álle partijen getekend hebben wordt de stage actief (bezig).
-        // Eén handtekening volstaat dus niet.
-        db.query(`
-          UPDATE stagecontract SET getekend_op = NOW() WHERE stage_id = ?
-        `, [stage_id], () => {
-          db.query(
-            `UPDATE stage SET status = 'bezig' WHERE stage_id = ? AND status = 'goedgekeurd'`,
-            [stage_id],
-            () => res.json({ message: 'Contract door iedereen getekend! De stage is nu actief.' }),
-          );
-        });
-      } else {
-        res.json({ message: `Contract getekend door ${rol}!` });
-      }
-    });
-  });
+      return res.json({ message: 'Contract door iedereen getekend! De stage start zodra de startdatum bereikt is en een mentor toegewezen is.' });
+    }
+
+    return res.json({ message: `Contract getekend door ${kolomprefix}!` });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
 });
 // ============================================================
 // COMPETENTIES
@@ -2540,8 +2661,8 @@ app.post('/api/probleemmeldingen', verifyToken, requireRol('mentor', 'admin'), (
           g.naam AS mentor_naam
         FROM stage s
         JOIN docent d ON s.docent_id = d.docent_id
-        JOIN mentor m ON s.mentor_id = m.mentor_id
-        JOIN gebruiker g ON m.gebruiker_id = g.gebruiker_id
+        LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+        LEFT JOIN gebruiker g ON m.gebruiker_id = g.gebruiker_id
         WHERE s.stage_id = ?
       `, [stage_id], (err3, rows) => {
         if (err3 || rows.length === 0) {
@@ -2657,8 +2778,8 @@ app.get('/api/docent/studenten', verifyToken, requireRol('docent', 'admin'), (re
       JOIN student st ON s.student_id = st.student_id
       JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
       JOIN bedrijf b ON s.bedrijf_id = b.bedrijf_id
-      JOIN mentor m ON s.mentor_id = m.mentor_id
-      JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
+      LEFT JOIN mentor m ON s.mentor_id = m.mentor_id
+      LEFT JOIN gebruiker gm ON m.gebruiker_id = gm.gebruiker_id
       WHERE s.docent_id = ?
       ORDER BY g.naam ASC
     `, [docent_id], (err2, results) => {
@@ -3131,6 +3252,115 @@ app.put('/api/gebruikers/:id/wachtwoord', verifyToken, requireRol('admin'), asyn
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// MENTOR VOORSTELLEN (bedrijf stelt mentor voor, admin keurt goed)
+// ============================================================
+
+// Bedrijf stelt een mentor voor
+app.post('/api/mentors/voorstel', verifyToken, requireRol('bedrijf'), async (req, res) => {
+  const { voornaam, naam, email, telefoonnummer, functietitel, stage_id } = req.body;
+
+  if (!voornaam || !naam || !email) {
+    return res.status(400).json({ error: 'Voornaam, naam en e-mail zijn verplicht.' });
+  }
+
+  try {
+    // Haal het bedrijf_id op van de ingelogde bedrijf-gebruiker
+    const [bedrijfRows] = await db.promise().query(
+      'SELECT bedrijf_id FROM bedrijf WHERE gebruiker_id = ?',
+      [req.gebruiker.id]
+    );
+    if (!bedrijfRows.length) return res.status(404).json({ error: 'Bedrijf niet gevonden.' });
+    const bedrijf_id = bedrijfRows[0].bedrijf_id;
+
+    const [result] = await db.promise().query(
+      `INSERT INTO mentor_voorstel (bedrijf_id, stage_id, voornaam, naam, email, telefoonnummer, functietitel)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [bedrijf_id, stage_id || null, voornaam.trim(), naam.trim(), email.trim(), telefoonnummer || null, functietitel || null]
+    );
+    res.status(201).json({ message: 'Mentor voorgesteld!', voorstel_id: result.insertId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: overzicht van mentor-voorstellen
+app.get('/api/mentors/voorstellen', verifyToken, requireRol('admin'), (req, res) => {
+  db.query(
+    `SELECT mv.voorstel_id, mv.voornaam, mv.naam, mv.email, mv.telefoonnummer, mv.functietitel,
+            mv.status, mv.aangemaakt_op, b.naam AS bedrijf_naam, mv.stage_id
+     FROM mentor_voorstel mv
+     JOIN bedrijf b ON mv.bedrijf_id = b.bedrijf_id
+     ORDER BY mv.aangemaakt_op DESC`,
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
+});
+
+// Admin: mentor-voorstel goedkeuren → maakt gebruiker + mentor-rij aan en koppelt aan stage
+app.put('/api/mentors/voorstellen/:id/goedkeuren', verifyToken, requireRol('admin'), async (req, res) => {
+  const { id } = req.params;
+  let conn;
+  try {
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+
+    const [voorstellen] = await conn.query(
+      'SELECT * FROM mentor_voorstel WHERE voorstel_id = ?', [id]
+    );
+    if (!voorstellen.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Voorstel niet gevonden.' });
+    }
+    const v = voorstellen[0];
+    if (v.status !== 'voorgesteld') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Voorstel is al verwerkt.' });
+    }
+
+    // 1. gebruiker aanmaken (rol='mentor')
+    const hash = await require('bcryptjs').hash('mentor123', 10);
+    const [gebruikerResult] = await conn.query(
+      `INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol)
+       VALUES (?, ?, ?, ?, ?, 'mentor')`,
+      [v.voornaam, v.naam, v.email, v.telefoonnummer, hash]
+    );
+    const gebruiker_id = gebruikerResult.insertId;
+
+    // 2. mentor-rij aanmaken
+    const [mentorResult] = await conn.query(
+      `INSERT INTO mentor (gebruiker_id, bedrijf_id, functietitel) VALUES (?, ?, ?)`,
+      [gebruiker_id, v.bedrijf_id, v.functietitel]
+    );
+    const mentor_id = mentorResult.insertId;
+
+    // 3. voorstel markeren als goedgekeurd
+    await conn.query(
+      `UPDATE mentor_voorstel SET status = 'goedgekeurd' WHERE voorstel_id = ?`, [id]
+    );
+
+    // 4. Optioneel: koppel mentor aan de stage
+    if (v.stage_id) {
+      await conn.query(
+        `UPDATE stage SET mentor_id = ? WHERE stage_id = ?`, [mentor_id, v.stage_id]
+      );
+    }
+
+    await conn.commit();
+    res.json({ message: 'Mentor goedgekeurd en account aangemaakt!', mentor_id, standaardwachtwoord: 'mentor123' });
+  } catch (e) {
+    if (conn) await conn.rollback();
+    if (e.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Er bestaat al een account met dit e-mailadres.' });
+    }
+    res.status(500).json({ error: e.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
