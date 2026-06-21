@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -50,7 +51,7 @@ function token() { return localStorage.getItem('token') }
 
 async function laadOpleidingen() {
   try {
-    const res = await fetch('http://localhost:3000/api/opleidingen', {
+    const res = await fetch(`${API_URL}/api/opleidingen`, {
       headers: { Authorization: `Bearer ${token()}` },
     })
     opleidingen.value = await res.json()
@@ -63,7 +64,7 @@ async function laadCompetenties() {
   if (!gekozenOpleidingId.value) return
   laadBezig.value = true
   try {
-    const res = await fetch(`http://localhost:3000/api/competenties/${gekozenOpleidingId.value}`, {
+    const res = await fetch(`${API_URL}/api/competenties/${gekozenOpleidingId.value}`, {
       headers: { Authorization: `Bearer ${token()}` },
     })
     const data = await res.json()
@@ -107,7 +108,7 @@ async function slaRubriekenOp(comp) {
     .filter(p => state.rubrieken[p].trim())
     .map(p => ({ punt: p, beschrijving: state.rubrieken[p].trim() }))
   try {
-    const res = await fetch(`http://localhost:3000/api/competenties/${id}/rubrieken`, {
+    const res = await fetch(`${API_URL}/api/competenties/${id}/rubrieken`, {
       method:  'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
       body:    JSON.stringify({ rubrieken }),
@@ -151,13 +152,13 @@ async function slaModalOp() {
   try {
     let res
     if (isBewerken.value) {
-      res = await fetch(`http://localhost:3000/api/competenties/${modalComp.value.id}`, {
+      res = await fetch(`${API_URL}/api/competenties/${modalComp.value.id}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body:    JSON.stringify({ naam, omschrijving: modalComp.value.omschrijving, gewicht: modalComp.value.gewicht }),
       })
     } else {
-      res = await fetch('http://localhost:3000/api/competenties', {
+      res = await fetch(`${API_URL}/api/competenties`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
         body:    JSON.stringify({ naam, omschrijving: modalComp.value.omschrijving, gewicht: modalComp.value.gewicht, opleiding_id: gekozenOpleidingId.value }),
@@ -183,7 +184,7 @@ function sluitDeleteModal() { toonDeleteModal.value = false; teVerwijderen.value
 async function bevestigDelete() {
   if (!teVerwijderen.value) return
   try {
-    const res = await fetch(`http://localhost:3000/api/competenties/${teVerwijderen.value.id}`, {
+    const res = await fetch(`${API_URL}/api/competenties/${teVerwijderen.value.id}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
     })
     if (res.ok) {
@@ -217,7 +218,7 @@ async function voegOpleidingToe() {
   if (!naam || opleidingBezig.value) return
   opleidingBezig.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/opleidingen', {
+    const res = await fetch(`${API_URL}/api/opleidingen`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
       body:    JSON.stringify({ naam }),
@@ -241,7 +242,7 @@ async function verwijderOpleiding() {
   const huidige = opleidingen.value.find(o => o.opleiding_id === gekozenOpleidingId.value)
   if (!confirm(`Opleiding "${huidige?.naam || ''}" verwijderen?`)) return
   try {
-    const res = await fetch(`http://localhost:3000/api/opleidingen/${gekozenOpleidingId.value}`, {
+    const res = await fetch(`${API_URL}/api/opleidingen/${gekozenOpleidingId.value}`, {
       method:  'DELETE',
       headers: { Authorization: `Bearer ${token()}` },
     })

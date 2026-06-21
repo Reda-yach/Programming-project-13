@@ -1,8 +1,8 @@
 // Gedeelde TopBar-links voor de docent-schermen.
 //
-// De stagecommissie (rol 'commissie') gebruikt dezelfde docent-schermen, maar
-// ziet als enige ook de 'Aanvragen'-tab. Een gewone docent (rol 'docent') ziet
-// enkel Studenten, Logboek en Evaluaties.
+// Een commissielid (rol 'commissie', of een docent met de commissielid-vlag)
+// gebruikt dezelfde docent-schermen én ziet bovendien de 'Aanvragen'-tab.
+// Een gewone docent ziet enkel Studenten, Logboek en Evaluaties.
 
 function huidigeGebruiker() {
   try {
@@ -18,13 +18,6 @@ export function magAanvragenZien() {
 }
 
 export function docentNavLinks() {
-  const g = huidigeGebruiker()
-
-  // Puur commissie-account: geen eigen studenten, enkel Aanvragen tonen.
-  if (g.rol === 'commissie') {
-    return [{ label: 'Aanvragen', to: '/docent-aanvragen' }]
-  }
-
   const links = [
     { label: 'Studenten', to: '/docent-studenten' },
     { label: 'Logboek', to: '/docent-logboek-overzicht', match: '/docent/logboek' },

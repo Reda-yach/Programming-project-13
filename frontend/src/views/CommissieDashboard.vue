@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -42,7 +43,7 @@ async function laadAanvragen() {
   laadFout.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/stages', {
+    const res = await fetch(`${API_URL}/api/stages`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error('Ophalen mislukt')
@@ -60,7 +61,7 @@ async function selecteer(aanvraag) {
   geselecteerde.value = aanvraag
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${aanvraag.stage_id}`, {
+    const res = await fetch(`${API_URL}/api/stages/${aanvraag.stage_id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) geselecteerde.value = await res.json()
@@ -85,7 +86,7 @@ async function beslis(actie) {
   bezig.value = true
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${geselecteerde.value.stage_id}/beslissing`, {
+    const res = await fetch(`${API_URL}/api/stages/${geselecteerde.value.stage_id}/beslissing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ beslissing: actie, motivatie: motivatie.value }),

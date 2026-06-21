@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import SignaturePad from '../components/SignaturePad.vue'
@@ -26,7 +27,7 @@ async function laadContract() {
   laadFout.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId.value}`, {
+    const res = await fetch(`${API_URL}/api/contracten/${stageId.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.status === 404) {
@@ -50,7 +51,7 @@ async function tekenContract() {
   bericht.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId.value}/tekenen`, {
+    const res = await fetch(`${API_URL}/api/contracten/${stageId.value}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ handtekening }),

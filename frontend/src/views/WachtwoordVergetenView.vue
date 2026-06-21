@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref } from 'vue'
 
 const email = ref('')
@@ -19,7 +20,7 @@ async function handleAanvraag() {
   loading.value = true
 
   try {
-    const response = await fetch('http://localhost:3000/api/auth/forgot-password', {
+    const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value.trim() }),

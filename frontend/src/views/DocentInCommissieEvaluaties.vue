@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
@@ -18,7 +19,7 @@ async function laadStudenten() {
   laadFout.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/docenten/mijn-studenten', {
+    const res = await fetch(`${API_URL}/api/docenten/mijn-studenten`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error('Ophalen mislukt')

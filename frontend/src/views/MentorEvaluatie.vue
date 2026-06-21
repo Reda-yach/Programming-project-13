@@ -1,11 +1,12 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './mentorNav'
 
 const route = useRoute()
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const SCORE_NIVEAUS = [5, 3, 1, 0]
 

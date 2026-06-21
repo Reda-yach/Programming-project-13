@@ -83,7 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
       admin: '/admin/competenties',
       // Puur commissie-account heeft geen studenten, landt direct op Aanvragen.
       commissie: '/docent-aanvragen',
-      bedrijf: '/bedrijf',
+      bedrijf: '/bedrijf/contract',
     }
 
     return map[role] || '/login'

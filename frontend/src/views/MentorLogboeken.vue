@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './mentorNav'
@@ -21,7 +22,7 @@ onMounted(async () => {
 
 async function laadLogboeken() {
   const token = localStorage.getItem('token')
-  const res = await fetch(`http://localhost:3000/api/mentors/${gebruiker.id}/logboeken`, {
+  const res = await fetch(`${API_URL}/api/mentors/${gebruiker.id}/logboeken`, {
     headers: { 'Authorization': `Bearer ${token}` }
   })
   logboeken.value = await res.json()
@@ -47,7 +48,7 @@ async function kiesLogboek(logboek) {
   detail.value = null
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/logboeken/${logboek.logboek_id}/volledig`, {
+    const res = await fetch(`${API_URL}/api/logboeken/${logboek.logboek_id}/volledig`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) detail.value = await res.json()
@@ -76,7 +77,7 @@ function terugNaarLijst() {
 
 async function laadFeedback(logboekId) {
   const token = localStorage.getItem('token')
-  const res = await fetch(`http://localhost:3000/api/logboeken/${logboekId}/feedback`, {
+  const res = await fetch(`${API_URL}/api/logboeken/${logboekId}/feedback`, {
     headers: { 'Authorization': `Bearer ${token}` }
   })
   bestaandeFeedback.value = await res.json()
@@ -85,7 +86,7 @@ async function laadFeedback(logboekId) {
 async function slaFeedbackOp() {
   if (!feedback.value.trim()) return true // niets in te dienen → ga gewoon door
   const token = localStorage.getItem('token')
-  const res = await fetch(`http://localhost:3000/api/logboeken/${geselecteerd.value.logboek_id}/feedback`, {
+  const res = await fetch(`${API_URL}/api/logboeken/${geselecteerd.value.logboek_id}/feedback`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -114,7 +115,7 @@ async function bevestigMetFeedback() {
 async function aftekenen() {
   bezig.value = true
   const token = localStorage.getItem('token')
-  const res = await fetch(`http://localhost:3000/api/logboeken/${geselecteerd.value.logboek_id}/aftekenen`, {
+  const res = await fetch(`${API_URL}/api/logboeken/${geselecteerd.value.logboek_id}/aftekenen`, {
     method: 'PUT',
     headers: { 'Authorization': `Bearer ${token}` }
   })

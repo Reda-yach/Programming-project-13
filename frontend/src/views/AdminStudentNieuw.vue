@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 
@@ -23,7 +24,7 @@ async function opslaan() {
   succes.value = ''
   bezig.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/students', {
+    const res = await fetch(`${API_URL}/api/students`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

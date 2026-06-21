@@ -203,8 +203,7 @@ const router = createRouter({
     // ── Bedrijf-portaal ───────────────────────────────────────────────────────
     {
       path: '/bedrijf',
-      name: 'bedrijf-dashboard',
-      component: () => import('../views/BedrijfDashboard.vue'),
+      redirect: '/bedrijf/contract',
     },
     {
       path: '/bedrijf/contract',

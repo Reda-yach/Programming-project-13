@@ -26,7 +26,8 @@ De applicatie moet:
 - Studenten
 - Stagecommissie
 - Docenten (EhB)
-- Stagementoren (bedrijf)
+- Bedrijven (eigen login: contract tekenen + mentor voorstellen)
+- Stagementoren
 - Administratie
 
 ## Functionaliteiten
@@ -47,8 +48,8 @@ De applicatie moet:
   - Aanpassingen vragen (met feedback)
 
 ### 3. Stageovereenkomst
-- Uploaden van stagecontract
-- Registratie van ondertekende documenten
+- Digitaal ondertekenen van het stagecontract
+- Ondertekend door student, bedrijf en stagecommissie
 
 ### 4. Wekelijkse opvolging
 - Studenten vullen logboeken in:
@@ -80,7 +81,9 @@ De applicatie moet:
 - Eindoverzicht per student
 
 ## Technologieën
-- JavaScript (Node.js)
+- Frontend: Vue 3 + Vite
+- Backend: Node.js (Express)
+- Database: MySQL
 - Git & GitHub
 - Trello (SCRUM/Kanban)
 
@@ -112,9 +115,9 @@ source database/seed.sql
 ```sql
 USE stageverloop;
 SELECT * FROM gebruiker;
-SELECT * FROM evaluatie_criterium;
+SELECT * FROM competentie;
 ```
-Je zou 5 gebruikers en 3 evaluatiecriteria moeten zien.
+Je zou de seed-gebruikers en de competenties van de opleiding moeten zien.
 
 > **Let op (bestaande databases):** `schema.sql` bevat het volledige, actuele schema —
 > voor een nieuwe database heb je enkel `schema.sql` + `seed.sql` nodig. De oude
@@ -125,18 +128,24 @@ Je zou 5 gebruikers en 3 evaluatiecriteria moeten zien.
 ## Tabellen
 | Tabel | Omschrijving |
 |---|---|
-| gebruiker | Alle gebruikers (student, docent, mentor, commissie, admin) |
+| opleiding | Opleidingen (waaraan competenties en studenten hangen) |
+| gebruiker | Alle gebruikers (student, docent, mentor, commissie, bedrijf, admin) |
 | student / docent / mentor | Rolspecifieke profielgegevens, gekoppeld aan `gebruiker` |
-| bedrijf | Stagebedrijven |
+| bedrijf | Stagebedrijven (met eigen login + status voorgesteld/goedgekeurd) |
+| mentor_voorstel | Door een bedrijf voorgestelde mentor, wacht op admin-goedkeuring |
 | stage | Stageaanvragen per student (incl. status van ingediend t/m afgerond) |
-| stagecontract | Ondertekening en bestandspad van het stagecontract |
+| stagecontract | Digitale ondertekening door student, bedrijf en commissie |
 | logboek | Wekelijkse logboeken per stage |
 | logboek_dag | Dagelijkse invoer (Ma–Vr) binnen een weeklogboek |
 | logboek_feedback | Mentor-/docentopmerkingen per logboek |
 | evaluatie / student_evaluatie | Tussentijdse en finale evaluaties per student |
-| evaluatie_criterium / rubriek | Aanpasbare competentiecriteria met scoringsrubrieken |
+| competentie / competentie_rubriek | Aanpasbare competenties met scoringsrubrieken (per opleiding) |
+| evaluatie_score | Score + toelichting per competentie binnen een evaluatie |
+| eindbeoordeling | Finale eindscore (0–20) door de docent |
 | commissie_beslissing | Beslissingen van de stagecommissie per stage |
+| contactbericht | Berichten tussen docent en mentor van een stage |
 | notificatie | Meldingen per gebruiker (met type voor kleur/icoon) |
+| wachtwoord_reset | Tijdelijke tokens voor "wachtwoord vergeten" |
 
 ## Testgebruikers
 | Email | Rol |

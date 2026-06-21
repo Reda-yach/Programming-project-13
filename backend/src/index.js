@@ -15,6 +15,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Promoot goedgekeurde, volledig getekende stages naar 'bezig' zodra hun
+// startdatum bereikt is. Lazy aangeroepen bij het ophalen van stages, zodat er
+// geen achtergrondtaak nodig is. Een mentor mag later toegewezen worden.
+function promoteGestarteStages() {
+  return db.promise().query(
+    `UPDATE stage s
+       JOIN stagecontract sc ON sc.stage_id = s.stage_id
+        SET s.status = 'bezig'
+      WHERE s.status = 'goedgekeurd'
+        AND sc.getekend_student = TRUE
+        AND sc.getekend_bedrijf = TRUE
+        AND sc.getekend_docent = TRUE
+        AND s.startdatum IS NOT NULL
+        AND s.startdatum <= CURDATE()`,
+  ).catch(() => {});
+}
+
 // ============================================================
 // TEST ROUTE
 // ============================================================
@@ -266,8 +283,11 @@ app.delete('/api/gebruikers/:id', verifyToken, requireRol('admin'), async (req, 
 
 
 // Één bedrijf ophalen
-app.get('/api/bedrijven/:id', verifyToken, (req, res) => {
+app.get('/api/bedrijven/:id', verifyToken, (req, res, next) => {
   const { id } = req.params;
+  // Laat niet-numerieke paden (bv. /api/bedrijven/voorstellen) doorvallen naar
+  // hun eigen route i.p.v. ze als bedrijf-id te behandelen.
+  if (!/^\d+$/.test(id)) return next();
   db.query(
     'SELECT bedrijf_id, naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer FROM bedrijf WHERE bedrijf_id = ?',
     [id],
@@ -334,14 +354,16 @@ app.post('/api/bedrijven/voorstel', verifyToken, requireRol('student'), async (r
     if (!studentRows.length) return res.status(404).json({ error: 'Student niet gevonden.' });
 
     const student_id = studentRows[0].student_id;
+    // Bij een aanpassing (status 'aanpassing_gevraagd') mag de student wél een
+    // (ander) bedrijf voorstellen — enkel een echt lopende aanvraag blokkeert.
     const [openRows] = await db.promise().query(
       `SELECT stage_id FROM stage
-       WHERE student_id = ? AND status IN ('ingediend','in_behandeling','aanpassing_gevraagd')
+       WHERE student_id = ? AND status IN ('ingediend','in_behandeling')
        LIMIT 1`,
       [student_id]
     );
     if (openRows.length) {
-      return res.status(409).json({ error: 'Je hebt al een openstaande aanvraag. Dien eerst je aanvraag in voordat je een nieuw bedrijf voorstelt.' });
+      return res.status(409).json({ error: 'Je hebt al een lopende aanvraag. Dien die eerst af voor je een nieuw bedrijf voorstelt.' });
     }
 
     const [result] = await db.promise().query(
@@ -419,6 +441,42 @@ app.put('/api/bedrijven/:id/goedkeuren', verifyToken, requireRol('admin'), async
   }
 });
 
+// Admin maakt rechtstreeks een goedgekeurd bedrijf aan (+ bedrijf-account).
+app.post('/api/bedrijven/aanmaken', verifyToken, requireRol('admin'), async (req, res) => {
+  const { naam, contact_email, contact_telefoonnummer, sector, straatnaam, huisnummer, postcode, gemeente, provincie } = req.body;
+  if (!naam || !naam.trim()) return res.status(400).json({ error: 'Bedrijfsnaam is verplicht.' });
+  if (!contact_email || !contact_email.trim()) return res.status(400).json({ error: 'Contact-e-mail is verplicht.' });
+
+  let conn;
+  try {
+    conn = await db.promise().getConnection();
+    await conn.beginTransaction();
+
+    const hash = await bcrypt.hash('bedrijf123', 10);
+    const [gebruikerResult] = await conn.query(
+      `INSERT INTO gebruiker (voornaam, naam, email, telefoonnummer, wachtwoord_hash, rol)
+       VALUES (?, ?, ?, ?, ?, 'bedrijf')`,
+      [naam.trim(), naam.trim(), contact_email.trim(), contact_telefoonnummer || null, hash],
+    );
+    const gebruiker_id = gebruikerResult.insertId;
+
+    const [bedrijfResult] = await conn.query(
+      `INSERT INTO bedrijf (naam, straatnaam, huisnummer, postcode, gemeente, provincie, sector, contact_email, contact_telefoonnummer, status, gebruiker_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'goedgekeurd', ?)`,
+      [naam.trim(), straatnaam || null, huisnummer || null, postcode || null, gemeente || null, provincie || null, sector || null, contact_email.trim(), contact_telefoonnummer || null, gebruiker_id],
+    );
+
+    await conn.commit();
+    res.status(201).json({ message: 'Bedrijf aangemaakt!', bedrijf_id: bedrijfResult.insertId, standaardwachtwoord: 'bedrijf123' });
+  } catch (e) {
+    if (conn) await conn.rollback();
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Er bestaat al een account met dit e-mailadres.' });
+    res.status(500).json({ error: e.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 // ============================================================
 // MENTORS
 // ============================================================
@@ -452,7 +510,7 @@ app.post('/api/mentors', verifyToken, async (req, res) => {
   const { voornaam, naam, email, telefoonnummer, functietitel, bedrijf_id } = req.body;
 
   if (!geldigTelefoon(telefoonnummer)) {
-    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+    return res.status(400).json({ error: 'Geef een geldig telefoonnummer.' });
   }
 
   try {
@@ -534,10 +592,10 @@ app.post('/api/students', verifyToken, requireRol('admin'), async (req, res) => 
     return res.status(400).json({ error: 'Voornaam, naam, email, studentnummer, opleiding en academiejaar zijn verplicht.' });
   }
   if (!geldigStudentnummer(studentnummer)) {
-    return res.status(400).json({ error: 'Studentnummer mag enkel letters en cijfers bevatten (6–20 tekens), zonder spaties.' });
+    return res.status(400).json({ error: 'Geef een geldig studentnummer.' });
   }
   if (!geldigTelefoon(telefoonnummer)) {
-    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+    return res.status(400).json({ error: 'Geef een geldig telefoonnummer.' });
   }
 
   try {
@@ -585,7 +643,7 @@ app.post('/api/docenten', verifyToken, requireRol('admin'), async (req, res) => 
     return res.status(400).json({ error: 'Rol moet "docent" of "commissie" zijn.' });
   }
   if (!geldigTelefoon(telefoonnummer)) {
-    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+    return res.status(400).json({ error: 'Geef een geldig telefoonnummer.' });
   }
 
   try {
@@ -646,7 +704,7 @@ app.post('/api/gebruikers', verifyToken, requireRol('admin'), async (req, res) =
     return res.status(400).json({ error: 'Voornaam, naam en email zijn verplicht.' });
   }
   if (!geldigTelefoon(telefoonnummer)) {
-    return res.status(400).json({ error: 'Telefoonnummer mag enkel cijfers, spaties, +, - en () bevatten en moet minstens 8 cijfers hebben.' });
+    return res.status(400).json({ error: 'Geef een geldig telefoonnummer.' });
   }
 
   try {
@@ -728,7 +786,8 @@ app.get('/api/stages', verifyToken, (req, res) => {
 });
 
 // Één stage ophalen (volledig, incl. bedrijf en mentorinfo)
-app.get('/api/stages/:id', verifyToken, (req, res) => {
+app.get('/api/stages/:id', verifyToken, async (req, res) => {
+  await promoteGestarteStages();
   const { id } = req.params;
   db.query(`
     SELECT
@@ -805,7 +864,8 @@ app.post('/api/stages', verifyToken, requireRol('student'), (req, res) => {
 });
 
 
-app.get('/api/mijn-stage', verifyToken, (req, res) => {
+app.get('/api/mijn-stage', verifyToken, async (req, res) => {
+  await promoteGestarteStages();
   const gebruiker_id = req.gebruiker.id;
 
   db.query(
@@ -1983,17 +2043,18 @@ app.put('/api/contracten/:stage_id/tekenen', verifyToken, async (req, res) => {
     if (c.getekend_student && c.getekend_bedrijf && c.getekend_docent) {
       await db.promise().query('UPDATE stagecontract SET getekend_op = NOW() WHERE stage_id = ?', [stage_id]);
 
-      // Stage wordt 'bezig' als mentor toegewezen is én startdatum bereikt/verstreken is
-      const mentorToegewezen = Boolean(stage.mentor_id);
+      // Stage wordt 'bezig' zodra de startdatum bereikt is (een mentor mag later
+      // toegewezen worden). Ligt de startdatum nog in de toekomst, dan promoot
+      // promoteGestarteStages() de stage later automatisch bij het ophalen.
       const startdatumBereikt = stage.startdatum && new Date(stage.startdatum) <= new Date();
-      if (mentorToegewezen && startdatumBereikt) {
+      if (startdatumBereikt) {
         await db.promise().query(
           `UPDATE stage SET status = 'bezig' WHERE stage_id = ? AND status = 'goedgekeurd'`,
           [stage_id]
         );
         return res.json({ message: 'Contract door iedereen getekend! De stage is nu actief.' });
       }
-      return res.json({ message: 'Contract door iedereen getekend! De stage start zodra de startdatum bereikt is en een mentor toegewezen is.' });
+      return res.json({ message: 'Contract door iedereen getekend! De stage start automatisch zodra de startdatum bereikt is.' });
     }
 
     return res.json({ message: `Contract getekend door ${kolomprefix}!` });
@@ -2245,7 +2306,14 @@ app.get('/api/docenten/mijn-studenten', verifyToken, (req, res) => {
             WHERE l.stage_id = s.stage_id
             ORDER BY l.week_nummer DESC
             LIMIT 1
-          ) AS logboek_status
+          ) AS logboek_status,
+          (
+            SELECT COUNT(*) > 0
+            FROM student_evaluatie se
+            JOIN evaluatie e ON se.evaluatie_id = e.evaluatie_id
+            WHERE se.stage_id = s.stage_id
+              AND e.type = 'mentor' AND e.fase = 'tussentijds' AND e.ingediend = 1
+          ) AS tussentijds_mentor_klaar
         FROM stage s
         JOIN student st ON s.student_id = st.student_id
         JOIN gebruiker g ON st.gebruiker_id = g.gebruiker_id
@@ -2781,6 +2849,22 @@ app.put('/api/contactberichten/:id/gelezen', verifyToken, async (req, res) => {
   }
 });
 
+// Aantal ongelezen contactberichten per stage voor de ingelogde gebruiker.
+app.get('/api/contact/ongelezen', verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT stage_id, COUNT(*) AS aantal
+         FROM contactbericht
+        WHERE ontvanger_id = ? AND gelezen = FALSE
+        GROUP BY stage_id`,
+      [req.gebruiker.id],
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // DOCENT STUDENTEN
 // ============================================================
@@ -3216,7 +3300,14 @@ app.get('/api/docent/logboeken', verifyToken, (req, res) => {
         COALESCE(COUNT(l.logboek_id), 0) AS totaal_weken,
         COALESCE(SUM(CASE WHEN l.status = 'ingediend' THEN 1 ELSE 0 END), 0) AS weken_ingediend,
         COALESCE(SUM(CASE WHEN l.status = 'goedgekeurd' THEN 1 ELSE 0 END), 0) AS weken_bevestigd,
-        MAX(l.week_nummer) AS laatste_week
+        MAX(l.week_nummer) AS laatste_week,
+        (
+          SELECT l2.status
+          FROM logboek l2
+          WHERE l2.stage_id = s.stage_id
+          ORDER BY l2.week_nummer DESC
+          LIMIT 1
+        ) AS huidige_week_status
       FROM stage s
       JOIN student st_rec ON s.student_id = st_rec.student_id
       JOIN gebruiker g ON st_rec.gebruiker_id = g.gebruiker_id
@@ -3320,6 +3411,23 @@ app.post('/api/mentors/voorstel', verifyToken, requireRol('bedrijf'), async (req
     if (!bedrijfRows.length) return res.status(404).json({ error: 'Bedrijf niet gevonden.' });
     const bedrijf_id = bedrijfRows[0].bedrijf_id;
 
+    // Voorkom dubbele mentors: geen bestaand account en geen openstaand of al
+    // goedgekeurd voorstel met dit e-mailadres.
+    const [bestaandeGebruiker] = await db.promise().query(
+      'SELECT gebruiker_id FROM gebruiker WHERE email = ?',
+      [email.trim()],
+    );
+    if (bestaandeGebruiker.length) {
+      return res.status(409).json({ error: 'Er bestaat al een account met dit e-mailadres.' });
+    }
+    const [bestaandVoorstel] = await db.promise().query(
+      `SELECT voorstel_id FROM mentor_voorstel WHERE email = ? AND status IN ('voorgesteld','goedgekeurd')`,
+      [email.trim()],
+    );
+    if (bestaandVoorstel.length) {
+      return res.status(409).json({ error: 'Deze mentor is al voorgesteld.' });
+    }
+
     const [result] = await db.promise().query(
       `INSERT INTO mentor_voorstel (bedrijf_id, stage_id, voornaam, naam, email, telefoonnummer, functietitel)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -3344,6 +3452,23 @@ app.get('/api/mentors/voorstellen', verifyToken, requireRol('admin'), (req, res)
       res.json(results);
     }
   );
+});
+
+// Admin: mentor-voorstel afkeuren → voorstel volledig verwijderen.
+app.put('/api/mentors/voorstellen/:id/afkeuren', verifyToken, requireRol('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [result] = await db.promise().query(
+      `DELETE FROM mentor_voorstel WHERE voorstel_id = ? AND status = 'voorgesteld'`,
+      [id],
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Voorstel niet gevonden of al verwerkt.' });
+    }
+    res.json({ message: 'Mentor-voorstel verwijderd.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Admin: mentor-voorstel goedkeuren → maakt gebruiker + mentor-rij aan en koppelt aan stage

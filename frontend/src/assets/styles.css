@@ -327,12 +327,42 @@ textarea { resize: vertical; min-height: 100px; line-height: 1.5; }
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* Responsive tabellen: op smal scherm worden rijen kaartjes (label: waarde),
+   zodat je niet horizontaal hoeft te scrollen. Voeg class="responsive-table"
+   toe aan de <table> en data-label="…" aan elke <td>. */
+@media (max-width: 640px) {
+  .responsive-table { min-width: 0; }
+  .responsive-table thead { display: none; }
+  .responsive-table tr {
+    display: block;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .responsive-table tr:last-child { border-bottom: none; }
+  .responsive-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 6px 14px;
+    border: none;
+    text-align: right;
+  }
+  .responsive-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: left;
+    white-space: nowrap;
+  }
 }
 
 thead {
@@ -793,6 +823,12 @@ tr:hover td { background: #fafafa; }
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+
+  /* Admin-pagina-headers (titel + zoekveld/knop) stapelen op smal scherm. */
+  .content > .flex {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .table-wrapper {

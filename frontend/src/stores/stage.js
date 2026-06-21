@@ -1,7 +1,8 @@
+import { API_URL } from '@/api'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 function mapStatus(dbStatus) {
   switch (dbStatus) {

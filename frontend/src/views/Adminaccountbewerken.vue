@@ -1,10 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './adminNav'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const route  = useRoute()
 const router = useRouter()

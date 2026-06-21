@@ -1,11 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted, computed } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import SignaturePad from '../components/SignaturePad.vue'
 import OvereenkomstDocument from '../components/OvereenkomstDocument.vue'
 
 const navLinks = [
-  { label: 'Dashboard', to: '/bedrijf' },
   { label: 'Contract', to: '/bedrijf/contract' },
   { label: 'Mentor voorstellen', to: '/bedrijf/mentor-voorstel' },
 ]
@@ -21,7 +21,7 @@ async function laadContract() {
   laadFout.value = ''
   try {
     // Haal stage op voor dit bedrijf
-    const stagesRes = await fetch('http://localhost:3000/api/stages?status=goedgekeurd,bezig', {
+    const stagesRes = await fetch(`${API_URL}/api/stages?status=goedgekeurd,bezig`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!stagesRes.ok) throw new Error()
@@ -29,7 +29,7 @@ async function laadContract() {
     if (!stages.length) { contract.value = null; return }
 
     const stageId = stages[0].stage_id
-    const contractRes = await fetch(`http://localhost:3000/api/contracten/${stageId}`, {
+    const contractRes = await fetch(`${API_URL}/api/contracten/${stageId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (contractRes.status === 404) { contract.value = null; return }
@@ -49,7 +49,7 @@ async function tekenContract() {
   bericht.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${contract.value.stage_id}/tekenen`, {
+    const res = await fetch(`${API_URL}/api/contracten/${contract.value.stage_id}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ handtekening }),

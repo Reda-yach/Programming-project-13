@@ -1,7 +1,9 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
-import SignaturePad from '@/components/SignaturePad.vue'
+import OvereenkomstDocument from '@/components/OvereenkomstDocument.vue'
+import ContactPaneel from '@/components/ContactPaneel.vue'
 import { docentNavLinks } from './docentNav'
 
 // 'Aanvragen' enkel voor commissie-docenten (zie docentNav.js).
@@ -9,19 +11,50 @@ const navLinks = docentNavLinks()
 
 const studenten = ref([])
 const contracten = ref({})
-const berichtContract = ref({})
 const laadFout = ref('')
-const tekenStageId = ref(null) // stage waarvan de tekenpad open staat
-const pad = ref(null)
+const inkijkStageId = ref(null) // stage waarvan het contract opengeklapt is
+const contactStageId = ref(null) // stage waarvan het contactpaneel open staat
+const ongelezen = ref({}) // ongelezen contactberichten per stage_id
 
 onMounted(async () => {
   await laadStudenten()
+  await laadOngelezen()
 })
+
+async function laadOngelezen() {
+  const token = localStorage.getItem('token')
+  try {
+    const res = await fetch(`${API_URL}/api/contact/ongelezen`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      const rows = await res.json()
+      const map = {}
+      for (const r of rows) map[r.stage_id] = r.aantal
+      ongelezen.value = map
+    }
+  } catch { /* stil */ }
+}
+
+function openContact(stageId) {
+  const opening = contactStageId.value !== stageId
+  contactStageId.value = opening ? stageId : null
+  if (opening) ongelezen.value = { ...ongelezen.value, [stageId]: 0 }
+}
+
+// De tussentijdse evaluatie-periode is voorbij zodra de finale fase begint
+// (de laatste 2 weken vóór de einddatum). Dan verdwijnt de gespreksmelding.
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+function tussentijdsVoorbij(student) {
+  if (!student.einddatum) return false
+  const eind = new Date(student.einddatum).getTime()
+  return Date.now() >= eind - 2 * WEEK_MS
+}
 
 async function laadContract(stageId) {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}`, {
+    const res = await fetch(`${API_URL}/api/contracten/${stageId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     contracten.value[stageId] = res.ok ? await res.json() : null
@@ -30,35 +63,11 @@ async function laadContract(stageId) {
   }
 }
 
-async function tekenContract(stageId) {
-  const handtekening = pad.value?.getData()
-  if (!handtekening) {
-    berichtContract.value[stageId] = 'Teken eerst je handtekening in het vak.'
-    return
-  }
-  const token = localStorage.getItem('token')
-  try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ handtekening }),
-    })
-    const data = await res.json()
-    berichtContract.value[stageId] = data.message || data.error
-    if (res.ok) {
-      tekenStageId.value = null
-      await laadContract(stageId)
-    }
-  } catch {
-    berichtContract.value[stageId] = 'Er ging iets mis.'
-  }
-}
-
 async function laadStudenten() {
   laadFout.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/docenten/mijn-studenten', {
+    const res = await fetch(`${API_URL}/api/docenten/mijn-studenten`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error('Ophalen mislukt')
@@ -189,52 +198,35 @@ function logboekLabel(status) {
             </div>
           </div>
 
-          <!-- Contract -->
+          <!-- Contract: docent/commissie kan het enkel inkijken, niet tekenen -->
           <div v-if="contracten[student.stage_id]" class="sc-contract">
-            <div class="sc-contract-title">Stagecontract</div>
-            <div class="sc-sign-row">
-              <span class="sc-sign">
-                <span class="sc-sign-role">Student</span>
-                <span class="sc-dot" :class="contracten[student.stage_id].getekend_student ? 'ok' : 'wacht'"></span>
-                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_student ? 'Ondertekend' : 'Wacht' }}</span>
-              </span>
-              <span class="sc-sign">
-                <span class="sc-sign-role">Mentor</span>
-                <span class="sc-dot" :class="contracten[student.stage_id].getekend_mentor ? 'ok' : 'wacht'"></span>
-                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_mentor ? 'Ondertekend' : 'Wacht' }}</span>
-              </span>
-              <span class="sc-sign">
-                <span class="sc-sign-role">Docent</span>
-                <span class="sc-dot" :class="contracten[student.stage_id].getekend_docent ? 'ok' : 'wacht'"></span>
-                <span class="sc-sign-status">{{ contracten[student.stage_id].getekend_docent ? 'Ondertekend' : 'Wacht' }}</span>
-              </span>
+            <button
+              class="btn btn-secondary btn-sm"
+              @click="inkijkStageId = inkijkStageId === student.stage_id ? null : student.stage_id"
+            >
+              {{ inkijkStageId === student.stage_id ? 'Stagecontract verbergen' : 'Stagecontract inkijken' }}
+            </button>
+            <div v-if="inkijkStageId === student.stage_id" class="mt-12">
+              <OvereenkomstDocument :contract="contracten[student.stage_id]" />
+            </div>
+          </div>
 
-              <span v-if="berichtContract[student.stage_id]" class="sc-contract-msg">
-                {{ berichtContract[student.stage_id] }}
-              </span>
-
-              <button
-                v-if="!contracten[student.stage_id].getekend_docent && tekenStageId !== student.stage_id"
-                class="btn btn-primary btn-sm"
-                style="margin-left:auto;"
-                @click="tekenStageId = student.stage_id; berichtContract[student.stage_id] = ''"
-              >
-                Contract ondertekenen
-              </button>
-              <span v-else-if="contracten[student.stage_id].getekend_docent" class="sc-contract-msg" style="margin-left:auto;">
-                Jij hebt al ondertekend
-              </span>
+          <!-- Contact met de mentor van deze student -->
+          <div class="sc-contract">
+            <!-- Melding na de tussentijdse evaluatie -->
+            <div v-if="student.tussentijds_mentor_klaar && !tussentijdsVoorbij(student)" class="gesprek-melding">
+              📌 Tussentijdse evaluatie is ingediend — neem contact met de mentor voor een tussentijds gesprek.
             </div>
 
-            <!-- Tekenpad voor de docent/commissie -->
-            <div v-if="tekenStageId === student.stage_id" class="sc-pad">
-              <SignaturePad ref="pad" />
-              <div class="flex gap-8 mt-8">
-                <button class="btn btn-primary btn-sm" @click="tekenContract(student.stage_id)">
-                  Handtekening opslaan
-                </button>
-                <button class="btn btn-secondary btn-sm" @click="tekenStageId = null">Annuleren</button>
-              </div>
+            <button
+              class="btn btn-secondary btn-sm"
+              @click="openContact(student.stage_id)"
+            >
+              {{ contactStageId === student.stage_id ? 'Berichten sluiten' : 'Contacteer mentor' }}
+              <span v-if="ongelezen[student.stage_id]" class="contact-badge">{{ ongelezen[student.stage_id] }}</span>
+            </button>
+            <div v-if="contactStageId === student.stage_id" class="mt-12">
+              <ContactPaneel :stage-id="student.stage_id" />
             </div>
           </div>
         </div>
@@ -243,4 +235,26 @@ function logboekLabel(status) {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.gesprek-melding {
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.contact-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 18px;
+}
+</style>

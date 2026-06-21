@@ -1,9 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { API_URL } from '@/api'
+import { ref } from 'vue'
 import TopBar from '../components/TopBar.vue'
 
 const navLinks = [
-  { label: 'Dashboard', to: '/bedrijf' },
   { label: 'Contract', to: '/bedrijf/contract' },
   { label: 'Mentor voorstellen', to: '/bedrijf/mentor-voorstel' },
 ]
@@ -13,23 +13,9 @@ const naam = ref('')
 const email = ref('')
 const telefoonnummer = ref('')
 const functietitel = ref('')
-const stageId = ref('')
-const stages = ref([])
 const bericht = ref('')
 const fout = ref('')
 const bezig = ref(false)
-
-async function laadStages() {
-  const token = localStorage.getItem('token')
-  try {
-    const res = await fetch('http://localhost:3000/api/stages?status=goedgekeurd,bezig', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) stages.value = await res.json()
-  } catch { /* stil */ }
-}
-
-onMounted(laadStages)
 
 async function stelVoor() {
   bericht.value = ''
@@ -41,7 +27,7 @@ async function stelVoor() {
   bezig.value = true
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/mentors/voorstel', {
+    const res = await fetch(`${API_URL}/api/mentors/voorstel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -50,13 +36,12 @@ async function stelVoor() {
         email: email.value,
         telefoonnummer: telefoonnummer.value || null,
         functietitel: functietitel.value || null,
-        stage_id: stageId.value || null,
       }),
     })
     const data = await res.json()
     if (res.ok) {
       bericht.value = 'Mentor voorgesteld! De admin keurt het voorstel goed.'
-      voornaam.value = naam.value = email.value = telefoonnummer.value = functietitel.value = stageId.value = ''
+      voornaam.value = naam.value = email.value = telefoonnummer.value = functietitel.value = ''
     } else {
       fout.value = data.error || 'Indienen mislukt.'
     }
@@ -98,15 +83,6 @@ async function stelVoor() {
           <div class="form-group">
             <label>Functietitel</label>
             <input type="text" v-model="functietitel" placeholder="bv. Senior Developer">
-          </div>
-          <div class="form-group">
-            <label>Koppel aan stage (optioneel)</label>
-            <select v-model="stageId">
-              <option value="">— Geen koppeling —</option>
-              <option v-for="s in stages" :key="s.stage_id" :value="String(s.stage_id)">
-                {{ s.voornaam }} {{ s.student }} — {{ s.bedrijf }}
-              </option>
-            </select>
           </div>
         </div>
 

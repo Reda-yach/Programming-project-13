@@ -1,9 +1,10 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 const stageStore = useStageStore()
 
 const dagNamen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag']

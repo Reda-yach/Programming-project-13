@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -7,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getStageStatusLabel } from '@/utils/stageStatus'
 
 const auth = useAuthStore()
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 // Sidebar: openstaande aanvragen. Detail: volledige gegevens van de selectie.
 const aanvragen = ref([])

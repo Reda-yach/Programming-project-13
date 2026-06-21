@@ -12,10 +12,10 @@ function geldigTelefoon(tel) {
   return aantalCijfers >= 8;
 }
 
-// Studentnummer: letters en cijfers toegestaan (bij ons gemengd), geen spaties of
-// speciale tekens, 6–20 tekens.
+// Studentnummer: letters, cijfers en streepjes toegestaan (bv. r0123456 of
+// ehb-2025-33), geen spaties of andere speciale tekens, 4–20 tekens.
 function geldigStudentnummer(nr) {
-  return /^[A-Za-z0-9]{6,20}$/.test(String(nr ?? '').trim());
+  return /^[A-Za-z0-9-]{4,20}$/.test(String(nr ?? '').trim());
 }
 
 module.exports = { geldigTelefoon, geldigStudentnummer };

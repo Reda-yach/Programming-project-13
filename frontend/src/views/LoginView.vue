@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -42,7 +43,7 @@ async function handleLogin() {
   loading.value = true
 
   try {
-    const response = await fetch('http://localhost:3000/api/login', {
+    const response = await fetch(`${API_URL}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value.trim(), wachtwoord: wachtwoord.value }),

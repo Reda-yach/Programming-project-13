@@ -1,8 +1,8 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
-import SignaturePad from '../components/SignaturePad.vue'
 import OvereenkomstDocument from '../components/OvereenkomstDocument.vue'
 import ContactPaneel from '../components/ContactPaneel.vue'
 import { navLinks } from './mentorNav'
@@ -15,19 +15,13 @@ const evaluaties = ref([])
 const laden = ref(true)
 const gebruiker = JSON.parse(localStorage.getItem('gebruiker'))
 
-// Modal-status voor het tekenen/bekijken van een overeenkomst.
+// Modal-status voor het bekijken van een overeenkomst.
 const modalStage = ref(null) // het stagiair-object waarvan de overeenkomst open staat
-const modalModus = ref('bekijk') // 'teken' of 'bekijk'
-const modalBericht = ref('')
 
 // Modal-status voor het contacteren van de docent.
 const contactStage = ref(null)
-const tekenBezig = ref(false)
-const pad = ref(null)
+const ongelezen = ref({}) // ongelezen contactberichten per stage_id
 
-const aantalTeTekenen = computed(
-  () => stagiairs.value.filter((s) => contracten.value[s.stage_id] && !contracten.value[s.stage_id].getekend_mentor).length,
-)
 const aantalLogboekTeBevestigen = computed(
   () => stagiairs.value.filter((s) => s.logboek_status === 'ingediend').length,
 )
@@ -35,7 +29,7 @@ const aantalLogboekTeBevestigen = computed(
 onMounted(async () => {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/mentors/${gebruiker.id}/stagiairs`, {
+    const res = await fetch(`${API_URL}/api/mentors/${gebruiker.id}/stagiairs`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     stagiairs.value = await res.json()
@@ -43,10 +37,20 @@ onMounted(async () => {
       await laadContract(s.stage_id)
     }
     // Mentor-evaluaties ophalen om per stage/fase de ingediend-status te kennen.
-    const evalRes = await fetch(`http://localhost:3000/api/mentors/${gebruiker.id}/evaluaties`, {
+    const evalRes = await fetch(`${API_URL}/api/mentors/${gebruiker.id}/evaluaties`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (evalRes.ok) evaluaties.value = await evalRes.json()
+
+    const ongRes = await fetch(`${API_URL}/api/contact/ongelezen`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (ongRes.ok) {
+      const rows = await ongRes.json()
+      const map = {}
+      for (const r of rows) map[r.stage_id] = r.aantal
+      ongelezen.value = map
+    }
   } finally {
     laden.value = false
   }
@@ -63,7 +67,7 @@ function evaluatieIngediend(stageId, fase) {
 async function laadContract(stageId) {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}`, {
+    const res = await fetch(`${API_URL}/api/contracten/${stageId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     contracten.value[stageId] = res.ok ? await res.json() : null
@@ -72,53 +76,21 @@ async function laadContract(stageId) {
   }
 }
 
-function openOvereenkomst(stagiair, modus) {
+function openOvereenkomst(stagiair) {
   modalStage.value = stagiair
-  modalModus.value = modus
-  modalBericht.value = ''
 }
 
 function sluitModal() {
   modalStage.value = null
-  modalBericht.value = ''
 }
 
 function openContact(stagiair) {
   contactStage.value = stagiair
+  // Openen markeert de berichten als gelezen → badge weg.
+  ongelezen.value = { ...ongelezen.value, [stagiair.stage_id]: 0 }
 }
 function sluitContact() {
   contactStage.value = null
-}
-
-async function tekenContract() {
-  const handtekening = pad.value?.getData()
-  if (!handtekening) {
-    modalBericht.value = 'Teken eerst je handtekening in het vak.'
-    return
-  }
-  const stageId = modalStage.value.stage_id
-  tekenBezig.value = true
-  modalBericht.value = ''
-  const token = localStorage.getItem('token')
-  try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ handtekening }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      modalBericht.value = data.error || 'Tekenen mislukt.'
-      return
-    }
-    await laadContract(stageId)
-    // Na tekenen meteen naar de bekijk-weergave van de bijgewerkte overeenkomst.
-    modalModus.value = 'bekijk'
-  } catch {
-    modalBericht.value = 'Er ging iets mis.'
-  } finally {
-    tekenBezig.value = false
-  }
 }
 
 function logboekStatus(s) {
@@ -172,13 +144,6 @@ function naarEvaluatie(s, fase) {
       <div class="overzicht-kaarten mt-24">
         <div class="card kaart">
           <div class="kaart-top">
-            <span class="text-secondary text-sm">Contracten te tekenen</span>
-            <span class="kaart-icoon">✍️</span>
-          </div>
-          <p class="kaart-getal">{{ aantalTeTekenen }}</p>
-        </div>
-        <div class="card kaart">
-          <div class="kaart-top">
             <span class="text-secondary text-sm">Te bevestigen logboek</span>
             <span class="kaart-icoon">📖</span>
           </div>
@@ -212,7 +177,10 @@ function naarEvaluatie(s, fase) {
               <td>
                 <div class="font-semibold">{{ s.voornaam }} {{ s.student_naam }}</div>
                 <div class="text-secondary text-xs mt-4">{{ s.opleiding }} · {{ s.bedrijf }}</div>
-                <a class="tabel-link" @click="openContact(s)">Contact docent</a>
+                <a class="tabel-link" @click="openContact(s)">
+                  Contact docent
+                  <span v-if="ongelezen[s.stage_id]" class="contact-badge">{{ ongelezen[s.stage_id] }}</span>
+                </a>
               </td>
 
               <!-- Logboek -->
@@ -269,17 +237,7 @@ function naarEvaluatie(s, fase) {
               <!-- Stageovereenkomst -->
               <td>
                 <template v-if="contracten[s.stage_id]">
-                  <button
-                    v-if="!contracten[s.stage_id].getekend_mentor"
-                    class="pill-knop pill-zwart"
-                    @click="openOvereenkomst(s, 'teken')"
-                  >
-                    Teken →
-                  </button>
-                  <span v-else class="pill badge-green">Getekend ✓</span>
-                  <div class="mt-4">
-                    <a class="tabel-link" @click="openOvereenkomst(s, 'bekijk')">Bekijk</a>
-                  </div>
+                  <a class="tabel-link" @click="openOvereenkomst(s)">Bekijk overeenkomst</a>
                 </template>
                 <span v-else class="pill badge-grijs">Nog niet beschikbaar</span>
               </td>
@@ -301,19 +259,6 @@ function naarEvaluatie(s, fase) {
 
         <div class="modal-body">
           <OvereenkomstDocument v-if="contracten[modalStage.stage_id]" :contract="contracten[modalStage.stage_id]" />
-
-          <!-- Teken-sectie -->
-          <div v-if="modalModus === 'teken' && contracten[modalStage.stage_id] && !contracten[modalStage.stage_id].getekend_mentor" class="card mt-16">
-            <h3 class="form-section-title">Jouw handtekening</h3>
-            <p class="text-secondary text-sm mt-4 mb-12">
-              Door te ondertekenen bevestig je als stagementor akkoord te gaan met deze overeenkomst.
-            </p>
-            <SignaturePad ref="pad" />
-            <p v-if="modalBericht" class="form-error mt-12">{{ modalBericht }}</p>
-            <button class="btn btn-primary mt-12" :disabled="tekenBezig" @click="tekenContract">
-              {{ tekenBezig ? 'Bezig...' : 'Contract ondertekenen' }}
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -382,6 +327,20 @@ function naarEvaluatie(s, fase) {
 }
 .studenten-tabel tr:last-child td {
   border-bottom: none;
+}
+
+.contact-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 18px;
 }
 
 .pill,

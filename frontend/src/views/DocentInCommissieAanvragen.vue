@@ -1,9 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, onMounted, computed } from 'vue'
 import TopBar from '@/components/TopBar.vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 import SignaturePad from '@/components/SignaturePad.vue'
 import { docentNavLinks } from './docentNav'
+import { navLinks as adminNavLinks } from './adminNav'
 
 // Deze pagina wordt gedeeld door de docent (/docent-aanvragen) en de admin
 // (/admin/aanvragen). De inhoud is identiek; enkel de navigatie/topbar volgt
@@ -18,16 +20,7 @@ const isAdmin = computed(() => {
 
 const topBar = computed(() => (isAdmin.value ? TopBar : TopBarDocentStagecommissie))
 
-const navLinks = computed(() =>
-  isAdmin.value
-    ? [
-        { label: 'Competenties', to: '/admin/competentiesets' },
-        { label: 'Stages', to: '/admin/stages' },
-        { label: 'Accounts', to: '/admin/accounts' },
-        { label: 'Aanvragen', to: '/admin/aanvragen' },
-      ]
-    : docentNavLinks()
-)
+const navLinks = computed(() => (isAdmin.value ? adminNavLinks : docentNavLinks()))
 
 const token = localStorage.getItem('token')
 
@@ -62,7 +55,7 @@ async function laadAanvragen() {
   ladenLijst.value = true
   foutLijst.value = null
   try {
-    const res = await fetch('http://localhost:3000/api/stages', {
+    const res = await fetch(`${API_URL}/api/stages`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error((await res.json()).error ?? 'Fout bij ophalen')
@@ -86,7 +79,7 @@ async function selecteer(id) {
 
   ladenDetail.value = true
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${id}`, {
+    const res = await fetch(`${API_URL}/api/stages/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error((await res.json()).error ?? 'Fout bij ophalen detail')
@@ -115,7 +108,7 @@ async function besliss(actie) {
 
   bezig.value = true
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${geselecteerdId.value}/beslissing`, {
+    const res = await fetch(`${API_URL}/api/stages/${geselecteerdId.value}/beslissing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -150,7 +143,7 @@ async function bevestigGoedkeuring() {
   bezig.value = true
   foutBeslissing.value = null
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${stageId}/beslissing`, {
+    const res = await fetch(`${API_URL}/api/stages/${stageId}/beslissing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ beslissing: 'goedkeuren', motivatie: feedback.value.trim() }),
@@ -160,7 +153,7 @@ async function bevestigGoedkeuring() {
       return
     }
 
-    const tekenRes = await fetch(`http://localhost:3000/api/contracten/${stageId}/tekenen`, {
+    const tekenRes = await fetch(`${API_URL}/api/contracten/${stageId}/tekenen`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ handtekening }),

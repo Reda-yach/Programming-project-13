@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import { useStageStore } from '../stores/stage'
@@ -25,7 +26,7 @@ onMounted(async () => {
 async function laadEindbeoordeling() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}/eindbeoordeling`, {
+    const res = await fetch(`${API_URL}/api/stages/${stageId.value}/eindbeoordeling`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) eindbeoordeling.value = await res.json()
@@ -41,7 +42,7 @@ const stageActief = computed(() => {
 async function laadStage() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}`, {
+    const res = await fetch(`${API_URL}/api/stages/${stageId.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) stage.value = await res.json()
@@ -51,7 +52,7 @@ async function laadStage() {
 async function laadEvaluaties() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}/evaluatie-overzicht`, {
+    const res = await fetch(`${API_URL}/api/stages/${stageId.value}/evaluatie-overzicht`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) evaluaties.value = await res.json()
@@ -61,7 +62,7 @@ async function laadEvaluaties() {
 async function laadLogboeken() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${stageId.value}/logboeken`, {
+    const res = await fetch(`${API_URL}/api/stages/${stageId.value}/logboeken`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) logboeken.value = await res.json()
@@ -71,7 +72,7 @@ async function laadLogboeken() {
 async function laadContract() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/contracten/${stageId.value}`, {
+    const res = await fetch(`${API_URL}/api/contracten/${stageId.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) contract.value = await res.json()
@@ -81,7 +82,7 @@ async function laadContract() {
 const tussentijdse = computed(() => evaluaties.value.filter(e => e.fase === 'tussentijds'))
 const finale = computed(() => evaluaties.value.filter(e => e.fase === 'finaal'))
 const logboekenGoedgekeurd = computed(() => logboeken.value.filter(l => l.status === 'goedgekeurd').length)
-const contractVolledig = computed(() => contract.value?.getekend_student && contract.value?.getekend_mentor && contract.value?.getekend_docent)
+const contractVolledig = computed(() => contract.value?.getekend_student && contract.value?.getekend_bedrijf && contract.value?.getekend_docent)
 
 function typeLabel(type) {
   return type === 'docent' ? 'Docent' : type === 'mentor' ? 'Mentor' : 'Zelfevaluatie'
@@ -170,12 +171,12 @@ function formatDatum(d) {
                 {{ contract.getekend_student ? 'Ondertekend' : 'Wacht op handtekening' }}
               </span>
             </span>
-            <span>Mentor:
-              <span class="badge" :class="contract.getekend_mentor ? 'badge-green' : 'badge-gray'">
-                {{ contract.getekend_mentor ? 'Ondertekend' : 'Wacht op handtekening' }}
+            <span>Bedrijf:
+              <span class="badge" :class="contract.getekend_bedrijf ? 'badge-green' : 'badge-gray'">
+                {{ contract.getekend_bedrijf ? 'Ondertekend' : 'Wacht op handtekening' }}
               </span>
             </span>
-            <span>Docent:
+            <span>Commissie:
               <span class="badge" :class="contract.getekend_docent ? 'badge-green' : 'badge-gray'">
                 {{ contract.getekend_docent ? 'Ondertekend' : 'Wacht op handtekening' }}
               </span>

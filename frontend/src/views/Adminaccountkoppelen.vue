@@ -1,10 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './adminNav'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const route  = useRoute()
 const router = useRouter()
@@ -34,7 +35,7 @@ const geselecteerdMentor = ref(null)
 // zonder rij in de docent-tabel (nog) kan niet gekoppeld worden aan een stage.
 const docentenLijst = computed(() =>
   alleGebruikers.value
-    .filter(u => u.rol === 'docent' && u.docent_id != null)
+    .filter(u => (u.rol === 'docent' || u.rol === 'commissie') && u.docent_id != null)
     .filter(u => {
       const q = docentZoek.value.toLowerCase()
       return !q ||

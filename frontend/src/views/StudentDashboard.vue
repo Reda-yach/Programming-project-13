@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -45,7 +46,7 @@ async function laadLogboekStatus() {
   const week = Math.floor((nu - start) / (7 * 24 * 60 * 60 * 1000)) + 1
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/mijn-logboek/week/${week}`, {
+    const res = await fetch(`${API_URL}/api/mijn-logboek/week/${week}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) return
@@ -113,7 +114,7 @@ async function laadEvalStatus() {
   if (!id) return
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/stages/${id}/evaluatie-overzicht`, {
+    const res = await fetch(`${API_URL}/api/stages/${id}/evaluatie-overzicht`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) return

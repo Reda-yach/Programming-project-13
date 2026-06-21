@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 // Herbruikbaar berichtenpaneel tussen de docent en de mentor van één stage.
 // De backend bepaalt afzender/ontvanger op basis van de ingelogde gebruiker.
 import { ref, onMounted } from 'vue'
@@ -7,7 +8,7 @@ const props = defineProps({
   stageId: { type: [Number, String], required: true },
 })
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 const berichten = ref([])
 const nieuw = ref('')
 const bezig = ref(false)
@@ -82,6 +83,7 @@ onMounted(laad)
 
 <template>
   <div class="contact-paneel">
+    <div class="contact-kop">Berichten</div>
     <div v-if="laden" class="text-secondary text-sm">Laden…</div>
     <template v-else>
       <div v-if="berichten.length === 0" class="text-secondary text-sm mb-12">
@@ -119,6 +121,14 @@ onMounted(laad)
 </template>
 
 <style scoped>
+.contact-kop {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
 .bericht-lijst {
   list-style: none;
   padding: 0;
@@ -130,15 +140,21 @@ onMounted(laad)
   overflow-y: auto;
 }
 .bericht {
-  padding: 10px 12px;
-  border-radius: 8px;
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--gray50);
   border: 1px solid var(--border);
 }
 .bericht-eigen {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  align-self: flex-end;
+  background: #2563eb;
+  border-color: #2563eb;
 }
+.bericht-eigen .bericht-tekst { color: #fff; }
+.bericht-eigen .bericht-kop strong { color: #fff; }
+.bericht-eigen .bericht-kop .text-secondary { color: #dbeafe; }
 .bericht-kop {
   display: flex;
   justify-content: space-between;

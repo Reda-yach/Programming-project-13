@@ -1,8 +1,9 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 const navLinks = ref([{ label: 'Logboeken', to: '/mentor' }])
 
 const dagNamen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag']

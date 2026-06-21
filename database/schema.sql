@@ -30,7 +30,7 @@ CREATE TABLE gebruiker (
     email               VARCHAR(150)    NOT NULL UNIQUE,
     telefoonnummer      VARCHAR(20),
     wachtwoord_hash     VARCHAR(255)    NOT NULL,
-    rol                 ENUM('student','docent','mentor','commissie','admin') NOT NULL,
+    rol                 ENUM('student','docent','mentor','commissie','bedrijf','admin') NOT NULL,
     afdeling            VARCHAR(150),
     -- Actieve sessie: bij elke login opnieuw gezet. Tokens met een andere
     -- sessie_id zijn ongeldig → ergens anders inloggen logt de rest uit.
@@ -83,6 +83,7 @@ CREATE TABLE docent (
 -- ------------------------------------------------------------
 CREATE TABLE bedrijf (
     bedrijf_id              INT             NOT NULL AUTO_INCREMENT,
+    gebruiker_id            INT             NULL UNIQUE,    -- login-account van het bedrijf (rol 'bedrijf'), gevuld bij goedkeuring
     naam                    VARCHAR(150)    NOT NULL,
     straatnaam              VARCHAR(150),
     huisnummer              VARCHAR(10),
@@ -92,8 +93,13 @@ CREATE TABLE bedrijf (
     sector                  VARCHAR(100),
     contact_email           VARCHAR(150),
     contact_telefoonnummer  VARCHAR(20),
+    -- 'voorgesteld' = door een student voorgesteld, wacht op admin-goedkeuring.
+    status                  ENUM('voorgesteld','goedgekeurd') NOT NULL DEFAULT 'goedgekeurd',
 
-    PRIMARY KEY (bedrijf_id)
+    PRIMARY KEY (bedrijf_id),
+    CONSTRAINT fk_bedrijf_gebruiker
+        FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- ------------------------------------------------------------
@@ -121,7 +127,7 @@ CREATE TABLE stage (
     stage_id            INT             NOT NULL AUTO_INCREMENT,
     student_id          INT             NOT NULL,
     bedrijf_id          INT             NOT NULL,
-    mentor_id           INT             NOT NULL,
+    mentor_id           INT             NULL,             -- pas toegewezen na contract (bedrijf stelt mentor voor)
     docent_id           INT,
     stagetitel          VARCHAR(200)    NOT NULL,
     beschrijving        TEXT,
@@ -155,14 +161,17 @@ CREATE TABLE stagecontract (
     getekend_student    BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_mentor     BOOLEAN         NOT NULL DEFAULT FALSE,
     getekend_docent     BOOLEAN         NOT NULL DEFAULT FALSE,
+    getekend_bedrijf    BOOLEAN         NOT NULL DEFAULT FALSE,
     -- Muis-handtekeningen, opgeslagen als base64 PNG data-URL uit het canvas.
-    -- 'docent' = de docent in de stagecommissie (zelfde persoon die goedkeurt).
+    -- Het contract wordt getekend door student + bedrijf + commissie (kolom 'docent').
     handtekening_student LONGTEXT       NULL,
     handtekening_mentor  LONGTEXT       NULL,
     handtekening_docent  LONGTEXT       NULL,
+    handtekening_bedrijf LONGTEXT       NULL,
     getekend_student_op  TIMESTAMP      NULL,
     getekend_mentor_op   TIMESTAMP      NULL,
     getekend_docent_op   TIMESTAMP      NULL,
+    getekend_bedrijf_op  TIMESTAMP      NULL,
     getekend_op         TIMESTAMP       NULL,
 
     PRIMARY KEY (contract_id),
@@ -427,5 +436,55 @@ CREATE TABLE wachtwoord_reset (
     KEY idx_reset_gebruiker (gebruiker_id),
     CONSTRAINT fk_reset_gebruiker
         FOREIGN KEY (gebruiker_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 20. MENTOR_VOORSTEL
+-- ------------------------------------------------------------
+-- Een bedrijf stelt een mentor voor; de admin keurt goed en maakt dan pas
+-- het echte gebruiker- + mentor-record aan.
+CREATE TABLE mentor_voorstel (
+    voorstel_id     INT          NOT NULL AUTO_INCREMENT,
+    bedrijf_id      INT          NOT NULL,
+    stage_id        INT          NULL,
+    voornaam        VARCHAR(100) NOT NULL,
+    naam            VARCHAR(100) NOT NULL,
+    email           VARCHAR(150) NOT NULL,
+    telefoonnummer  VARCHAR(20),
+    functietitel    VARCHAR(100),
+    status          ENUM('voorgesteld','goedgekeurd','afgewezen') NOT NULL DEFAULT 'voorgesteld',
+    aangemaakt_op   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (voorstel_id),
+    CONSTRAINT fk_mentorvoorstel_bedrijf
+        FOREIGN KEY (bedrijf_id) REFERENCES bedrijf(bedrijf_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_mentorvoorstel_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 21. CONTACTBERICHT  (losse berichten tussen docent en mentor van een stage)
+-- ------------------------------------------------------------
+CREATE TABLE contactbericht (
+    bericht_id      INT       NOT NULL AUTO_INCREMENT,
+    stage_id        INT       NOT NULL,
+    afzender_id     INT       NOT NULL,
+    ontvanger_id    INT       NOT NULL,
+    bericht         TEXT      NOT NULL,
+    gelezen         BOOLEAN   NOT NULL DEFAULT FALSE,
+    aangemaakt_op   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (bericht_id),
+    CONSTRAINT fk_contact_stage
+        FOREIGN KEY (stage_id) REFERENCES stage(stage_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_contact_afzender
+        FOREIGN KEY (afzender_id) REFERENCES gebruiker(gebruiker_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_contact_ontvanger
+        FOREIGN KEY (ontvanger_id) REFERENCES gebruiker(gebruiker_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );

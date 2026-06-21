@@ -1,10 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
 import { navLinks } from './adminNav'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const router = useRouter()
 
@@ -111,7 +112,7 @@ onMounted(laadStages)
 
       <!-- Table -->
       <div v-else class="table-wrapper">
-        <table>
+        <table class="responsive-table">
           <thead>
             <tr>
               <th>Student</th>
@@ -131,23 +132,23 @@ onMounted(laadStages)
               </td>
             </tr>
             <tr v-for="stage in gefilterdeStages" :key="stage.stage_id">
-              <td class="td-name">{{ stage.student_naam }}</td>
-              <td style="color:var(--text-secondary);">{{ stage.opleiding }}</td>
-              <td>{{ stage.bedrijf }}</td>
-              <td style="color:var(--text-secondary);">{{ stage.periode }}</td>
-              <td>
+              <td class="td-name" data-label="Student">{{ stage.student_naam }}</td>
+              <td style="color:var(--text-secondary);" data-label="Opleiding">{{ stage.opleiding }}</td>
+              <td data-label="Bedrijf">{{ stage.bedrijf }}</td>
+              <td style="color:var(--text-secondary);" data-label="Periode">{{ stage.periode }}</td>
+              <td data-label="Docent">
                 <span v-if="stage.docent">{{ stage.docent }}</span>
                 <span v-else style="color:var(--text-secondary);">—</span>
               </td>
-              <td>
+              <td data-label="Mentor">
                 <span v-if="stage.mentor_naam_orig">{{ stage.mentor_naam_orig }}</span>
                 <span v-else style="color:var(--text-secondary);">—</span>
               </td>
-              <td>
+              <td data-label="Status">
                 <span v-if="volledig(stage)" class="badge badge-pill badge-green">Volledig ✓</span>
                 <span v-else class="badge badge-pill badge-orange">Incompleet</span>
               </td>
-              <td>
+              <td data-label="">
                 <button
                   class="btn btn-primary btn-sm"
                   @click="naarKoppelen(stage)"
@@ -184,4 +185,11 @@ onMounted(laadStages)
   background: transparent;
 }
 .text-secondary { color: var(--text-secondary); }
+
+@media (max-width: 640px) {
+  .zoek-wrapper {
+    width: 100%;
+    min-width: 0;
+  }
+}
 </style>

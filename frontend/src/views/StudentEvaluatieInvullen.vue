@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -8,7 +9,7 @@ const route = useRoute()
 const router = useRouter()
 const stageStore = useStageStore()
 const token = localStorage.getItem('token')
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const fase = route.params.fase
 const titel = fase === 'tussentijds' ? 'Tussentijdse evaluatie' : 'Eindevaluatie'

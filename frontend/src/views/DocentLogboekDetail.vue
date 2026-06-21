@@ -1,10 +1,11 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import TopBarDocentStagecommissie from '@/components/TopBarDocentStagecommissie.vue'
 import { docentNavLinks } from './docentNav'
 
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 const route = useRoute()
 
 // 'Aanvragen' enkel voor commissie-docenten (zie docentNav.js).
@@ -123,7 +124,7 @@ async function laadFeedback() {
   if (!huidigLogboek.value) return
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/logboeken/${huidigLogboek.value.logboek_id}/feedback`, {
+    const res = await fetch(`${API_URL}/api/logboeken/${huidigLogboek.value.logboek_id}/feedback`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     bestaandeFeedback.value = await res.json()
@@ -138,7 +139,7 @@ async function slaFeedbackOp() {
   feedbackBericht.value = ''
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`http://localhost:3000/api/logboeken/${huidigLogboek.value.logboek_id}/feedback`, {
+    const res = await fetch(`${API_URL}/api/logboeken/${huidigLogboek.value.logboek_id}/feedback`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

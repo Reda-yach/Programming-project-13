@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -7,7 +8,7 @@ import { useStageStore } from '../stores/stage'
 const stageStore = useStageStore()
 const router = useRouter()
 const token = localStorage.getItem('token')
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const evaluaties = ref([])
 const laden = ref(false)

@@ -1,17 +1,19 @@
 <script setup>
+import { API_URL } from '@/api'
 // Read-only vergelijking van een evaluatie voor één stage + fase:
 // per competentie de zelfevaluatie van de student naast de beoordeling van de
 // mentor. Herbruikbaar door student (eigen stage) en docent (per student).
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
+import ContactPaneel from '../components/ContactPaneel.vue'
 import { useStageStore } from '../stores/stage'
 import { docentNavLinks } from './docentNav'
 
 const route = useRoute()
 const router = useRouter()
 const stageStore = useStageStore()
-const API = 'http://localhost:3000/api'
+const API = `${API_URL}/api`
 
 const fase = route.params.fase
 const titel = fase === 'tussentijds' ? 'Tussentijdse evaluatie' : 'Eindevaluatie'
@@ -256,6 +258,17 @@ onMounted(laad)
             </p>
           </template>
         </div>
+
+        <!-- Contact met de mentor (docent): voor een gesprek over de evaluatie -->
+        <section v-if="isDocent" class="card mt-16">
+          <h2 class="form-section-title">Contact met de mentor</h2>
+          <p class="text-secondary text-sm mt-4 mb-12">
+            {{ fase === 'tussentijds'
+              ? 'Neem contact op met de mentor voor een tussentijds gesprek over de voortgang.'
+              : 'Neem contact op met de mentor voor een gesprek over deze evaluatie.' }}
+          </p>
+          <ContactPaneel :stage-id="stageId" />
+        </section>
       </template>
 
     </main>

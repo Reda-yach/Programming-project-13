@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -64,19 +65,20 @@ function geldigTelefoon(tel) {
   return (w.match(/[0-9]/g) || []).length >= 8
 }
 
-// Studentnummer: letters en cijfers, 6–20 tekens, geen spaties of speciale tekens.
+// Studentnummer: letters, cijfers en streepjes (bv. r0123456 of ehb-2025-33),
+// 4–20 tekens, geen spaties of andere speciale tekens.
 function geldigStudentnummer(nr) {
-  return /^[A-Za-z0-9]{6,20}$/.test((nr || '').trim())
+  return /^[A-Za-z0-9-]{4,20}$/.test((nr || '').trim())
 }
 
 function valideer() {
   Object.keys(fouten).forEach((k) => delete fouten[k])
 
   if (!geldigTelefoon(form.value.telefoonnummer)) {
-    fouten.telefoonnummer = 'Enkel cijfers, spaties, +, - en () — minstens 8 cijfers.'
+    fouten.telefoonnummer = 'Geef een geldig telefoonnummer.'
   }
   if (form.value.rol === 'student' && !geldigStudentnummer(form.value.studentnummer)) {
-    fouten.studentnummer = 'Enkel letters en cijfers, 6–20 tekens, geen spaties.'
+    fouten.studentnummer = 'Geef een geldig studentnummer.'
   }
 
   return Object.keys(fouten).length === 0
@@ -94,7 +96,7 @@ onMounted(async () => {
 
 async function laadOpleidingen() {
   try {
-    const res = await fetch('http://localhost:3000/api/opleidingen', {
+    const res = await fetch(`${API_URL}/api/opleidingen`, {
       headers: { Authorization: `Bearer ${token()}` },
     })
     opleidingen.value = await res.json()
@@ -105,7 +107,7 @@ async function laadOpleidingen() {
 
 async function laadBedrijven() {
   try {
-    const res = await fetch('http://localhost:3000/api/bedrijven', {
+    const res = await fetch(`${API_URL}/api/bedrijven`, {
       headers: { Authorization: `Bearer ${token()}` },
     })
     bedrijven.value = await res.json()
@@ -122,11 +124,11 @@ watch(() => form.value.opleiding_id, (id) => {
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
 const ENDPOINT = {
-  student:   'http://localhost:3000/api/students',
-  docent:    'http://localhost:3000/api/docenten',
-  commissie: 'http://localhost:3000/api/docenten',
-  mentor:    'http://localhost:3000/api/mentors',
-  admin:     'http://localhost:3000/api/gebruikers',
+  student:   `${API_URL}/api/students`,
+  docent:    `${API_URL}/api/docenten`,
+  commissie: `${API_URL}/api/docenten`,
+  mentor:    `${API_URL}/api/mentors`,
+  admin:     `${API_URL}/api/gebruikers`,
 }
 
 function bouwBody() {
@@ -442,4 +444,10 @@ const isMentor    = computed(() => form.value.rol === 'mentor')
 }
 
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* Op telefoon: velden onder elkaar i.p.v. 2 kolommen, geen horizontaal scrollen. */
+@media (max-width: 640px) {
+  .form-rij { grid-template-columns: 1fr; }
+  .form-input { min-width: 0; }
+}
 </style>

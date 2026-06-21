@@ -1,4 +1,5 @@
 <script setup>
+import { API_URL } from '@/api'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TopBar from '../components/TopBar.vue'
@@ -31,6 +32,12 @@ const toonVoorstelForm = ref(false)
 const voorstelNaam = ref('')
 const voorstelEmail = ref('')
 const voorstelTel = ref('')
+const voorstelSector = ref('')
+const voorstelStraat = ref('')
+const voorstelHuisnummer = ref('')
+const voorstelPostcode = ref('')
+const voorstelGemeente = ref('')
+const voorstelProvincie = ref('')
 
 // Stage-velden
 const stagetitel = ref('')
@@ -46,7 +53,7 @@ const serverFout = ref('')
 async function laadBedrijven() {
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('http://localhost:3000/api/bedrijven', {
+    const res = await fetch(`${API_URL}/api/bedrijven`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) beschikbareBedrijven.value = await res.json()
@@ -62,6 +69,14 @@ onMounted(async () => {
   const vulIn = ['in_behandeling', 'goedgekeurd', 'aanpassing_gevraagd']
   if (vulIn.includes(stageStore.status) && stageStore.aanvraag) {
     const a = stageStore.aanvraag
+    // Zorg dat het gekozen bedrijf zichtbaar/selecteerbaar blijft, ook als het nog
+    // niet goedgekeurd is — anders verdwijnt het uit de dropdown bij een aanpassing.
+    if (a.bedrijf_id && !beschikbareBedrijven.value.some((b) => String(b.bedrijf_id) === String(a.bedrijf_id))) {
+      beschikbareBedrijven.value.push({
+        bedrijf_id: a.bedrijf_id,
+        naam: `${a.bedrijf || 'Mijn bedrijf'} (wacht op goedkeuring)`,
+      })
+    }
     gekozenBedrijfId.value = a.bedrijf_id ? String(a.bedrijf_id) : ''
     stagetitel.value = a.stagetitel || ''
     opdracht.value = a.beschrijving || ''
@@ -92,6 +107,13 @@ function valideer() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!voorstelEmail.value.trim()) fouten.voorstelEmail = 'Contact-e-mail is verplicht'
     else if (!emailRegex.test(voorstelEmail.value)) fouten.voorstelEmail = 'Ongeldig e-mailadres'
+    if (!voorstelSector.value.trim()) fouten.voorstelSector = 'Sector is verplicht'
+    if (!voorstelStraat.value.trim()) fouten.voorstelStraat = 'Straatnaam is verplicht'
+    if (!voorstelHuisnummer.value.trim()) fouten.voorstelHuisnummer = 'Huisnummer is verplicht'
+    if (!voorstelPostcode.value.trim()) fouten.voorstelPostcode = 'Postcode is verplicht'
+    else if (!/^\d{4}$/.test(voorstelPostcode.value.trim())) fouten.voorstelPostcode = 'Postcode = 4 cijfers'
+    if (!voorstelGemeente.value.trim()) fouten.voorstelGemeente = 'Gemeente is verplicht'
+    if (!voorstelProvincie.value.trim()) fouten.voorstelProvincie = 'Provincie is verplicht'
   }
 
   if (!stagetitel.value.trim()) fouten.stagetitel = 'Stagetitel is verplicht'
@@ -122,13 +144,19 @@ async function handleIndienen() {
 
     // Stap 1: nieuw bedrijf voorstellen als de student er één opgaf
     if (toonVoorstelForm.value) {
-      const voorstelRes = await fetch('http://localhost:3000/api/bedrijven/voorstel', {
+      const voorstelRes = await fetch(`${API_URL}/api/bedrijven/voorstel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           naam: voorstelNaam.value.trim(),
           contact_email: voorstelEmail.value.trim(),
           contact_telefoonnummer: voorstelTel.value.trim() || null,
+          sector: voorstelSector.value.trim(),
+          straatnaam: voorstelStraat.value.trim(),
+          huisnummer: voorstelHuisnummer.value.trim(),
+          postcode: voorstelPostcode.value.trim(),
+          gemeente: voorstelGemeente.value.trim(),
+          provincie: voorstelProvincie.value.trim(),
         }),
       })
       const voorstelData = await voorstelRes.json()
@@ -140,7 +168,7 @@ async function handleIndienen() {
     }
 
     // Stap 2: stage-aanvraag indienen
-    const aanvraagRes = await fetch('http://localhost:3000/api/aanvraag', {
+    const aanvraagRes = await fetch(`${API_URL}/api/aanvraag`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -244,6 +272,36 @@ function naarDashboard() {
                 <div class="form-group">
                   <label>Telefoon bedrijf</label>
                   <input type="tel" v-model="voorstelTel" placeholder="+32 ...">
+                </div>
+                <div class="form-group">
+                  <label>Sector <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelSector" placeholder="bv. ICT &amp; Consultancy">
+                  <span v-if="fouten.voorstelSector" class="form-error">{{ fouten.voorstelSector }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Straatnaam <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelStraat" placeholder="bv. Nijverheidskaai">
+                  <span v-if="fouten.voorstelStraat" class="form-error">{{ fouten.voorstelStraat }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Huisnummer <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelHuisnummer" placeholder="bv. 170">
+                  <span v-if="fouten.voorstelHuisnummer" class="form-error">{{ fouten.voorstelHuisnummer }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Postcode <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelPostcode" placeholder="bv. 1070">
+                  <span v-if="fouten.voorstelPostcode" class="form-error">{{ fouten.voorstelPostcode }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Gemeente <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelGemeente" placeholder="bv. Anderlecht">
+                  <span v-if="fouten.voorstelGemeente" class="form-error">{{ fouten.voorstelGemeente }}</span>
+                </div>
+                <div class="form-group">
+                  <label>Provincie <span style="color:#dc2626">*</span></label>
+                  <input type="text" v-model="voorstelProvincie" placeholder="bv. Brussel">
+                  <span v-if="fouten.voorstelProvincie" class="form-error">{{ fouten.voorstelProvincie }}</span>
                 </div>
               </div>
             </div>
